@@ -1,5 +1,7 @@
-### 项目只实现了基本的功能，还有很多bug，后面慢慢改
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+### 项目只实现了基本的功能，还有很多bug，后面慢慢改
 
 <div style="display: flex; flex-wrap: wrap; gap: 10px;">
   <img src="https://github.com/user-attachments/assets/4ef04f4f-2d3f-4aaf-ad24-445efdab53d1" alt="截图1" style="width: 24%; height: auto;" />
