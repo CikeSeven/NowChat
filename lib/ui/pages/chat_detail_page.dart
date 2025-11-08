@@ -4,7 +4,6 @@ import 'package:now_chat/providers/chat_provider.dart';
 import 'package:now_chat/ui/widgets/assistant_message_widget.dart';
 import 'package:now_chat/ui/widgets/message_input.dart';
 import 'package:now_chat/ui/widgets/user_message_widget.dart';
-import 'package:now_chat/util/app_logger.dart';
 import 'package:provider/provider.dart';
 import '../widgets/model_selector_bottom_sheet.dart.dart';
 

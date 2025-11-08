@@ -1,13 +1,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:now_chat/app/router.dart';
 import 'package:now_chat/core/models/message.dart';
 import 'package:now_chat/ui/widgets/markdown_message_widget.dart';
-import 'package:url_launcher/url_launcher.dart';
-
-import 'code_block_builder.dart';
 import 'message_bottom_sheet_menu.dart';
 
 class AssistantMessageWidget extends StatefulWidget {

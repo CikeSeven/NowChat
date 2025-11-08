@@ -219,7 +219,6 @@ class ChatProvider with ChangeNotifier {
     return models;
   }
 
-
   Future<void> sendMessage(int chatId, String userContent, bool isStreaming) async {
     AppLogger.i("发送消息");
     final chat = getChatById(chatId);

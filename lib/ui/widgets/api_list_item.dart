@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:now_chat/core/models/ai_provider_config.dart';
-import 'package:now_chat/providers/chat_provider.dart';
-import 'package:provider/provider.dart';
 
 class ApiListItem extends StatefulWidget {
   final AIProviderConfig provider;
@@ -26,7 +24,6 @@ class _ApiListItemState extends State<ApiListItem> {
 
   @override
   Widget build(BuildContext context) {
-    final chatProvider = context.watch<ChatProvider>();
     final color = Theme.of(context).colorScheme;
     final models = widget.provider.models;
 
