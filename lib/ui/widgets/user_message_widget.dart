@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:now_chat/core/models/message.dart';
 import 'package:now_chat/ui/widgets/message_bottom_sheet_menu.dart';
 
+import '../../app/router.dart';
+
 class UserMessageWidget extends StatelessWidget {
   final Message message;
   const UserMessageWidget({super.key, required this.message});
@@ -36,6 +38,17 @@ class UserMessageWidget extends StatelessWidget {
               showModalBottomSheetMenu(
                 context: context,
                 items: [
+                  SheetMenuItem(
+                    icon: Icons.edit,
+                    label: '编辑内容',
+                    onTap: () {
+                      Navigator.pushNamed(
+                        context,
+                        AppRoutes.editMessage,
+                        arguments: message,
+                      );
+                    },
+                  ),
                   SheetMenuItem(
                     icon: Icons.copy,
                     label: '复制全文',

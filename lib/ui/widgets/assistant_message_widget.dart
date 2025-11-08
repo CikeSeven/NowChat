@@ -64,7 +64,7 @@ class _AssistantMessageWidgetState extends State<AssistantMessageWidget>
                 Navigator.pushNamed(
                   context,
                   AppRoutes.editMessage,
-                  arguments: {'content': message.content},
+                  arguments: message,
                 );
               },
             ),
@@ -182,7 +182,7 @@ class _AssistantMessageWidgetState extends State<AssistantMessageWidget>
                     Navigator.pushNamed(
                       context,
                       AppRoutes.editMessage,
-                      arguments: {'content': message.content},
+                      arguments: message,
                     );
                   },
                   icon: Icon(
