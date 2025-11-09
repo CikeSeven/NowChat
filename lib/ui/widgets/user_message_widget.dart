@@ -38,9 +38,10 @@ class UserMessageWidget extends StatelessWidget {
             onLongPress: () {
               showModalBottomSheetMenu(
                 context: context,
+                message: message,
                 items: [
                   SheetMenuItem(
-                    icon: Icons.edit,
+                    icon: Icon(Icons.edit),
                     label: '编辑内容',
                     onTap: () {
                       Navigator.pushNamed(
@@ -51,14 +52,14 @@ class UserMessageWidget extends StatelessWidget {
                     },
                   ),
                   SheetMenuItem(
-                    icon: Icons.copy,
+                    icon: Icon(Icons.copy),
                     label: '复制全文',
                     onTap: () {
                       Clipboard.setData(ClipboardData(text: message.content));
                     },
                   ),
                   SheetMenuItem(
-                    icon: Icons.delete_outline,
+                    icon: Icon(Icons.delete, color: color.error,),
                     label: '删除消息',
                     onTap: () {
                       onDelete();

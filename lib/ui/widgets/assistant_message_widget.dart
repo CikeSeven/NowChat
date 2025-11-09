@@ -55,12 +55,15 @@ class _AssistantMessageWidgetState extends State<AssistantMessageWidget>
     final reasoningSeconds = (message.reasoningTimeMs ?? 0) / 1000.0;
 
     return InkWell(
+
+      // 长按弹出菜单
       onLongPress: () {
         showModalBottomSheetMenu(
           context: context,
+          message: message,
           items: [
             SheetMenuItem(
-              icon: Icons.edit,
+              icon: Icon(Icons.edit),
               label: '编辑内容',
               onTap: () {
                 Navigator.pushNamed(
@@ -71,14 +74,14 @@ class _AssistantMessageWidgetState extends State<AssistantMessageWidget>
               },
             ),
             SheetMenuItem(
-              icon: Icons.copy,
+              icon: Icon(Icons.copy),
               label: '复制内容',
               onTap: () {
                 Clipboard.setData(ClipboardData(text: message.content));
               },
             ),
             SheetMenuItem(
-              icon: Icons.delete_outline,
+              icon: Icon(Icons.delete_outline, color: color.error,),
               label: '删除消息',
               onTap: () {
                 widget.onDelete();
@@ -87,6 +90,7 @@ class _AssistantMessageWidgetState extends State<AssistantMessageWidget>
           ],
         );
       },
+
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
         child: Column(

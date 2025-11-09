@@ -231,6 +231,10 @@ class ChatProvider with ChangeNotifier {
     return models;
   }
 
+  // 重新生成消息
+  Future<void> regenerateMessage(int chatId, bool isStreaming) async {
+    // TODO
+  }
 
   // 发送消息
   Future<void> sendMessage(int chatId, String userContent, bool isStreaming) async {
