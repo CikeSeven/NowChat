@@ -68,9 +68,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                     itemBuilder: (context, index) {
                       final msg = messages[index];
                       if (msg.role == "user") {
-                        return UserMessageWidget(message: msg);
+                        return UserMessageWidget(message: msg, onDelete: () => chatProvider.deleteMessage(msg.isarId),);
                       } else if (msg.role == "assistant") {
-                        return AssistantMessageWidget(message: msg, isGenerating: chat.isGenerating,);
+                        return AssistantMessageWidget(message: msg, isGenerating: chat.isGenerating, onDelete: () => chatProvider.deleteMessage(msg.isarId),);
                       }
                       return const SizedBox.shrink();
                     },

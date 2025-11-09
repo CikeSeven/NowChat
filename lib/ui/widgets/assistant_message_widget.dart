@@ -1,6 +1,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart';
 import 'package:now_chat/app/router.dart';
 import 'package:now_chat/core/models/message.dart';
 import 'package:now_chat/ui/widgets/markdown_message_widget.dart';
@@ -9,7 +10,8 @@ import 'message_bottom_sheet_menu.dart';
 class AssistantMessageWidget extends StatefulWidget {
   final Message message;
   final bool isGenerating;
-  const AssistantMessageWidget({super.key, required this.message, required this.isGenerating});
+  final VoidCallback onDelete;
+  const AssistantMessageWidget({super.key, required this.message, required this.isGenerating, required this.onDelete});
 
   @override
   State<AssistantMessageWidget> createState() => _AssistantMessageWidgetState();
@@ -79,7 +81,7 @@ class _AssistantMessageWidgetState extends State<AssistantMessageWidget>
               icon: Icons.delete_outline,
               label: '删除消息',
               onTap: () {
-                // TODO: 删除逻辑
+                widget.onDelete();
               },
             ),
           ],

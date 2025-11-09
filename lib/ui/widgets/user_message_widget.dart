@@ -8,7 +8,8 @@ import '../../app/router.dart';
 
 class UserMessageWidget extends StatelessWidget {
   final Message message;
-  const UserMessageWidget({super.key, required this.message});
+  final VoidCallback onDelete;
+  const UserMessageWidget({super.key, required this.message, required this.onDelete});
 
   @override
   Widget build(BuildContext context) {
@@ -60,7 +61,7 @@ class UserMessageWidget extends StatelessWidget {
                     icon: Icons.delete_outline,
                     label: '删除消息',
                     onTap: () {
-                      // TODO: 删除逻辑
+                      onDelete();
                     },
                   ),
                 ],

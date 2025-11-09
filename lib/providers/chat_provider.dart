@@ -164,7 +164,19 @@ class ChatProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  // 删除消息
+  Future<void> deleteMessage(int isarId) async {
+    await isar.writeTxn(() async {
+      await isar.messages.delete(isarId);
+    });
 
+    AppLogger.i("删除消息: $isarId");
+    // 从内存中同步删除
+  _currentMessages.removeWhere((m) => m.isarId == isarId);
+    notifyListeners();
+  }
+
+  // 刷新API的模型列表
   Future<void> refreshConfigModels(String id, List<String> models) async {
     final provider = getProviderById(id);
     if (provider == null) return;
@@ -219,6 +231,8 @@ class ChatProvider with ChangeNotifier {
     return models;
   }
 
+
+  // 发送消息
   Future<void> sendMessage(int chatId, String userContent, bool isStreaming) async {
     AppLogger.i("发送消息");
     final chat = getChatById(chatId);
@@ -341,7 +355,7 @@ class ChatProvider with ChangeNotifier {
   }
 
 
-  // --- 本地存取 ---
+  // 本地存取
   Future<void> _loadFromLocal() async {
     if (_initialized) return;
     _initialized = true;
@@ -366,6 +380,7 @@ class ChatProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  // 保存Provider到本地
   Future<void> _saveProvidersl() async {
     await Storage.saveProviders(_providers);
   }
