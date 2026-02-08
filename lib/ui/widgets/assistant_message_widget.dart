@@ -4,7 +4,10 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart';
 import 'package:now_chat/app/router.dart';
 import 'package:now_chat/core/models/message.dart';
+import 'package:now_chat/providers/chat_provider.dart';
 import 'package:now_chat/ui/widgets/markdown_message_widget.dart';
+import 'package:now_chat/util/app_logger.dart';
+import 'package:provider/provider.dart';
 import 'message_bottom_sheet_menu.dart';
 
 class AssistantMessageWidget extends StatefulWidget {
@@ -50,8 +53,10 @@ class _AssistantMessageWidgetState extends State<AssistantMessageWidget>
 
   @override
   Widget build(BuildContext context) {
-    final color = Theme.of(context).colorScheme;
+    final chatProvider = context.watch<ChatProvider>();
+    final colors = Theme.of(context).colorScheme;
     final message = widget.message;
+    final chat = chatProvider.getChatById(message.chatId)!;
     final reasoningSeconds = (message.reasoningTimeMs ?? 0) / 1000.0;
 
     return InkWell(
@@ -81,7 +86,7 @@ class _AssistantMessageWidgetState extends State<AssistantMessageWidget>
               },
             ),
             SheetMenuItem(
-              icon: Icon(Icons.delete_outline, color: color.error,),
+              icon: Icon(Icons.delete_outline, color: colors.error,),
               label: '删除消息',
               onTap: () {
                 widget.onDelete();
@@ -96,6 +101,25 @@ class _AssistantMessageWidgetState extends State<AssistantMessageWidget>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (message.content.isEmpty && chat.isGenerating && (message.reasoning == null ? true : message.reasoning!.isEmpty))
+            Padding(
+              padding: const EdgeInsets.only(left: 16),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 25,
+                    height: 25,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 3,
+                      color: colors.primary,
+                    ),
+                  ),
+                  SizedBox(width: 16,),
+                  Text("生成中...")
+                ],
+              ),
+            ),
+
             // reasoning 信息块
             if (message.reasoning != null && message.reasoning!.isNotEmpty)
               Container(
@@ -108,7 +132,7 @@ class _AssistantMessageWidgetState extends State<AssistantMessageWidget>
                         Text(
                           '已思考 ${reasoningSeconds.toStringAsFixed(1)} 秒',
                           style: TextStyle(
-                            color: color.onSurfaceVariant,
+                            color: colors.onSurfaceVariant,
                             fontSize: 14,
                           ),
                         ),
@@ -124,7 +148,7 @@ class _AssistantMessageWidgetState extends State<AssistantMessageWidget>
                             child: Icon(
                               Icons.expand_more,
                               size: 22,
-                              color: color.onSurfaceVariant,
+                              color: colors.onSurfaceVariant,
                             ),
                           ),
                         ),
@@ -139,13 +163,13 @@ class _AssistantMessageWidgetState extends State<AssistantMessageWidget>
                         margin: const EdgeInsets.only(top: 8, bottom: 8),
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: color.surfaceContainerHighest.withAlpha(130),
+                          color: colors.surfaceContainerHighest.withAlpha(130),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(
                           message.reasoning!,
                           style: TextStyle(
-                            color: color.onSurfaceVariant,
+                            color: colors.onSurfaceVariant,
                             fontSize: 14,
                           ),
                         ),

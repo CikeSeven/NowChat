@@ -11,6 +11,7 @@ class Message {
   late String content;
   String? reasoning;
   int? reasoningTimeMs;
+  List<String>? imagePaths;
   late final DateTime timestamp;
 
   Message({
@@ -19,6 +20,7 @@ class Message {
     required this.content,
     this.reasoning,
     this.reasoningTimeMs,
+    this.imagePaths,
     required this.timestamp,
   });
 

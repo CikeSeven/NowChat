@@ -28,7 +28,7 @@ class _ChatListPageState extends State<ChatListPage> {
       canPop: !_isSelecting, // 当正在选择时阻止系统返回
       onPopInvokedWithResult: (bool didPop, dynamic result) {
         if (!didPop && _isSelecting) {
-          // 如果是拦截的返回事件 -> 退出多选模式
+          // 退出多选模式
           setState(() {
             _isSelecting = false;
             _selectedIds.clear();

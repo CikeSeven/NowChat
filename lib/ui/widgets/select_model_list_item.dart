@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:logger/logger.dart';
 import '../../core/models/ai_provider_config.dart';
 
 class SelectModelListItem extends StatefulWidget {
@@ -20,6 +19,7 @@ class _SelectModelListItemState extends State<SelectModelListItem> {
 
     final color = Theme.of(context).colorScheme;
     final models = widget.provider.models;
+    final chipMaxWidth = MediaQuery.of(context).size.width * 0.72;
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 2, horizontal: 12),
@@ -46,6 +46,8 @@ class _SelectModelListItemState extends State<SelectModelListItem> {
                             children: [
                               Text(
                                 "${widget.provider.name} [${widget.provider.models.length}]",
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                     fontSize: 15, fontWeight: FontWeight.w500),
                               ),
@@ -90,21 +92,29 @@ class _SelectModelListItemState extends State<SelectModelListItem> {
                                     onTap: () {
                                       widget.onSelect(model);
                                     },
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: (widget.providerId == widget.provider.id
-                                                && widget.model == model) ? color.primaryContainer : color.surface,
-                                        borderRadius: BorderRadius.circular(6),
-                                        border: Border.all(
-                                            color: color.outline.withAlpha(80)),
-                                      ),
-                                      child: Text(
-                                        model,
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: color.onSurfaceVariant,
+                                    child: ConstrainedBox(
+                                      constraints: BoxConstraints(maxWidth: chipMaxWidth),
+                                      child: Tooltip(
+                                        message: model,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 8, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: (widget.providerId == widget.provider.id
+                                                    && widget.model == model) ? color.primaryContainer : color.surface,
+                                            borderRadius: BorderRadius.circular(6),
+                                            border: Border.all(
+                                                color: color.outline.withAlpha(80)),
+                                          ),
+                                          child: Text(
+                                            model,
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: color.onSurfaceVariant,
+                                            ),
+                                          ),
                                         ),
                                       ),
                                     ),

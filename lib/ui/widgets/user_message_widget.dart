@@ -24,14 +24,14 @@ class UserMessageWidget extends StatelessWidget {
           color: color.secondaryContainer,
           borderRadius: const BorderRadius.only(
             topLeft:  Radius.circular(10),
-            topRight:  Radius.circular(2),
+            topRight:  Radius.circular(1),
             bottomLeft:  Radius.circular(10),
             bottomRight:  Radius.circular(10)
           ),
           child: InkWell(
             borderRadius: const BorderRadius.only(
               topLeft:  Radius.circular(10),
-              topRight:  Radius.circular(2),
+              topRight:  Radius.circular(1),
               bottomLeft:  Radius.circular(10),
               bottomRight:  Radius.circular(10)
             ),

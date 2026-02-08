@@ -309,6 +309,7 @@ class ChatProvider with ChangeNotifier {
             }
 
             if (deltaContent.isNotEmpty) {
+              reasoningTimer?.cancel();
               aiMsg.content += deltaContent;
               notifyNeeded = true;
             }

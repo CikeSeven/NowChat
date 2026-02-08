@@ -454,11 +454,18 @@ class _EditProviderPageState extends State<EditProviderPage> {
       padding: EdgeInsets.symmetric(vertical: 4, horizontal: 12),
       child: Row(
         children: [
-          Text(
-            model,
-            style: TextStyle(color: colors.onSurface),
+          Expanded(
+            child: Tooltip(
+              message: model,
+              child: Text(
+                model,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: colors.onSurface),
+              ),
+            ),
           ),
-          Spacer(),
+          const SizedBox(width: 8),
           SizedBox(
             width: 22,
             height: 22,

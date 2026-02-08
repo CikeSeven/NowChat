@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_highlight/flutter_highlight.dart';
+import 'package:flutter_highlight/themes/github.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'package:url_launcher/url_launcher.dart';
@@ -71,12 +73,13 @@ class CodeBlockBuilder extends MarkdownElementBuilder {
     if (code.isEmpty) return null;
 
     final color = Theme.of(context).colorScheme;
+    final language = element.attributes['class']?.replaceFirst('language-', '') ?? '';
 
     // 判断是否为多行代码块
     final isMultiline = code.contains('\n') || element.attributes['class']?.contains('language-') == true;
 
     if (!isMultiline) {
-      // 单行内联代码 → 不加复制按钮
+      // 单行内联代码
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         decoration: BoxDecoration(
@@ -94,7 +97,7 @@ class CodeBlockBuilder extends MarkdownElementBuilder {
       );
     }
 
-    //多行代码块 → 带复制按钮
+    //多行代码块
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.symmetric(vertical: 6),
@@ -102,35 +105,56 @@ class CodeBlockBuilder extends MarkdownElementBuilder {
         color: color.surfaceContainerHighest.withAlpha(130),
         borderRadius: BorderRadius.circular(10),
       ),
-      child: Stack(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.only(left: 12, right: 12, top: 12, bottom: 12),
-            child: SelectableText(
-              code,
-              style: TextStyle(
-                fontFamily: 'monospace',
-                fontSize: 14,
-                color: color.onSurfaceVariant,
+        Padding(
+          padding: const EdgeInsets.only(left: 16, right: 16),
+          child: Row(
+            children: [
+              Text(
+                language.isNotEmpty ? language : 'code',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: color.onSurfaceVariant.withAlpha(180),
+                ),
               ),
+              const Spacer(),
+              SizedBox(
+                width: 22,
+                height: 22,
+                child: IconButton(
+                  icon: Icon(
+                    Icons.copy,
+                    size: 18,
+                    color: color.onSurfaceVariant.withAlpha(220),
+                  ),
+                  tooltip: '复制代码',
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: code));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('已复制到剪贴板')),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(left: 12, right: 12, top: 8, bottom: 12),
+          child: HighlightView(
+            code,
+            language: language, // 自动识别语言
+            theme: githubTheme, // 可改为 draculaTheme、monokaiSublimeTheme 等
+            padding: EdgeInsets.zero,
+            textStyle: const TextStyle(
+              fontFamily: 'monospace',
+              fontSize: 14,
             ),
           ),
-          Positioned(
-            bottom: 0,
-            right: 0,
-            child: IconButton(
-              icon: Icon(
-                Icons.copy,
-                size: 18,
-                color: color.onSurfaceVariant.withAlpha(220),
-              ),
-              tooltip: '复制代码',
-              onPressed: () {
-                Clipboard.setData(ClipboardData(text: code));
-              },
-            ),
-          ),
-        ],
+        ),
+      ],
       ),
     );
   }

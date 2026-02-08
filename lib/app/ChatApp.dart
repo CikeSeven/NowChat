@@ -17,7 +17,9 @@ class ChatApp extends StatelessWidget {
         return MaterialApp(
           debugShowCheckedModeBanner: false,
           title: "Now Chat",
-          theme: settings.isDarkMode ? theme.dark() : theme.light(),
+          theme: theme.light(),
+          darkTheme: theme.dark(),
+          themeMode: settings.themeMode,
           onGenerateRoute: AppRoutes.generateRoute,
           initialRoute: AppRoutes.home,
         );
