@@ -13,6 +13,7 @@ class ChatSettingsPage extends StatefulWidget {
 }
 
 class _ChatSettingsPageState extends State<ChatSettingsPage> {
+  final TextEditingController _titleController = TextEditingController();
   final TextEditingController _maxTokensController = TextEditingController();
   final TextEditingController _systemPromptController = TextEditingController();
 
@@ -33,6 +34,7 @@ class _ChatSettingsPageState extends State<ChatSettingsPage> {
     final chat = chatProvider.getChatById(widget.chatId);
     _chat = chat;
     if (chat != null) {
+      _titleController.text = chat.title;
       _temperature = chat.temperature;
       _topP = chat.topP;
       _isStreaming = chat.isStreaming;
@@ -43,6 +45,7 @@ class _ChatSettingsPageState extends State<ChatSettingsPage> {
 
   @override
   void dispose() {
+    _titleController.dispose();
     _maxTokensController.dispose();
     _systemPromptController.dispose();
     super.dispose();
@@ -54,12 +57,17 @@ class _ChatSettingsPageState extends State<ChatSettingsPage> {
     return value;
   }
 
-  bool get _canSave => _chat != null && _maxTokens != null;
+  bool get _canSave =>
+      _chat != null &&
+      _maxTokens != null &&
+      _titleController.text.trim().isNotEmpty;
 
   Future<void> _save() async {
     final chat = _chat;
     final maxTokens = _maxTokens;
     if (chat == null || maxTokens == null) return;
+    final title = _titleController.text.trim();
+    if (title.isEmpty) return;
     final systemPrompt = _systemPromptController.text.trim();
 
     final chatProvider = context.read<ChatProvider>();
@@ -69,6 +77,9 @@ class _ChatSettingsPageState extends State<ChatSettingsPage> {
             : chatProvider.getProviderById(chat.providerId!);
     final streamingSupported = provider?.requestMode.supportsStreaming ?? true;
 
+    if (title != chat.title) {
+      await chatProvider.renameChat(chat.id, title);
+    }
     await chatProvider.updateChat(
       chat,
       systemPrompt: systemPrompt,
@@ -144,6 +155,21 @@ class _ChatSettingsPageState extends State<ChatSettingsPage> {
                   Text(
                     '会话标题：${chat.title}',
                     style: const TextStyle(fontSize: 13),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _titleController,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      labelText: '会话标题',
+                      helperText: '保存后立即生效',
+                      errorText:
+                          _titleController.text.trim().isEmpty
+                              ? '标题不能为空'
+                              : null,
+                      border: const OutlineInputBorder(),
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
