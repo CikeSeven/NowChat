@@ -4,11 +4,17 @@
 支持多个 API 提供方、会话级参数、自定义模型管理、流式输出，以及图片/文件作为上下文输入。
 
 ## 界面预览
-![Screenshot_2026-02-14-00-22-36-768_com example no](https://github.com/user-attachments/assets/aa6dd126-70b2-416f-abde-a36d43ca452a) 会话列表页 
- API 管理页
-![Screenshot_2026-02-14-00-23-00-043_com example no](https://github.com/user-attachments/assets/e27a9af7-74b1-4ca4-95ee-08e62fcb3253) 新增/编辑 API 页  
-![Screenshot_2026-02-14-00-22-51-925_com example no](https://github.com/user-attachments/assets/d144362f-379c-44ec-a4d8-3fafd14a5d7a) 聊天详情页  
-![Screenshot_2026-02-14-00-23-05-375_com example no](https://github.com/user-attachments/assets/e94b7ba8-3774-402c-bbfb-02ee9cb14dd6) 会话设置页
+| 会话列表页 | API 管理页 |
+| --- | --- |
+| <img src="https://github.com/user-attachments/assets/aa6dd126-70b2-416f-abde-a36d43ca452a" width="220" /> | <img src="" width="220" /> |
+
+| 新增/编辑 API 页 | 聊天详情页 |
+| --- | --- |
+| <img src="https://github.com/user-attachments/assets/e27a9af7-74b1-4ca4-95ee-08e62fcb3253" width="220" /> | <img src="https://github.com/user-attachments/assets/d144362f-379c-44ec-a4d8-3fafd14a5d7a" width="220" /> |
+
+| 会话设置页 |
+| --- |
+| <img src="https://github.com/user-attachments/assets/e94b7ba8-3774-402c-bbfb-02ee9cb14dd6" width="220" /> |
 
 ## 核心功能
 
