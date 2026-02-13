@@ -6,7 +6,7 @@
 ## 界面预览
 | 会话列表页 | API 管理页 |
 | --- | --- |
-| <img src="https://github.com/user-attachments/assets/aa6dd126-70b2-416f-abde-a36d43ca452a" width="220" /> | <img src="" width="220" /> |
+| <img src="https://github.com/user-attachments/assets/aa6dd126-70b2-416f-abde-a36d43ca452a" width="220" /> | <img src="https://github.com/user-attachments/assets/bb93b681-0e43-47cc-82b9-374c72c30827" width="220" /> |
 
 | 新增/编辑 API 页 | 聊天详情页 |
 | --- | --- |
