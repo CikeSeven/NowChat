@@ -4,12 +4,11 @@
 支持多个 API 提供方、会话级参数、自定义模型管理、流式输出，以及图片/文件作为上下文输入。
 
 ## 界面预览
-
-[图片1] 会话列表页  
-[图片2] API 管理页  
-[图片3] 新增/编辑 API 页  
-[图片4] 聊天详情页  
-[图片5] 会话设置页
+![Screenshot_2026-02-14-00-22-36-768_com example no](https://github.com/user-attachments/assets/aa6dd126-70b2-416f-abde-a36d43ca452a) 会话列表页 
+![Screenshot_2026-02-14-00-22-41-199_com example no](https://github.com/user-attachments/assets/da11abc9-8adb-4130-ae34-b10c86caa6d6) API 管理页
+![Screenshot_2026-02-14-00-23-00-043_com example no](https://github.com/user-attachments/assets/e27a9af7-74b1-4ca4-95ee-08e62fcb3253) 新增/编辑 API 页  
+![Screenshot_2026-02-14-00-22-51-925_com example no](https://github.com/user-attachments/assets/d144362f-379c-44ec-a4d8-3fafd14a5d7a) 聊天详情页  
+![Screenshot_2026-02-14-00-23-05-375_com example no](https://github.com/user-attachments/assets/e94b7ba8-3774-402c-bbfb-02ee9cb14dd6) 会话设置页
 
 ## 核心功能
 
