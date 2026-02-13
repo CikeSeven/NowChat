@@ -4,8 +4,6 @@ import 'package:now_chat/app/theme.dart';
 import 'package:now_chat/providers/settings_provider.dart';
 import 'package:provider/provider.dart';
 
-
-
 class ChatApp extends StatelessWidget {
   const ChatApp({super.key});
 
@@ -19,7 +17,7 @@ class ChatApp extends StatelessWidget {
           title: "Now Chat",
           theme: theme.light(),
           darkTheme: theme.dark(),
-          themeMode: settings.themeMode,
+          themeMode: settings.effectiveThemeMode,
           onGenerateRoute: AppRoutes.generateRoute,
           initialRoute: AppRoutes.home,
         );

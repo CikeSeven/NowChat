@@ -14,7 +14,6 @@ class ApiPage extends StatefulWidget {
 class _ApiPageState extends State<ApiPage> {
   final TextEditingController _searchController = TextEditingController();
   final Set<String> _expandedProviderIds = <String>{};
-  final Set<String> _expandedModelProviderIds = <String>{};
 
   @override
   void dispose() {
@@ -28,16 +27,6 @@ class _ApiPageState extends State<ApiPage> {
         _expandedProviderIds.remove(providerId);
       } else {
         _expandedProviderIds.add(providerId);
-      }
-    });
-  }
-
-  void _toggleModelExpanded(String providerId) {
-    setState(() {
-      if (_expandedModelProviderIds.contains(providerId)) {
-        _expandedModelProviderIds.remove(providerId);
-      } else {
-        _expandedModelProviderIds.add(providerId);
       }
     });
   }
@@ -140,16 +129,11 @@ class _ApiPageState extends State<ApiPage> {
                         final isExpanded = _expandedProviderIds.contains(
                           provider.id,
                         );
-                        final isModelExpanded = _expandedModelProviderIds
-                            .contains(provider.id);
                         return _ApiProviderCard(
                           provider: provider,
                           isExpanded: isExpanded,
-                          isModelListExpanded: isModelExpanded,
                           onToggleExpand:
                               () => _toggleProviderExpanded(provider.id),
-                          onToggleModelList:
-                              () => _toggleModelExpanded(provider.id),
                           onEdit: () {
                             Navigator.pushNamed(
                               context,
@@ -220,18 +204,14 @@ class _ApiPageState extends State<ApiPage> {
 class _ApiProviderCard extends StatelessWidget {
   final AIProviderConfig provider;
   final bool isExpanded;
-  final bool isModelListExpanded;
   final VoidCallback onToggleExpand;
-  final VoidCallback onToggleModelList;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
   const _ApiProviderCard({
     required this.provider,
     required this.isExpanded,
-    required this.isModelListExpanded,
     required this.onToggleExpand,
-    required this.onToggleModelList,
     required this.onEdit,
     required this.onDelete,
   });
@@ -398,42 +378,11 @@ class _ApiProviderCard extends StatelessWidget {
                               color: colors.onSurface,
                             ),
                           ),
-                          const Spacer(),
-                          TextButton.icon(
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 0,
-                              ),
-                              minimumSize: const Size(0, 26),
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              visualDensity: VisualDensity.compact,
-                            ),
-                            onPressed: onToggleModelList,
-                            icon: Icon(
-                              isModelListExpanded
-                                  ? Icons.expand_less_rounded
-                                  : Icons.expand_more_rounded,
-                              size: 16,
-                            ),
-                            label: Text(
-                              isModelListExpanded ? '收起' : '展开',
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                          ),
                         ],
                       ),
                       if (models.isEmpty)
                         Text(
                           '暂无模型',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: colors.onSurfaceVariant,
-                          ),
-                        )
-                      else if (!isModelListExpanded)
-                        Text(
-                          '已收起，点击“展开”查看全部模型',
                           style: TextStyle(
                             fontSize: 12,
                             color: colors.onSurfaceVariant,

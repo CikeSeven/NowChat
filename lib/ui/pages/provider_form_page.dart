@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:now_chat/core/models/ai_provider_config.dart';
 import 'package:now_chat/core/provider/provider_catalog.dart';
@@ -29,6 +31,9 @@ class _ProviderFormPageState extends State<ProviderFormPage> {
   bool _loadingModels = false;
   bool _showAllPresets = false;
   String? _loadError;
+  String? _activeProviderId;
+  bool _isAutoSaving = false;
+  bool _pendingAutoSave = false;
 
   String _selectedPresetId = ProviderCatalog.presets.first.id;
   ProviderType _selectedType = ProviderCatalog.presets.first.type;
@@ -52,6 +57,7 @@ class _ProviderFormPageState extends State<ProviderFormPage> {
       final existing = chatProvider.getProviderById(providerId);
       if (existing != null) {
         _isEditing = true;
+        _activeProviderId = existing.id;
         _nameController.text = existing.name;
         _baseUrlController.text = existing.baseUrl ?? '';
         _pathController.text = existing.urlPath ?? '';
@@ -93,12 +99,9 @@ class _ProviderFormPageState extends State<ProviderFormPage> {
         _pathController.text.trim().isNotEmpty;
   }
 
-  Future<void> _save() async {
-    if (!_canSave) return;
-
-    final chatProvider = context.read<ChatProvider>();
-    final payload = AIProviderConfig(
-      id: widget.providerId ?? const Uuid().v4(),
+  AIProviderConfig _buildPayload(String providerId) {
+    return AIProviderConfig(
+      id: providerId,
       name: _nameController.text.trim(),
       type: _selectedType,
       requestMode: _selectedRequestMode,
@@ -111,10 +114,19 @@ class _ProviderFormPageState extends State<ProviderFormPage> {
         _modelCapabilities,
       ),
     );
+  }
 
-    if (_isEditing && widget.providerId != null) {
+  Future<bool> _persistCurrentProvider() async {
+    if (!_canSave) return false;
+
+    final chatProvider = context.read<ChatProvider>();
+    final providerId = _activeProviderId ?? const Uuid().v4();
+    final payload = _buildPayload(providerId);
+    final exists = chatProvider.getProviderById(providerId) != null;
+
+    if (exists) {
       await chatProvider.updateProvider(
-        widget.providerId!,
+        providerId,
         name: payload.name,
         type: payload.type,
         requestMode: payload.requestMode,
@@ -129,8 +141,50 @@ class _ProviderFormPageState extends State<ProviderFormPage> {
       await chatProvider.createNewProvider(payload);
     }
 
-    if (!mounted) return;
+    if (mounted && (!_isEditing || _activeProviderId != providerId)) {
+      setState(() {
+        _isEditing = true;
+        _activeProviderId = providerId;
+      });
+    } else {
+      _isEditing = true;
+      _activeProviderId = providerId;
+    }
+    return true;
+  }
+
+  Future<void> _save() async {
+    if (!_canSave) return;
+    while (_isAutoSaving) {
+      await Future<void>.delayed(const Duration(milliseconds: 16));
+    }
+    final saved = await _persistCurrentProvider();
+    if (!saved || !mounted) return;
     Navigator.of(context).pop();
+  }
+
+  void _scheduleAutoSave() {
+    if (!_canSave) return;
+    if (_isAutoSaving) {
+      _pendingAutoSave = true;
+      return;
+    }
+    _isAutoSaving = true;
+    unawaited(_runAutoSave());
+  }
+
+  Future<void> _runAutoSave() async {
+    try {
+      await _persistCurrentProvider();
+    } catch (_) {
+      // 自动保存失败不打断当前交互，用户仍可手动点击保存重试
+    } finally {
+      _isAutoSaving = false;
+      if (_pendingAutoSave) {
+        _pendingAutoSave = false;
+        _scheduleAutoSave();
+      }
+    }
   }
 
   void _onSelectPreset(String presetId) {
@@ -211,6 +265,7 @@ class _ProviderFormPageState extends State<ProviderFormPage> {
         _modelCapabilities.remove(normalizedModel);
       }
     });
+    _scheduleAutoSave();
   }
 
   void _removeModel(String model) {
@@ -219,6 +274,7 @@ class _ProviderFormPageState extends State<ProviderFormPage> {
       _modelRemarks.remove(model);
       _modelCapabilities.remove(model);
     });
+    _scheduleAutoSave();
   }
 
   void _toggleModelCapability(
@@ -238,6 +294,7 @@ class _ProviderFormPageState extends State<ProviderFormPage> {
         _modelCapabilities.remove(model);
       }
     });
+    _scheduleAutoSave();
   }
 
   Future<void> _showCustomModelDialog({
@@ -381,6 +438,7 @@ class _ProviderFormPageState extends State<ProviderFormPage> {
     final baseUrl = _baseUrlController.text.trim();
     final apiKey = _apiKeyController.text.trim();
     if (baseUrl.isEmpty) return;
+    _scheduleAutoSave();
 
     setState(() {
       _loadingModels = true;
