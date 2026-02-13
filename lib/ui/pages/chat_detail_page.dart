@@ -31,6 +31,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   bool _isStreaming = true;
   String _pendingSystemPrompt = '';
   List<String> _pendingAttachmentPaths = <String>[];
+  int _lastAutoScrollMessageCount = -1;
+  int? _lastAutoScrollChatId;
 
   @override
   void initState() {
@@ -43,6 +45,32 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       context.read<ChatProvider>().loadMessages(widget.chatId!);
     } else {
       context.read<ChatProvider>().loadMessages(null);
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _scrollToLatest({bool animated = false}) {
+    if (!mounted) return;
+    if (!_scrollController.hasClients) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToLatest(animated: animated);
+      });
+      return;
+    }
+    final target = _scrollController.position.maxScrollExtent;
+    if (animated) {
+      _scrollController.animateTo(
+        target,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+      );
+    } else {
+      _scrollController.jumpTo(target);
     }
   }
 
@@ -76,6 +104,17 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     final activeSystemPrompt =
         (chat?.systemPrompt ?? _pendingSystemPrompt).trim();
     final hasSystemPrompt = activeSystemPrompt.isNotEmpty;
+    if (chat != null) {
+      final changedChat = _lastAutoScrollChatId != chat.id;
+      final changedCount = _lastAutoScrollMessageCount != messages.length;
+      if (changedChat || changedCount) {
+        _lastAutoScrollChatId = chat.id;
+        _lastAutoScrollMessageCount = messages.length;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _scrollToLatest();
+        });
+      }
+    }
     if (chat != null && _pendingSystemPrompt != (chat.systemPrompt ?? '')) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
