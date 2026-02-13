@@ -1,27 +1,33 @@
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:http/http.dart';
 import 'package:now_chat/app/router.dart';
 import 'package:now_chat/core/models/message.dart';
 import 'package:now_chat/providers/chat_provider.dart';
 import 'package:now_chat/ui/widgets/markdown_message_widget.dart';
-import 'package:now_chat/util/app_logger.dart';
 import 'package:provider/provider.dart';
 import 'message_bottom_sheet_menu.dart';
 
 class AssistantMessageWidget extends StatefulWidget {
   final Message message;
   final bool isGenerating;
+  final bool showResendButton;
   final VoidCallback onDelete;
-  const AssistantMessageWidget({super.key, required this.message, required this.isGenerating, required this.onDelete});
+  final VoidCallback? onResend;
+  const AssistantMessageWidget({
+    super.key,
+    required this.message,
+    required this.isGenerating,
+    required this.showResendButton,
+    required this.onDelete,
+    this.onResend,
+  });
 
   @override
   State<AssistantMessageWidget> createState() => _AssistantMessageWidgetState();
 }
 
 class _AssistantMessageWidgetState extends State<AssistantMessageWidget>
-  with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin {
   bool _expanded = false;
   late final AnimationController _controller;
 
@@ -60,7 +66,6 @@ class _AssistantMessageWidgetState extends State<AssistantMessageWidget>
     final reasoningSeconds = (message.reasoningTimeMs ?? 0) / 1000.0;
 
     return InkWell(
-
       // 长按弹出菜单
       onLongPress: () {
         showModalBottomSheetMenu(
@@ -86,7 +91,7 @@ class _AssistantMessageWidgetState extends State<AssistantMessageWidget>
               },
             ),
             SheetMenuItem(
-              icon: Icon(Icons.delete_outline, color: colors.error,),
+              icon: Icon(Icons.delete_outline, color: colors.error),
               label: '删除消息',
               onTap: () {
                 widget.onDelete();
@@ -101,24 +106,26 @@ class _AssistantMessageWidgetState extends State<AssistantMessageWidget>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (message.content.isEmpty && chat.isGenerating && (message.reasoning == null ? true : message.reasoning!.isEmpty))
-            Padding(
-              padding: const EdgeInsets.only(left: 16),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 25,
-                    height: 25,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 3,
-                      color: colors.primary,
+            if (message.content.isEmpty &&
+                chat.isGenerating &&
+                (message.reasoning == null ? true : message.reasoning!.isEmpty))
+              Padding(
+                padding: const EdgeInsets.only(left: 16),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 25,
+                      height: 25,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 3,
+                        color: colors.primary,
+                      ),
                     ),
-                  ),
-                  SizedBox(width: 16,),
-                  Text("生成中...")
-                ],
+                    SizedBox(width: 16),
+                    const Text("生成中...", style: TextStyle(fontSize: 16)),
+                  ],
+                ),
               ),
-            ),
 
             // reasoning 信息块
             if (message.reasoning != null && message.reasoning!.isNotEmpty)
@@ -133,7 +140,7 @@ class _AssistantMessageWidgetState extends State<AssistantMessageWidget>
                           '已思考 ${reasoningSeconds.toStringAsFixed(1)} 秒',
                           style: TextStyle(
                             color: colors.onSurfaceVariant,
-                            fontSize: 14,
+                            fontSize: 16,
                           ),
                         ),
                         const SizedBox(width: 4),
@@ -141,10 +148,12 @@ class _AssistantMessageWidgetState extends State<AssistantMessageWidget>
                           borderRadius: BorderRadius.circular(20),
                           onTap: _toggleExpand,
                           child: RotationTransition(
-                            turns: Tween<double>(begin: 0, end: 0.5)
-                                .animate(CurvedAnimation(
-                                    parent: _controller,
-                                    curve: Curves.easeInOut)),
+                            turns: Tween<double>(begin: 0, end: 0.5).animate(
+                              CurvedAnimation(
+                                parent: _controller,
+                                curve: Curves.easeInOut,
+                              ),
+                            ),
                             child: Icon(
                               Icons.expand_more,
                               size: 22,
@@ -154,7 +163,7 @@ class _AssistantMessageWidgetState extends State<AssistantMessageWidget>
                         ),
                       ],
                     ),
-                
+
                     // 展开区域动画
                     AnimatedCrossFade(
                       duration: const Duration(milliseconds: 200),
@@ -170,13 +179,14 @@ class _AssistantMessageWidgetState extends State<AssistantMessageWidget>
                           message.reasoning!,
                           style: TextStyle(
                             color: colors.onSurfaceVariant,
-                            fontSize: 14,
+                            fontSize: 16,
                           ),
                         ),
                       ),
-                      crossFadeState: _expanded
-                          ? CrossFadeState.showSecond
-                          : CrossFadeState.showFirst,
+                      crossFadeState:
+                          _expanded
+                              ? CrossFadeState.showSecond
+                              : CrossFadeState.showFirst,
                     ),
                   ],
                 ),
@@ -185,59 +195,48 @@ class _AssistantMessageWidgetState extends State<AssistantMessageWidget>
             // 主内容，支持Markdown
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(8),
-              ),
+              decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
               child: MarkdownMessageWidget(data: message.content),
             ),
 
             // 底部按钮
             if (!widget.isGenerating)
-            Row(
-              children: [
-                // 重新生成按钮
-                IconButton(
-                  onPressed: () {},
-                  icon: Icon(
-                    size: 20,
-                    Icons.refresh_outlined
-                  ),
-                  tooltip: "重新生成",
-                ),
-                Spacer(),
+              Row(
+                children: [
+                  if (widget.showResendButton)
+                    IconButton(
+                      onPressed: widget.onResend,
+                      icon: Icon(size: 20, Icons.refresh_outlined),
+                      tooltip: "重新发送",
+                    ),
+                  const Spacer(),
 
-                // 编辑按钮
-                IconButton(
-                  onPressed: () {
-                    Navigator.pushNamed(
-                      context,
-                      AppRoutes.editMessage,
-                      arguments: message,
-                    );
-                  },
-                  icon: Icon(
-                    size: 20,
-                    Icons.edit_outlined
+                  // 编辑按钮
+                  IconButton(
+                    onPressed: () {
+                      Navigator.pushNamed(
+                        context,
+                        AppRoutes.editMessage,
+                        arguments: message,
+                      );
+                    },
+                    icon: Icon(size: 20, Icons.edit_outlined),
+                    tooltip: "编辑",
                   ),
-                  tooltip: "编辑",
-                ),
 
-                //复制按钮
-                IconButton(
-                  onPressed: () {
-                    Clipboard.setData(ClipboardData(text: message.content));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('内容已复制')),
-                    );
-                  },
-                  icon: Icon(
-                    size: 20,
-                    Icons.copy_outlined
+                  //复制按钮
+                  IconButton(
+                    onPressed: () {
+                      Clipboard.setData(ClipboardData(text: message.content));
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(const SnackBar(content: Text('内容已复制')));
+                    },
+                    icon: Icon(size: 20, Icons.copy_outlined),
+                    tooltip: "复制",
                   ),
-                  tooltip: "复制",
-                )
-              ],
-            ),
+                ],
+              ),
           ],
         ),
       ),

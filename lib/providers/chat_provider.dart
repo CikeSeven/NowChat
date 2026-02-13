@@ -17,8 +17,6 @@ class ChatProvider with ChangeNotifier {
   final List<AIProviderConfig> _providers = [];
   List<Message> _currentMessages = [];
 
-  
-
   bool _initialized = false;
 
   List<ChatSession> get chatList => List.unmodifiable(_chatList);
@@ -52,8 +50,6 @@ class ChatProvider with ChangeNotifier {
     }
   }
 
-  
-
   /// 加载某个会话的所有消息
   Future<void> loadMessages(int? chatId) async {
     if (chatId == null) {
@@ -71,7 +67,7 @@ class ChatProvider with ChangeNotifier {
     final chat = ChatSession(
       title: title ?? "新会话 ${_chatList.length + 1}",
       createdAt: DateTime.now(),
-      lastUpdated: DateTime.now()
+      lastUpdated: DateTime.now(),
     );
     await isar.writeTxn(() async {
       await isar.chatSessions.put(chat);
@@ -112,6 +108,7 @@ class ChatProvider with ChangeNotifier {
     ChatSession chat, {
     String? providerId,
     String? model,
+    String? systemPrompt,
     double? temperature,
     double? topP,
     int? maxTokens,
@@ -122,6 +119,7 @@ class ChatProvider with ChangeNotifier {
     chat.updateConfig(
       providerId: providerId,
       model: model,
+      systemPrompt: systemPrompt,
       temperature: temperature,
       topP: topP,
       maxTokens: maxTokens,
@@ -150,7 +148,9 @@ class ChatProvider with ChangeNotifier {
   // 添加消息
   Future<void> saveMessage(Message message) async {
     // 更新 _currentMessages
-    final index = _currentMessages.indexWhere((m) => m.isarId == message.isarId);
+    final index = _currentMessages.indexWhere(
+      (m) => m.isarId == message.isarId,
+    );
     if (index >= 0) {
       // 已存在 -> 替换
       _currentMessages[index] = message;
@@ -172,15 +172,24 @@ class ChatProvider with ChangeNotifier {
 
     AppLogger.i("删除消息: $isarId");
     // 从内存中同步删除
-  _currentMessages.removeWhere((m) => m.isarId == isarId);
+    _currentMessages.removeWhere((m) => m.isarId == isarId);
     notifyListeners();
   }
 
   // 刷新API的模型列表
-  Future<void> refreshConfigModels(String id, List<String> models) async {
+  Future<void> refreshConfigModels(
+    String id,
+    List<String> models, {
+    Map<String, String>? modelRemarks,
+    Map<String, ModelFeatureOptions>? modelCapabilities,
+  }) async {
     final provider = getProviderById(id);
     if (provider == null) return;
-    provider.models = models;
+    provider.updateConfig(
+      models: models,
+      modelRemarks: modelRemarks ?? provider.modelRemarks,
+      modelCapabilities: modelCapabilities ?? provider.modelCapabilities,
+    );
     await _saveProvidersl();
     notifyListeners();
   }
@@ -192,7 +201,6 @@ class ChatProvider with ChangeNotifier {
     notifyListeners();
   }
 
-
   // 删除Provider
   Future<void> deleteProvider(String id) async {
     _providers.removeWhere((p) => p.id == id);
@@ -200,172 +208,352 @@ class ChatProvider with ChangeNotifier {
     notifyListeners();
   }
 
-
   //更新Provider信息
   Future<void> updateProvider(
     String providerId, {
-       String? name,
-       ProviderType? type,
-       String? baseUrl,
-       String? urlPath,
-       String? apiKey,
-       List<String>? models,
-    }) async {
-      AIProviderConfig? provider = getProviderById(providerId);
-      if(provider == null) return;
-      provider.updateConfig(
-        name: name,
-        type: type,
-        baseUrl: baseUrl,
-        apiKey: apiKey,
-        urlPath: urlPath,
-        models: models
-      );
-      _saveProvidersl;
-      notifyListeners();
-    }
+    String? name,
+    ProviderType? type,
+    RequestMode? requestMode,
+    String? baseUrl,
+    String? urlPath,
+    String? apiKey,
+    List<String>? models,
+    Map<String, String>? modelRemarks,
+    Map<String, ModelFeatureOptions>? modelCapabilities,
+  }) async {
+    AIProviderConfig? provider = getProviderById(providerId);
+    if (provider == null) return;
+    provider.updateConfig(
+      name: name,
+      type: type,
+      requestMode: requestMode,
+      baseUrl: baseUrl,
+      apiKey: apiKey,
+      urlPath: urlPath,
+      models: models,
+      modelRemarks: modelRemarks,
+      modelCapabilities: modelCapabilities,
+    );
+    await _saveProvidersl();
+    notifyListeners();
+  }
 
   // 获取api模型列表
-  Future<List<String>> fetchModels(AIProviderConfig provider, String baseUrl, String apiKey) async {
+  Future<List<String>> fetchModels(
+    AIProviderConfig provider,
+    String baseUrl,
+    String apiKey,
+  ) async {
     final models = await ApiService.fetchModels(provider, baseUrl, apiKey);
     return models;
   }
 
   // 重新生成消息
   Future<void> regenerateMessage(int chatId, bool isStreaming) async {
-    // TODO
+    final chat = getChatById(chatId);
+    if (chat == null || chat.isGenerating) return;
+    final provider = getProviderById(chat.providerId ?? '');
+    if (provider == null) return;
+
+    final messages = await getMessagesByChatId(chatId);
+    if (messages.isEmpty) return;
+
+    final lastUserIndex = messages.lastIndexWhere((m) => m.role == 'user');
+    if (lastUserIndex == -1) return;
+
+    final trailingAssistantMessages =
+        messages
+            .skip(lastUserIndex + 1)
+            .where((m) => m.role == 'assistant')
+            .toList();
+
+    final backupAssistantMessages = List<Message>.from(
+      trailingAssistantMessages,
+    );
+    await _deleteMessagesByIds(
+      trailingAssistantMessages.map((m) => m.isarId).toSet(),
+    );
+
+    await _setChatGenerating(chat, true);
+    try {
+      final aiMsg = Message(
+        chatId: chatId,
+        role: 'assistant',
+        content: '',
+        reasoning: '',
+        timestamp: DateTime.now(),
+      );
+      await saveMessage(aiMsg);
+
+      final effectiveStreaming =
+          isStreaming && provider.requestMode.supportsStreaming;
+      if (isStreaming && !provider.requestMode.supportsStreaming) {
+        AppLogger.w("当前请求方式不支持流式输出，已自动回退为普通请求");
+      }
+
+      String? failureReason;
+      bool responseStarted = false;
+
+      if (effectiveStreaming) {
+        Timer? reasoningTimer;
+        DateTime? reasoningStartTime;
+        try {
+          await ApiService.sendChatRequestStreaming(
+            provider: provider,
+            session: chat,
+            isar: isar,
+            onStream: (deltaContent, deltaReasoning) async {
+              bool notifyNeeded = false;
+
+              if (deltaReasoning != null && deltaReasoning.isNotEmpty) {
+                if (reasoningStartTime == null) {
+                  reasoningStartTime = DateTime.now();
+                  reasoningTimer = Timer.periodic(
+                    const Duration(milliseconds: 100),
+                    (_) async {
+                      aiMsg.reasoningTimeMs =
+                          DateTime.now()
+                              .difference(reasoningStartTime!)
+                              .inMilliseconds;
+                      notifyListeners();
+                    },
+                  );
+                }
+                aiMsg.reasoning = (aiMsg.reasoning ?? '') + deltaReasoning;
+                notifyNeeded = true;
+              }
+
+              if (deltaContent.isNotEmpty) {
+                responseStarted = true;
+                reasoningTimer?.cancel();
+                aiMsg.content += deltaContent;
+                notifyNeeded = true;
+              }
+
+              if (notifyNeeded) await saveMessage(aiMsg);
+            },
+            onDone: () async {
+              reasoningTimer?.cancel();
+              if (reasoningStartTime != null) {
+                aiMsg.reasoningTimeMs =
+                    DateTime.now()
+                        .difference(reasoningStartTime!)
+                        .inMilliseconds;
+              }
+              await saveMessage(aiMsg);
+            },
+          );
+        } catch (e) {
+          failureReason = e.toString();
+        }
+      } else {
+        try {
+          final response = await ApiService.sendChatRequest(
+            provider: provider,
+            session: chat,
+            isar: isar,
+          );
+          aiMsg
+            ..content = response['content'] ?? ''
+            ..reasoning = response['reasoning']
+            ..reasoningTimeMs = response['reasoningTimeMs'];
+          if (aiMsg.content.trim().isNotEmpty) {
+            responseStarted = true;
+          }
+          await saveMessage(aiMsg);
+        } catch (e) {
+          failureReason = e.toString();
+        }
+      }
+
+      final shouldRestoreOldReply = !responseStarted;
+      if (shouldRestoreOldReply) {
+        await _deleteMessagesByIds({aiMsg.isarId});
+        if (backupAssistantMessages.isNotEmpty) {
+          await _restoreMessages(backupAssistantMessages);
+        }
+        if (failureReason != null) {
+          AppLogger.w("重新发送失败，已恢复旧回复: $failureReason");
+        } else {
+          AppLogger.w("重新发送未产出有效内容，已恢复旧回复");
+        }
+      }
+    } finally {
+      await _setChatGenerating(chat, false);
+    }
   }
 
   // 发送消息
-  Future<void> sendMessage(int chatId, String userContent, bool isStreaming) async {
+  Future<void> sendMessage(
+    int chatId,
+    String userContent,
+    bool isStreaming,
+    List<String>? attachmentPaths,
+  ) async {
     AppLogger.i("发送消息");
     final chat = getChatById(chatId);
     if (chat == null) return;
     final provider = getProviderById(chat.providerId ?? '');
     if (provider == null) {
-      await saveMessage(Message(
-        chatId: chatId,
-        role: 'assistant',
-        content: '无效的 Provider',
-        timestamp: DateTime.now(),
-      ));
+      await saveMessage(
+        Message(
+          chatId: chatId,
+          role: 'assistant',
+          content: '无效的 Provider',
+          timestamp: DateTime.now(),
+        ),
+      );
       notifyListeners();
       return;
     }
-    updateChat(
-      chat,
-      isGenerating: true,
-      lastUpdated: DateTime.now()
-    );
-
-    // 添加用户消息
-    final userMsg = Message(
+    await _setChatGenerating(chat, true);
+    try {
+      // 添加用户消息
+      final userMsg = Message(
         chatId: chatId,
         role: 'user',
         content: userContent,
-        timestamp: DateTime.now()
+        imagePaths: attachmentPaths,
+        timestamp: DateTime.now(),
       );
 
-    await saveMessage(userMsg);
-    notifyListeners();
+      await saveMessage(userMsg);
+      notifyListeners();
 
-    // 临时 assistant 消息
-    final aiMsg = Message(
-      chatId: chatId,
-      role: 'assistant',
-      content: '',
-      reasoning: '',
-      timestamp: DateTime.now()
-    );
+      // 临时 assistant 消息
+      final aiMsg = Message(
+        chatId: chatId,
+        role: 'assistant',
+        content: '',
+        reasoning: '',
+        timestamp: DateTime.now(),
+      );
 
-    await saveMessage(aiMsg);
-    notifyListeners();
-    
+      await saveMessage(aiMsg);
+      notifyListeners();
 
-    // 流式对话
-    if (isStreaming) {
-      Timer? reasoningTimer;
-      DateTime? reasoningStartTime;
+      // 流式对话
+      final effectiveStreaming =
+          isStreaming && provider.requestMode.supportsStreaming;
+      if (isStreaming && !provider.requestMode.supportsStreaming) {
+        AppLogger.w("当前请求方式不支持流式输出，已自动回退为普通请求");
+      }
 
-      try {
-        await ApiService.sendChatRequestStreaming(
-          provider: provider,
-          session: chat,
-          isar: isar,
-          onStream: (deltaContent, deltaReasoning) async {
-            bool notifyNeeded = false;
+      if (effectiveStreaming) {
+        Timer? reasoningTimer;
+        DateTime? reasoningStartTime;
 
-            if (deltaReasoning != null && deltaReasoning.isNotEmpty) {
-              if (reasoningStartTime == null) {
-                reasoningStartTime = DateTime.now();
-                reasoningTimer = Timer.periodic(const Duration(milliseconds: 100), (_) async {
-                  aiMsg.reasoningTimeMs =
-                      DateTime.now().difference(reasoningStartTime!).inMilliseconds;
-                  notifyListeners();
-                });
+        try {
+          await ApiService.sendChatRequestStreaming(
+            provider: provider,
+            session: chat,
+            isar: isar,
+            onStream: (deltaContent, deltaReasoning) async {
+              bool notifyNeeded = false;
+
+              if (deltaReasoning != null && deltaReasoning.isNotEmpty) {
+                if (reasoningStartTime == null) {
+                  reasoningStartTime = DateTime.now();
+                  reasoningTimer = Timer.periodic(
+                    const Duration(milliseconds: 100),
+                    (_) async {
+                      aiMsg.reasoningTimeMs =
+                          DateTime.now()
+                              .difference(reasoningStartTime!)
+                              .inMilliseconds;
+                      notifyListeners();
+                    },
+                  );
+                }
+                aiMsg.reasoning = (aiMsg.reasoning ?? '') + deltaReasoning;
+                notifyNeeded = true;
               }
-              aiMsg.reasoning = (aiMsg.reasoning ?? '') + deltaReasoning;
-              notifyNeeded = true;
-            }
 
-            if (deltaContent.isNotEmpty) {
+              if (deltaContent.isNotEmpty) {
+                reasoningTimer?.cancel();
+                aiMsg.content += deltaContent;
+                notifyNeeded = true;
+              }
+
+              if (notifyNeeded) await saveMessage(aiMsg);
+            },
+            onDone: () async {
+              AppLogger.i("onDone: 流式请求结束");
               reasoningTimer?.cancel();
-              aiMsg.content += deltaContent;
-              notifyNeeded = true;
-            }
-
-            if (notifyNeeded) await saveMessage(aiMsg);
-          },
-          onDone: () async {
-            AppLogger.i("onDone: 流式请求结束");
-            reasoningTimer?.cancel();
-            if (reasoningStartTime != null) {
-              aiMsg.reasoningTimeMs =
-                  DateTime.now().difference(reasoningStartTime!).inMilliseconds;
-            }
-            // 确保生成状态关闭
-            final chat = getChatById(chatId);
-            if (chat != null) {
-              chat.isGenerating = false;
-              await isar.writeTxn(() async {
-                await isar.chatSessions.put(chat);
-              });
-              notifyListeners();
-            }
-            await saveMessage(aiMsg);
-          },
-        );
-      } catch (e) {
-        aiMsg.content = "AI 响应出错：${e.toString()}";
-        await saveMessage(aiMsg);
+              if (reasoningStartTime != null) {
+                aiMsg.reasoningTimeMs =
+                    DateTime.now()
+                        .difference(reasoningStartTime!)
+                        .inMilliseconds;
+              }
+              await saveMessage(aiMsg);
+            },
+          );
+        } catch (e) {
+          aiMsg.content = "AI 响应出错：${e.toString()}";
+          await saveMessage(aiMsg);
+        }
+      } else {
+        try {
+          final response = await ApiService.sendChatRequest(
+            provider: provider,
+            session: chat,
+            isar: isar,
+          );
+          aiMsg
+            ..content = response['content'] ?? ''
+            ..reasoning = response['reasoning']
+            ..reasoningTimeMs = response['reasoningTimeMs'];
+          await saveMessage(aiMsg);
+        } catch (e) {
+          aiMsg.content = '请求失败: $e';
+          await saveMessage(aiMsg);
+        }
       }
-    } else {
-      try {
-        final response = await ApiService.sendChatRequest(
-          provider: provider,
-          session: chat,
-          isar: isar,
-        );
-        aiMsg
-          ..content = response['content'] ?? ''
-          ..reasoning = response['reasoning']
-          ..reasoningTimeMs = response['reasoningTimeMs'];
-        await saveMessage(aiMsg);
-      } catch (e) {
-        aiMsg.content = '请求失败: $e';
-        await saveMessage(aiMsg);
-      }
+    } finally {
+      await _setChatGenerating(chat, false);
     }
     notifyListeners();
   }
 
+  Future<void> _setChatGenerating(ChatSession chat, bool isGenerating) async {
+    chat.isGenerating = isGenerating;
+    await isar.writeTxn(() async {
+      await isar.chatSessions.put(chat);
+    });
+    notifyListeners();
+  }
+
+  Future<void> _deleteMessagesByIds(Set<int> ids) async {
+    if (ids.isEmpty) return;
+    await isar.writeTxn(() async {
+      for (final id in ids) {
+        await isar.messages.delete(id);
+      }
+    });
+    _currentMessages.removeWhere((m) => ids.contains(m.isarId));
+    notifyListeners();
+  }
+
+  Future<void> _restoreMessages(List<Message> messages) async {
+    if (messages.isEmpty) return;
+    await isar.writeTxn(() async {
+      for (final msg in messages) {
+        await isar.messages.put(msg);
+      }
+    });
+    _currentMessages.addAll(messages);
+    _currentMessages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+    notifyListeners();
+  }
 
   // 本地存取
   Future<void> _loadFromLocal() async {
     if (_initialized) return;
     _initialized = true;
-    
-    final chats = await isar.chatSessions.where().sortByLastUpdatedDesc().findAll();
+
+    final chats =
+        await isar.chatSessions.where().sortByLastUpdatedDesc().findAll();
     await isar.writeTxn(() async {
       for (var chat in chats) {
         if (chat.isGenerating) {
@@ -376,7 +564,6 @@ class ChatProvider with ChangeNotifier {
     });
     _chatList.clear();
     _chatList.addAll(chats);
-
 
     final loadedProviders = await Storage.loadProviders();
     _providers.clear();

@@ -1,4 +1,3 @@
-
 import 'package:isar/isar.dart';
 
 part 'message.g.dart';
@@ -31,6 +30,7 @@ class Message {
     'content': content,
     'reasoning': reasoning,
     'reasoningTimeMs': reasoningTimeMs,
+    'imagePaths': imagePaths,
     'timestamp': timestamp.toIso8601String(),
   };
 
@@ -40,8 +40,8 @@ class Message {
     content: json['content'],
     reasoning: json['reasoning'],
     reasoningTimeMs: json['reasoningTimeMs'],
+    imagePaths:
+        (json['imagePaths'] as List?)?.map((e) => e.toString()).toList(),
     timestamp: DateTime.parse(json['timestamp']),
   );
-
 }
-

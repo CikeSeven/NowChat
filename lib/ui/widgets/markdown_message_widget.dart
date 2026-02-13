@@ -20,19 +20,17 @@ class MarkdownMessageWidget extends StatelessWidget {
           launchUrl(Uri.parse(href));
         }
       },
-      
-      builders: {
-        'code': CodeBlockBuilder(context),
-      },
-      
+      builders: {'code': CodeBlockBuilder(context)},
       styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+        p: TextStyle(fontSize: 16, color: color.onSurface, height: 1.45),
+        listBullet: TextStyle(fontSize: 16, color: color.onSurface),
         codeblockDecoration: BoxDecoration(
           color: color.surfaceContainerHighest.withAlpha(130),
           borderRadius: BorderRadius.circular(10),
         ),
         code: TextStyle(
           fontFamily: 'monospace',
-          fontSize: 14,
+          fontSize: 15,
           color: color.onSurfaceVariant,
         ),
         a: TextStyle(
@@ -43,13 +41,12 @@ class MarkdownMessageWidget extends StatelessWidget {
           color: color.onSurfaceVariant,
           fontStyle: FontStyle.italic,
         ),
-        img: TextStyle(fontSize: 0), // 避免图片间距异常
+        img: TextStyle(fontSize: 0),
       ),
     );
   }
 }
 
-/// 支持在构建器中传入 context，以便使用主题与 ScaffoldMessenger
 class CodeBlockBuilder extends MarkdownElementBuilder {
   final BuildContext context;
   CodeBlockBuilder(this.context);
@@ -73,13 +70,13 @@ class CodeBlockBuilder extends MarkdownElementBuilder {
     if (code.isEmpty) return null;
 
     final color = Theme.of(context).colorScheme;
-    final language = element.attributes['class']?.replaceFirst('language-', '') ?? '';
-
-    // 判断是否为多行代码块
-    final isMultiline = code.contains('\n') || element.attributes['class']?.contains('language-') == true;
+    final language =
+        element.attributes['class']?.replaceFirst('language-', '') ?? '';
+    final isMultiline =
+        code.contains('\n') ||
+        element.attributes['class']?.contains('language-') == true;
 
     if (!isMultiline) {
-      // 单行内联代码
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         decoration: BoxDecoration(
@@ -90,14 +87,13 @@ class CodeBlockBuilder extends MarkdownElementBuilder {
           code,
           style: TextStyle(
             fontFamily: 'monospace',
-            fontSize: 14,
+            fontSize: 15,
             color: color.onSurfaceVariant,
           ),
         ),
       );
     }
 
-    //多行代码块
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.symmetric(vertical: 6),
@@ -108,53 +104,55 @@ class CodeBlockBuilder extends MarkdownElementBuilder {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 16, right: 16),
-          child: Row(
-            children: [
-              Text(
-                language.isNotEmpty ? language : 'code',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: color.onSurfaceVariant.withAlpha(180),
-                ),
-              ),
-              const Spacer(),
-              SizedBox(
-                width: 22,
-                height: 22,
-                child: IconButton(
-                  icon: Icon(
-                    Icons.copy,
-                    size: 18,
-                    color: color.onSurfaceVariant.withAlpha(220),
+          Padding(
+            padding: const EdgeInsets.only(left: 16, right: 16),
+            child: Row(
+              children: [
+                Text(
+                  language.isNotEmpty ? language : 'code',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: color.onSurfaceVariant.withAlpha(180),
                   ),
-                  tooltip: '复制代码',
-                  onPressed: () {
-                    Clipboard.setData(ClipboardData(text: code));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('已复制到剪贴板')),
-                    );
-                  },
                 ),
-              ),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.only(left: 12, right: 12, top: 8, bottom: 12),
-          child: HighlightView(
-            code,
-            language: language, // 自动识别语言
-            theme: githubTheme, // 可改为 draculaTheme、monokaiSublimeTheme 等
-            padding: EdgeInsets.zero,
-            textStyle: const TextStyle(
-              fontFamily: 'monospace',
-              fontSize: 14,
+                const Spacer(),
+                SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: IconButton(
+                    icon: Icon(
+                      Icons.copy,
+                      size: 18,
+                      color: color.onSurfaceVariant.withAlpha(220),
+                    ),
+                    tooltip: '复制代码',
+                    onPressed: () {
+                      Clipboard.setData(ClipboardData(text: code));
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(const SnackBar(content: Text('已复制到剪贴板')));
+                    },
+                  ),
+                ),
+              ],
             ),
           ),
-        ),
-      ],
+          Padding(
+            padding: const EdgeInsets.only(
+              left: 12,
+              right: 12,
+              top: 8,
+              bottom: 12,
+            ),
+            child: HighlightView(
+              code,
+              language: language,
+              theme: githubTheme,
+              padding: EdgeInsets.zero,
+              textStyle: const TextStyle(fontFamily: 'monospace', fontSize: 15),
+            ),
+          ),
+        ],
       ),
     );
   }

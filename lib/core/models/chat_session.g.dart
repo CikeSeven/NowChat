@@ -52,18 +52,23 @@ const ChatSessionSchema = CollectionSchema(
       name: r'providerId',
       type: IsarType.string,
     ),
-    r'temperature': PropertySchema(
+    r'systemPrompt': PropertySchema(
       id: 7,
+      name: r'systemPrompt',
+      type: IsarType.string,
+    ),
+    r'temperature': PropertySchema(
+      id: 8,
       name: r'temperature',
       type: IsarType.double,
     ),
     r'title': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'title',
       type: IsarType.string,
     ),
     r'topP': PropertySchema(
-      id: 9,
+      id: 10,
       name: r'topP',
       type: IsarType.double,
     )
@@ -100,6 +105,12 @@ int _chatSessionEstimateSize(
       bytesCount += 3 + value.length * 3;
     }
   }
+  {
+    final value = object.systemPrompt;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
   bytesCount += 3 + object.title.length * 3;
   return bytesCount;
 }
@@ -117,9 +128,10 @@ void _chatSessionSerialize(
   writer.writeLong(offsets[4], object.maxTokens);
   writer.writeString(offsets[5], object.model);
   writer.writeString(offsets[6], object.providerId);
-  writer.writeDouble(offsets[7], object.temperature);
-  writer.writeString(offsets[8], object.title);
-  writer.writeDouble(offsets[9], object.topP);
+  writer.writeString(offsets[7], object.systemPrompt);
+  writer.writeDouble(offsets[8], object.temperature);
+  writer.writeString(offsets[9], object.title);
+  writer.writeDouble(offsets[10], object.topP);
 }
 
 ChatSession _chatSessionDeserialize(
@@ -136,9 +148,10 @@ ChatSession _chatSessionDeserialize(
     maxTokens: reader.readLongOrNull(offsets[4]) ?? 4096,
     model: reader.readStringOrNull(offsets[5]),
     providerId: reader.readStringOrNull(offsets[6]),
-    temperature: reader.readDoubleOrNull(offsets[7]) ?? 0.7,
-    title: reader.readString(offsets[8]),
-    topP: reader.readDoubleOrNull(offsets[9]) ?? 1.0,
+    systemPrompt: reader.readStringOrNull(offsets[7]),
+    temperature: reader.readDoubleOrNull(offsets[8]) ?? 0.7,
+    title: reader.readString(offsets[9]),
+    topP: reader.readDoubleOrNull(offsets[10]) ?? 1.0,
   );
   object.id = id;
   return object;
@@ -166,10 +179,12 @@ P _chatSessionDeserializeProp<P>(
     case 6:
       return (reader.readStringOrNull(offset)) as P;
     case 7:
-      return (reader.readDoubleOrNull(offset) ?? 0.7) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 8:
-      return (reader.readString(offset)) as P;
+      return (reader.readDoubleOrNull(offset) ?? 0.7) as P;
     case 9:
+      return (reader.readString(offset)) as P;
+    case 10:
       return (reader.readDoubleOrNull(offset) ?? 1.0) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -814,6 +829,160 @@ extension ChatSessionQueryFilter
   }
 
   QueryBuilder<ChatSession, ChatSession, QAfterFilterCondition>
+      systemPromptIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'systemPrompt',
+      ));
+    });
+  }
+
+  QueryBuilder<ChatSession, ChatSession, QAfterFilterCondition>
+      systemPromptIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'systemPrompt',
+      ));
+    });
+  }
+
+  QueryBuilder<ChatSession, ChatSession, QAfterFilterCondition>
+      systemPromptEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'systemPrompt',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ChatSession, ChatSession, QAfterFilterCondition>
+      systemPromptGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'systemPrompt',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ChatSession, ChatSession, QAfterFilterCondition>
+      systemPromptLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'systemPrompt',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ChatSession, ChatSession, QAfterFilterCondition>
+      systemPromptBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'systemPrompt',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ChatSession, ChatSession, QAfterFilterCondition>
+      systemPromptStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'systemPrompt',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ChatSession, ChatSession, QAfterFilterCondition>
+      systemPromptEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'systemPrompt',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ChatSession, ChatSession, QAfterFilterCondition>
+      systemPromptContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'systemPrompt',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ChatSession, ChatSession, QAfterFilterCondition>
+      systemPromptMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'systemPrompt',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ChatSession, ChatSession, QAfterFilterCondition>
+      systemPromptIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'systemPrompt',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<ChatSession, ChatSession, QAfterFilterCondition>
+      systemPromptIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'systemPrompt',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<ChatSession, ChatSession, QAfterFilterCondition>
       temperatureEqualTo(
     double value, {
     double epsilon = Query.epsilon,
@@ -1167,6 +1336,19 @@ extension ChatSessionQuerySortBy
     });
   }
 
+  QueryBuilder<ChatSession, ChatSession, QAfterSortBy> sortBySystemPrompt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'systemPrompt', Sort.asc);
+    });
+  }
+
+  QueryBuilder<ChatSession, ChatSession, QAfterSortBy>
+      sortBySystemPromptDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'systemPrompt', Sort.desc);
+    });
+  }
+
   QueryBuilder<ChatSession, ChatSession, QAfterSortBy> sortByTemperature() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'temperature', Sort.asc);
@@ -1303,6 +1485,19 @@ extension ChatSessionQuerySortThenBy
     });
   }
 
+  QueryBuilder<ChatSession, ChatSession, QAfterSortBy> thenBySystemPrompt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'systemPrompt', Sort.asc);
+    });
+  }
+
+  QueryBuilder<ChatSession, ChatSession, QAfterSortBy>
+      thenBySystemPromptDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'systemPrompt', Sort.desc);
+    });
+  }
+
   QueryBuilder<ChatSession, ChatSession, QAfterSortBy> thenByTemperature() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'temperature', Sort.asc);
@@ -1386,6 +1581,13 @@ extension ChatSessionQueryWhereDistinct
     });
   }
 
+  QueryBuilder<ChatSession, ChatSession, QDistinct> distinctBySystemPrompt(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'systemPrompt', caseSensitive: caseSensitive);
+    });
+  }
+
   QueryBuilder<ChatSession, ChatSession, QDistinct> distinctByTemperature() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'temperature');
@@ -1453,6 +1655,12 @@ extension ChatSessionQueryProperty
   QueryBuilder<ChatSession, String?, QQueryOperations> providerIdProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'providerId');
+    });
+  }
+
+  QueryBuilder<ChatSession, String?, QQueryOperations> systemPromptProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'systemPrompt');
     });
   }
 

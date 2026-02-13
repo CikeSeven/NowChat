@@ -8,6 +8,7 @@ class ChatSession {
   late String title;
   String? providerId;
   String? model;
+  String? systemPrompt;
   double temperature = 0.7;
   double topP = 1.0;
   int maxTokens = 4096;
@@ -20,6 +21,7 @@ class ChatSession {
     required this.title,
     this.providerId,
     this.model,
+    this.systemPrompt,
     this.temperature = 0.7,
     this.topP = 1.0,
     this.maxTokens = 4096,
@@ -28,11 +30,11 @@ class ChatSession {
     required this.createdAt,
     required this.lastUpdated,
   });
-  
 
   void updateConfig({
     String? providerId,
     String? model,
+    String? systemPrompt,
     double? temperature,
     double? topP,
     int? maxTokens,
@@ -42,6 +44,7 @@ class ChatSession {
   }) {
     if (providerId != null) this.providerId = providerId;
     if (model != null) this.model = model;
+    if (systemPrompt != null) this.systemPrompt = systemPrompt;
     if (temperature != null) this.temperature = temperature;
     if (topP != null) this.topP = topP;
     if (maxTokens != null) this.maxTokens = maxTokens;
@@ -54,6 +57,7 @@ class ChatSession {
     String? title,
     String? providerId,
     String? model,
+    String? systemPrompt,
     double? temperature,
     double? topP,
     int? maxTokens,
@@ -65,16 +69,16 @@ class ChatSession {
       title: title ?? this.title,
       providerId: providerId ?? this.providerId,
       model: model ?? this.model,
+      systemPrompt: systemPrompt ?? this.systemPrompt,
       temperature: temperature ?? this.temperature,
       topP: topP ?? this.topP,
       maxTokens: maxTokens ?? this.maxTokens,
       isStreaming: isStreaming ?? this.isStreaming,
       createdAt: createdAt,
       isGenerating: isGenerating ?? this.isGenerating,
-      lastUpdated: lastUpdated ?? this.lastUpdated
+      lastUpdated: lastUpdated ?? this.lastUpdated,
     );
   }
-
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -82,6 +86,7 @@ class ChatSession {
     'createdAt': createdAt.toIso8601String(),
     'providerId': providerId,
     'model': model,
+    'systemPrompt': systemPrompt,
     'temperature': temperature,
     'topP': topP,
     'maxTokens': maxTokens,
@@ -94,6 +99,7 @@ class ChatSession {
     title: json['title'],
     providerId: json['providerId'],
     model: json['model'],
+    systemPrompt: json['systemPrompt']?.toString(),
     temperature: (json['temperature'] ?? 0.7).toDouble(),
     topP: (json['topP'] ?? 1.0).toDouble(),
     maxTokens: json['maxTokens'] ?? 4096,
@@ -102,5 +108,4 @@ class ChatSession {
     createdAt: DateTime.parse(json['createdAt']),
     lastUpdated: DateTime.parse(json['lastUpdated']),
   );
-
 }

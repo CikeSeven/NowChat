@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:now_chat/ui/pages/chat_settings_page.dart';
 import 'package:now_chat/ui/pages/edit_message_page.dart';
-import 'package:now_chat/ui/pages/edit_provider_page.dart';
+import 'package:now_chat/ui/pages/provider_form_page.dart';
 
 import '../core/models/message.dart';
 import '../ui/pages/chat_detail_page.dart';
@@ -9,7 +10,8 @@ import '../ui/pages/home_page.dart';
 class AppRoutes {
   static const home = '/';
   static const chatDetail = '/chat/detail';
-  static const editProvider = '/edit_provider';
+  static const chatSettings = '/chat/settings';
+  static const providerForm = '/provider/form';
   static const editMessage = '/edit_message';
 
   static Route<dynamic> generateRoute(RouteSettings settings) {
@@ -23,37 +25,50 @@ class AppRoutes {
         return MaterialPageRoute(
           builder: (_) => ChatDetailPage(chatId: chatId),
         );
-        
-      case editProvider:
+
+      case chatSettings:
         final args = settings.arguments as Map<String, dynamic>?;
-        final providerId = args?['providerId'];
+        final rawChatId = args?['chatId'];
+        final chatId =
+            rawChatId is int
+                ? rawChatId
+                : int.tryParse(rawChatId?.toString() ?? '');
+        if (chatId == null) {
+          return MaterialPageRoute(
+            builder: (_) => const Scaffold(body: Center(child: Text('会话不存在'))),
+          );
+        }
         return _buildSlideRoute(
-          builder: (_) => EditProviderPage(providerId: providerId,)
+          builder: (_) => ChatSettingsPage(chatId: chatId),
         );
-      
+
+      case providerForm:
+        final args = settings.arguments as Map<String, dynamic>?;
+        final providerId = args?['providerId'] as String?;
+        return _buildSlideRoute(
+          builder: (_) => ProviderFormPage(providerId: providerId),
+        );
+
       case editMessage:
         // 直接传 Message 对象，不用拆 Map
         final message = settings.arguments as Message?;
         if (message == null) {
           return MaterialPageRoute(
-            builder: (_) => const Scaffold(
-              body: Center(child: Text('消息不存在')),
-            ),
+            builder: (_) => const Scaffold(body: Center(child: Text('消息不存在'))),
           );
         }
         return _buildSlideRoute(
           builder: (_) => EditMessagePage(message: message),
         );
 
-
       default:
         return MaterialPageRoute(
-          builder: (_) => const Scaffold(
-            body: Center(child: Text('404 页面未找到')),
-          ),
+          builder:
+              (_) => const Scaffold(body: Center(child: Text('404 页面未找到'))),
         );
     }
   }
+
   static Route<T> _buildSlideRoute<T>({required WidgetBuilder builder}) {
     return PageRouteBuilder<T>(
       pageBuilder: (context, animation, secondaryAnimation) => builder(context),
