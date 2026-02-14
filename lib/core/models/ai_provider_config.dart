@@ -1,13 +1,17 @@
 import 'package:uuid/uuid.dart';
 
+/// 内置与兼容提供方类型。
 enum ProviderType {
   openai,
   gemini,
   claude,
   ollama,
   deepseek,
-  openaiCompatible; // OpenAI API兼容类型
 
+  /// 兼容 OpenAI Chat Completions 协议的第三方服务。
+  openaiCompatible;
+
+  /// 提供方默认显示名称。
   String get defaultName {
     switch (this) {
       case ProviderType.openai:
@@ -25,6 +29,7 @@ enum ProviderType {
     }
   }
 
+  /// 提供方默认基础地址。
   String get defaultBaseUrl {
     switch (this) {
       case ProviderType.openai:
@@ -42,6 +47,7 @@ enum ProviderType {
     }
   }
 
+  /// 提供方默认请求路径。
   String get defaultPath {
     switch (this) {
       case ProviderType.deepseek:
@@ -57,6 +63,7 @@ enum ProviderType {
     }
   }
 
+  /// 是否允许用户在 UI 编辑路径。
   bool get allowEditPath {
     switch (this) {
       case ProviderType.openai:
@@ -70,17 +77,19 @@ enum ProviderType {
     }
   }
 
+  /// 当前提供方是否必须提供 API Key。
   bool get requiresApiKey {
-    // 是否需要Key
     return true;
   }
 }
 
+/// 请求协议模式。
 enum RequestMode {
   openaiChat,
   geminiGenerateContent,
   claudeMessages;
 
+  /// 在 UI 中显示的协议标签。
   String get label {
     switch (this) {
       case RequestMode.openaiChat:
@@ -92,6 +101,7 @@ enum RequestMode {
     }
   }
 
+  /// 是否支持流式响应。
   bool get supportsStreaming {
     switch (this) {
       case RequestMode.openaiChat:
@@ -101,6 +111,7 @@ enum RequestMode {
     }
   }
 
+  /// 当前协议默认路径模板。
   String get defaultPath {
     switch (this) {
       case RequestMode.openaiChat:
@@ -113,8 +124,12 @@ enum RequestMode {
   }
 }
 
+/// 单个模型可选能力配置。
 class ModelFeatureOptions {
+  /// 是否支持视觉输入。
   final bool supportsVision;
+
+  /// 是否支持工具调用。
   final bool supportsTools;
 
   const ModelFeatureOptions({
@@ -122,8 +137,10 @@ class ModelFeatureOptions {
     this.supportsTools = false,
   });
 
+  /// 是否至少开启了一项能力。
   bool get hasAnyCapability => supportsVision || supportsTools;
 
+  /// 返回带有部分字段变更的新实例。
   ModelFeatureOptions copyWith({bool? supportsVision, bool? supportsTools}) {
     return ModelFeatureOptions(
       supportsVision: supportsVision ?? this.supportsVision,
@@ -131,11 +148,13 @@ class ModelFeatureOptions {
     );
   }
 
+  /// 序列化为 JSON。
   Map<String, dynamic> toJson() => {
     'supportsVision': supportsVision,
     'supportsTools': supportsTools,
   };
 
+  /// 从动态对象解析能力配置，兼容多种历史字段名。
   static ModelFeatureOptions fromDynamic(dynamic raw) {
     if (raw is Map) {
       final supportsVision =
@@ -155,17 +174,37 @@ class ModelFeatureOptions {
   }
 }
 
+/// 用户配置的 AI 提供方实体。
 class AIProviderConfig {
-  final String id; // 唯一ID
-  String name; // 用户自定义名称
-  ProviderType type; // 提供方类型
-  RequestMode requestMode; // 请求方式
-  String? baseUrl; // API基础URL
-  String? urlPath; //API路径
-  String? apiKey; // 用户提供的Key
-  List<String> models; // 模型列表
-  Map<String, String> modelRemarks; // 模型备注（key: 模型名, value: 备注名）
-  Map<String, ModelFeatureOptions> modelCapabilities; // 模型能力配置
+  /// 全局唯一 ID。
+  final String id;
+
+  /// 提供方显示名称。
+  String name;
+
+  /// 提供方类别。
+  ProviderType type;
+
+  /// 请求协议模式。
+  RequestMode requestMode;
+
+  /// 基础地址（例如 `https://api.openai.com`）。
+  String? baseUrl;
+
+  /// 请求路径（可包含 `[model]` 占位符）。
+  String? urlPath;
+
+  /// 鉴权密钥。
+  String? apiKey;
+
+  /// 该提供方可选模型列表。
+  List<String> models;
+
+  /// 模型备注（`模型名 -> 备注显示名`）。
+  Map<String, String> modelRemarks;
+
+  /// 模型能力配置（`模型名 -> 能力`）。
+  Map<String, ModelFeatureOptions> modelCapabilities;
 
   AIProviderConfig({
     required this.id,
@@ -188,6 +227,7 @@ class AIProviderConfig {
          models: _normalizeModels(models),
        );
 
+  /// 创建一个用于新建流程的空白配置。
   factory AIProviderConfig.newCustom() {
     return AIProviderConfig(
       id: const Uuid().v4(),
@@ -203,6 +243,7 @@ class AIProviderConfig {
     );
   }
 
+  /// 按需更新当前配置。
   void updateConfig({
     String? name,
     ProviderType? type,
@@ -245,6 +286,7 @@ class AIProviderConfig {
     }
   }
 
+  /// 获取模型在 UI 的显示名（优先备注）。
   String displayNameForModel(String model) {
     final trimmed = model.trim();
     if (trimmed.isEmpty) return model;
@@ -253,12 +295,14 @@ class AIProviderConfig {
     return remark;
   }
 
+  /// 获取指定模型能力配置。
   ModelFeatureOptions featuresForModel(String model) {
     final trimmed = model.trim();
     if (trimmed.isEmpty) return const ModelFeatureOptions();
     return modelCapabilities[trimmed] ?? const ModelFeatureOptions();
   }
 
+  /// 序列化为 JSON。
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
@@ -274,6 +318,7 @@ class AIProviderConfig {
     ),
   };
 
+  /// 返回带有部分字段变更的新实例。
   AIProviderConfig copyWith({
     String? id,
     String? name,
@@ -300,6 +345,7 @@ class AIProviderConfig {
     );
   }
 
+  /// 从 JSON 反序列化配置。
   factory AIProviderConfig.fromJson(Map<String, dynamic> json) =>
       AIProviderConfig(
         id: json['id'],
@@ -463,6 +509,7 @@ class AIProviderConfig {
     return _normalizeCapabilities(capabilities: capabilities, models: models);
   }
 
+  /// 根据已保存字段推断请求模式，兼容历史数据。
   static RequestMode inferRequestMode({
     required ProviderType type,
     String? baseUrl,

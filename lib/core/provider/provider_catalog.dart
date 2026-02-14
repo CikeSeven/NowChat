@@ -1,12 +1,26 @@
 import 'package:now_chat/core/models/ai_provider_config.dart';
 
+/// 提供方预设配置。
 class ProviderPreset {
+  /// 预设唯一标识。
   final String id;
+
+  /// 预设显示名称。
   final String name;
+
+  /// 预设描述信息。
   final String description;
+
+  /// 提供方类型。
   final ProviderType type;
+
+  /// 请求协议模式。
   final RequestMode requestMode;
+
+  /// 默认基础地址。
   final String baseUrl;
+
+  /// 默认请求路径。
   final String path;
 
   const ProviderPreset({
@@ -20,9 +34,12 @@ class ProviderPreset {
   });
 }
 
+/// 内置提供方目录与检索逻辑。
 class ProviderCatalog {
+  /// “自定义”预设 ID。
   static const String customId = 'custom';
 
+  /// 应用内可选预设列表。
   static const List<ProviderPreset> presets = [
     ProviderPreset(
       id: 'openai',
@@ -165,6 +182,7 @@ class ProviderCatalog {
     ),
   ];
 
+  /// 按名称或描述搜索预设。
   static List<ProviderPreset> search(String keyword) {
     final query = keyword.trim().toLowerCase();
     if (query.isEmpty) return presets;
@@ -174,6 +192,7 @@ class ProviderCatalog {
     }).toList();
   }
 
+  /// 根据 ID 获取预设，找不到时回退首项。
   static ProviderPreset findById(String? id) {
     return presets.firstWhere(
       (preset) => preset.id == id,
@@ -181,6 +200,7 @@ class ProviderCatalog {
     );
   }
 
+  /// 从用户配置反查最匹配的预设。
   static ProviderPreset matchFromConfig(AIProviderConfig config) {
     final currentBaseUrl = (config.baseUrl ?? '').trim().toLowerCase();
     final currentPath = (config.urlPath ?? '').trim().toLowerCase();
