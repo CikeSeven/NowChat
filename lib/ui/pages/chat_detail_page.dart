@@ -34,6 +34,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   String _pendingSystemPrompt = '';
   List<String> _pendingAttachmentPaths = <String>[];
   bool _isRequestingMoreHistory = false;
+  bool _defaultsInitialized = false;
 
   @override
   void initState() {
@@ -44,16 +45,34 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     if (widget.chatId != null) {
       _chat = chatProvider.getChatById(widget.chatId!); // 加载当前会话的消息
       _pendingSystemPrompt = _chat?.systemPrompt ?? '';
-      context.read<ChatProvider>().loadInitialMessages(widget.chatId!).then((_) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        _scrollToLatestOnEnter();
+        context.read<ChatProvider>().loadInitialMessages(widget.chatId!).then((_) {
+          if (!mounted) return;
+          _scrollToLatestOnEnter();
+        });
       });
     } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        context.read<ChatProvider>().loadInitialMessages(null);
+      });
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_defaultsInitialized) return;
+    _defaultsInitialized = true;
+    if (widget.chatId != null) return;
+    try {
       final settings = context.read<SettingsProvider>();
       _providerId = settings.defaultProviderId;
       _model = settings.defaultModel;
       _isStreaming = settings.defaultStreaming;
-      context.read<ChatProvider>().loadInitialMessages(null);
+    } catch (_) {
+      // 忽略默认设置读取失败，保持新会话可用。
     }
   }
 
