@@ -130,6 +130,7 @@ class _ApiPageState extends State<ApiPage> {
                           provider.id,
                         );
                         return _ApiProviderCard(
+                          key: ValueKey('api-provider-${provider.id}'),
                           provider: provider,
                           isExpanded: isExpanded,
                           onToggleExpand:
@@ -209,6 +210,7 @@ class _ApiProviderCard extends StatelessWidget {
   final VoidCallback onDelete;
 
   const _ApiProviderCard({
+    super.key,
     required this.provider,
     required this.isExpanded,
     required this.onToggleExpand,

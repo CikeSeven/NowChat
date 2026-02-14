@@ -7,10 +7,12 @@ class MessageInput extends StatefulWidget {
   final ChatSession? chat;
   final bool isStreaming;
   final bool streamingSupported;
+  final bool isGenerating;
   final String? model;
   final bool modelSupportsVision;
   final bool modelSupportsTools;
   final void Function(String text, List<String> attachments) onSend;
+  final VoidCallback? onStopGenerating;
   final ValueChanged<bool?> streamingChanged;
   final VoidCallback? onModelSelected;
   final VoidCallback? onPickImage;
@@ -23,9 +25,11 @@ class MessageInput extends StatefulWidget {
     super.key,
     required this.chat,
     required this.onSend,
+    this.onStopGenerating,
     required this.onModelSelected,
     required this.isStreaming,
     required this.streamingSupported,
+    this.isGenerating = false,
     this.onPickImage,
     this.onPickFile,
     this.onRemoveAttachment,
@@ -216,8 +220,7 @@ class _MessageInputState extends State<MessageInput> {
   bool get _canSendNow =>
       (_controller.text.trim().isNotEmpty || widget.attachments.isNotEmpty) &&
       ((widget.chat?.model?.trim().isNotEmpty ?? false) ||
-          (widget.model?.trim().isNotEmpty ?? false)) &&
-      !(widget.chat != null && widget.chat!.isGenerating);
+          (widget.model?.trim().isNotEmpty ?? false));
 
   Widget _capabilityIcon(
     BuildContext context, {
@@ -418,18 +421,28 @@ class _MessageInputState extends State<MessageInput> {
                           height: 30,
                           child: IconButton(
                             onPressed: () {
-                              _handleSend();
+                              if (widget.isGenerating) {
+                                widget.onStopGenerating?.call();
+                                return;
+                              }
+                              if (_canSendNow) {
+                                _handleSend();
+                              }
                             },
                             padding: EdgeInsets.zero, // 去掉内边距
                             constraints: const BoxConstraints(), // 去掉默认最小尺寸
                             icon: Icon(
-                              Icons.send,
+                              widget.isGenerating
+                                  ? Icons.stop_circle_outlined
+                                  : Icons.send,
                               color:
-                                  _canSendNow
+                                  widget.isGenerating
+                                      ? color.error
+                                      : _canSendNow
                                       ? color.primary
                                       : color.onSurfaceVariant.withAlpha(110),
                             ),
-                            tooltip: '发送消息',
+                            tooltip: widget.isGenerating ? '打断生成' : '发送消息',
                           ),
                         ),
                       ],

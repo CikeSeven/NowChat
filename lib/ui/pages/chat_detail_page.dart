@@ -196,15 +196,29 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                                 () => chatProvider.deleteMessage(msg.isarId),
                           );
                         } else if (msg.role == "assistant") {
+                          final showContinueButton =
+                              isLastMessage &&
+                              chatProvider.canContinueAssistantMessage(
+                                chat.id,
+                                msg.isarId,
+                              );
                           return AssistantMessageWidget(
                             message: msg,
                             isGenerating: chat.isGenerating,
                             showResendButton: isLastMessage,
+                            showContinueButton: showContinueButton,
                             onResend: () async {
                               await chatProvider.regenerateMessage(
                                 chat.id,
                                 chat.isStreaming,
                               );
+                            },
+                            onContinue: () async {
+                              await chatProvider
+                                  .continueGeneratingAssistantMessage(
+                                    chat.id,
+                                    chat.isStreaming,
+                                  );
                             },
                             onDelete:
                                 () => chatProvider.deleteMessage(msg.isarId),
@@ -219,6 +233,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           MessageInput(
             chat: chat,
             model: selectedModelDisplay,
+            isGenerating: chat?.isGenerating ?? false,
             modelSupportsVision: selectedModelFeatures.supportsVision,
             modelSupportsTools: selectedModelFeatures.supportsTools,
             attachments: _pendingAttachmentPaths,
@@ -264,6 +279,11 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             },
             onModelSelected: () async {
               _showModelSelector(context);
+            },
+            onStopGenerating: () {
+              if (chat != null) {
+                chatProvider.interruptGeneration(chat.id);
+              }
             },
             onPickImage:
                 () => _pickImages(

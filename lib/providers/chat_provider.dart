@@ -10,12 +10,26 @@ import '../core/models/chat_session.dart';
 import '../core/models/message.dart';
 import '../util/storage.dart';
 
+class _PendingContinuation {
+  final int assistantMessageId;
+  final int anchorUserMessageId;
+
+  const _PendingContinuation({
+    required this.assistantMessageId,
+    required this.anchorUserMessageId,
+  });
+}
+
 class ChatProvider with ChangeNotifier {
   final Isar isar;
 
   final List<ChatSession> _chatList = [];
   final List<AIProviderConfig> _providers = [];
   List<Message> _currentMessages = [];
+  final Map<int, GenerationAbortController> _abortControllers =
+      <int, GenerationAbortController>{};
+  final Map<int, _PendingContinuation> _pendingContinuations =
+      <int, _PendingContinuation>{};
 
   bool _initialized = false;
 
@@ -87,6 +101,8 @@ class ChatProvider with ChangeNotifier {
       AppLogger.i("删除会话(id: $id) 与 $count 条消息");
     });
     _chatList.removeWhere((c) => c.id == id);
+    _abortControllers.remove(id);
+    _pendingContinuations.remove(id);
     _currentMessages.clear();
     notifyListeners();
   }
@@ -172,7 +188,16 @@ class ChatProvider with ChangeNotifier {
 
     AppLogger.i("删除消息: $isarId");
     // 从内存中同步删除
+    final removedIndex = _currentMessages.indexWhere((m) => m.isarId == isarId);
+    final removedChatId =
+        removedIndex >= 0 ? _currentMessages[removedIndex].chatId : null;
     _currentMessages.removeWhere((m) => m.isarId == isarId);
+    if (removedChatId != null) {
+      final pending = _pendingContinuations[removedChatId];
+      if (pending != null && pending.assistantMessageId == isarId) {
+        _pendingContinuations.remove(removedChatId);
+      }
+    }
     notifyListeners();
   }
 
@@ -248,6 +273,139 @@ class ChatProvider with ChangeNotifier {
     return models;
   }
 
+  bool canContinueAssistantMessage(int chatId, int assistantMessageId) {
+    final pending = _pendingContinuations[chatId];
+    if (pending == null) return false;
+    return pending.assistantMessageId == assistantMessageId;
+  }
+
+  void interruptGeneration(int chatId) {
+    final controller = _abortControllers[chatId];
+    if (controller == null) return;
+    controller.abort();
+    AppLogger.i("已请求中断会话($chatId)的生成");
+  }
+
+  Future<void> continueGeneratingAssistantMessage(
+    int chatId,
+    bool isStreaming,
+  ) async {
+    final chat = getChatById(chatId);
+    if (chat == null || chat.isGenerating) return;
+    final provider = getProviderById(chat.providerId ?? '');
+    if (provider == null) return;
+    final pending = _pendingContinuations[chatId];
+    if (pending == null) return;
+
+    final messages = await getMessagesByChatId(chatId);
+    final assistantIndex = messages.indexWhere(
+      (m) => m.isarId == pending.assistantMessageId,
+    );
+    if (assistantIndex == -1) {
+      _pendingContinuations.remove(chatId);
+      notifyListeners();
+      return;
+    }
+    final assistantMessage = messages[assistantIndex];
+    final anchorIndex = messages.lastIndexWhere(
+      (m) => m.isarId == pending.anchorUserMessageId,
+    );
+    if (anchorIndex == -1 || anchorIndex >= assistantIndex) {
+      _pendingContinuations.remove(chatId);
+      notifyListeners();
+      return;
+    }
+
+    final requestMessages = <Message>[
+      ...messages.take(assistantIndex + 1),
+      Message(
+        chatId: chatId,
+        role: 'user',
+        content: '继续上一条回复未完成的内容，从中断位置接着写，不要重复已输出内容。',
+        timestamp: DateTime.now(),
+      ),
+    ];
+
+    final abortController = GenerationAbortController();
+    _abortControllers[chatId] = abortController;
+    await _setChatGenerating(chat, true);
+    bool responseStarted = false;
+    bool interrupted = false;
+
+    try {
+      final effectiveStreaming =
+          isStreaming && provider.requestMode.supportsStreaming;
+      if (isStreaming && !provider.requestMode.supportsStreaming) {
+        AppLogger.w("当前请求方式不支持流式输出，已自动回退为普通请求");
+      }
+
+      if (effectiveStreaming) {
+        await ApiService.sendChatRequestStreaming(
+          provider: provider,
+          session: chat,
+          isar: isar,
+          abortController: abortController,
+          overrideMessages: requestMessages,
+          onStream: (deltaContent, deltaReasoning) async {
+            bool notifyNeeded = false;
+            if (deltaReasoning != null && deltaReasoning.isNotEmpty) {
+              assistantMessage.reasoning =
+                  (assistantMessage.reasoning ?? '') + deltaReasoning;
+              notifyNeeded = true;
+            }
+            if (deltaContent.isNotEmpty) {
+              responseStarted = true;
+              assistantMessage.content += deltaContent;
+              notifyNeeded = true;
+            }
+            if (notifyNeeded) {
+              await saveMessage(assistantMessage);
+            }
+          },
+          onDone: () async {
+            await saveMessage(assistantMessage);
+          },
+        );
+      } else {
+        final response = await ApiService.sendChatRequest(
+          provider: provider,
+          session: chat,
+          isar: isar,
+          abortController: abortController,
+          overrideMessages: requestMessages,
+        );
+        final content = (response['content'] ?? '').toString();
+        final reasoning = response['reasoning']?.toString();
+        assistantMessage
+          ..content += content
+          ..reasoning =
+              ((assistantMessage.reasoning ?? '') + (reasoning ?? '')).trim()
+          ..reasoningTimeMs = response['reasoningTimeMs'];
+        if (content.trim().isNotEmpty) {
+          responseStarted = true;
+        }
+        await saveMessage(assistantMessage);
+      }
+    } on GenerationAbortedException {
+      interrupted = true;
+      AppLogger.i("继续生成已中断(chatId=$chatId)");
+    } catch (e) {
+      AppLogger.w("继续生成失败(chatId=$chatId): $e");
+    } finally {
+      _abortControllers.remove(chatId);
+      await _setChatGenerating(chat, false);
+    }
+
+    final hasAnyOutput = assistantMessage.content.trim().isNotEmpty;
+    if (interrupted && hasAnyOutput) {
+      // 用户手动中断时，无论本次是否已开始新增输出，都保留“继续”入口。
+      _pendingContinuations[chatId] = pending;
+    } else if (responseStarted) {
+      _pendingContinuations.remove(chatId);
+    }
+    notifyListeners();
+  }
+
   // 重新生成消息
   Future<void> regenerateMessage(int chatId, bool isStreaming) async {
     final chat = getChatById(chatId);
@@ -274,7 +432,10 @@ class ChatProvider with ChangeNotifier {
       trailingAssistantMessages.map((m) => m.isarId).toSet(),
     );
 
+    final abortController = GenerationAbortController();
+    _abortControllers[chatId] = abortController;
     await _setChatGenerating(chat, true);
+    bool interrupted = false;
     try {
       final aiMsg = Message(
         chatId: chatId,
@@ -302,6 +463,7 @@ class ChatProvider with ChangeNotifier {
             provider: provider,
             session: chat,
             isar: isar,
+            abortController: abortController,
             onStream: (deltaContent, deltaReasoning) async {
               bool notifyNeeded = false;
 
@@ -343,6 +505,8 @@ class ChatProvider with ChangeNotifier {
               await saveMessage(aiMsg);
             },
           );
+        } on GenerationAbortedException {
+          interrupted = true;
         } catch (e) {
           failureReason = e.toString();
         }
@@ -352,6 +516,7 @@ class ChatProvider with ChangeNotifier {
             provider: provider,
             session: chat,
             isar: isar,
+            abortController: abortController,
           );
           aiMsg
             ..content = response['content'] ?? ''
@@ -361,12 +526,18 @@ class ChatProvider with ChangeNotifier {
             responseStarted = true;
           }
           await saveMessage(aiMsg);
+        } on GenerationAbortedException {
+          interrupted = true;
         } catch (e) {
           failureReason = e.toString();
         }
       }
 
-      final shouldRestoreOldReply = !responseStarted;
+      final hasAnyOutput =
+          aiMsg.content.trim().isNotEmpty ||
+          ((aiMsg.reasoning ?? '').trim().isNotEmpty);
+      final shouldRestoreOldReply = !responseStarted && !interrupted;
+      final shouldKeepInterruptedPartial = interrupted && hasAnyOutput;
       if (shouldRestoreOldReply) {
         await _deleteMessagesByIds({aiMsg.isarId});
         if (backupAssistantMessages.isNotEmpty) {
@@ -377,8 +548,22 @@ class ChatProvider with ChangeNotifier {
         } else {
           AppLogger.w("重新发送未产出有效内容，已恢复旧回复");
         }
+      } else if (shouldKeepInterruptedPartial) {
+        _pendingContinuations[chatId] = _PendingContinuation(
+          assistantMessageId: aiMsg.isarId,
+          anchorUserMessageId: messages[lastUserIndex].isarId,
+        );
+      } else if (interrupted && !hasAnyOutput) {
+        await _deleteMessagesByIds({aiMsg.isarId});
+        if (backupAssistantMessages.isNotEmpty) {
+          await _restoreMessages(backupAssistantMessages);
+        }
+        _pendingContinuations.remove(chatId);
+      } else {
+        _pendingContinuations.remove(chatId);
       }
     } finally {
+      _abortControllers.remove(chatId);
       await _setChatGenerating(chat, false);
     }
   }
@@ -406,7 +591,11 @@ class ChatProvider with ChangeNotifier {
       notifyListeners();
       return;
     }
+    _pendingContinuations.remove(chatId);
+    final abortController = GenerationAbortController();
+    _abortControllers[chatId] = abortController;
     await _setChatGenerating(chat, true);
+    bool interrupted = false;
     try {
       // 添加用户消息
       final userMsg = Message(
@@ -435,6 +624,7 @@ class ChatProvider with ChangeNotifier {
       // 流式对话
       final effectiveStreaming =
           isStreaming && provider.requestMode.supportsStreaming;
+      bool responseStarted = false;
       if (isStreaming && !provider.requestMode.supportsStreaming) {
         AppLogger.w("当前请求方式不支持流式输出，已自动回退为普通请求");
       }
@@ -448,6 +638,7 @@ class ChatProvider with ChangeNotifier {
             provider: provider,
             session: chat,
             isar: isar,
+            abortController: abortController,
             onStream: (deltaContent, deltaReasoning) async {
               bool notifyNeeded = false;
 
@@ -470,6 +661,7 @@ class ChatProvider with ChangeNotifier {
               }
 
               if (deltaContent.isNotEmpty) {
+                responseStarted = true;
                 reasoningTimer?.cancel();
                 aiMsg.content += deltaContent;
                 notifyNeeded = true;
@@ -489,6 +681,8 @@ class ChatProvider with ChangeNotifier {
               await saveMessage(aiMsg);
             },
           );
+        } on GenerationAbortedException {
+          interrupted = true;
         } catch (e) {
           aiMsg.content = "AI 响应出错：${e.toString()}";
           await saveMessage(aiMsg);
@@ -499,18 +693,39 @@ class ChatProvider with ChangeNotifier {
             provider: provider,
             session: chat,
             isar: isar,
+            abortController: abortController,
           );
           aiMsg
             ..content = response['content'] ?? ''
             ..reasoning = response['reasoning']
             ..reasoningTimeMs = response['reasoningTimeMs'];
+          if (aiMsg.content.trim().isNotEmpty) {
+            responseStarted = true;
+          }
           await saveMessage(aiMsg);
+        } on GenerationAbortedException {
+          interrupted = true;
         } catch (e) {
           aiMsg.content = '请求失败: $e';
           await saveMessage(aiMsg);
         }
       }
+
+      final hasAnyOutput =
+          aiMsg.content.trim().isNotEmpty ||
+          ((aiMsg.reasoning ?? '').trim().isNotEmpty);
+      if (interrupted && hasAnyOutput) {
+        _pendingContinuations[chatId] = _PendingContinuation(
+          assistantMessageId: aiMsg.isarId,
+          anchorUserMessageId: userMsg.isarId,
+        );
+      } else if (interrupted && !hasAnyOutput) {
+        await _deleteMessagesByIds({aiMsg.isarId});
+      } else if (responseStarted) {
+        _pendingContinuations.remove(chatId);
+      }
     } finally {
+      _abortControllers.remove(chatId);
       await _setChatGenerating(chat, false);
     }
     notifyListeners();
@@ -526,12 +741,23 @@ class ChatProvider with ChangeNotifier {
 
   Future<void> _deleteMessagesByIds(Set<int> ids) async {
     if (ids.isEmpty) return;
+    final removedChatIds =
+        _currentMessages
+            .where((m) => ids.contains(m.isarId))
+            .map((m) => m.chatId)
+            .toSet();
     await isar.writeTxn(() async {
       for (final id in ids) {
         await isar.messages.delete(id);
       }
     });
     _currentMessages.removeWhere((m) => ids.contains(m.isarId));
+    for (final chatId in removedChatIds) {
+      final pending = _pendingContinuations[chatId];
+      if (pending != null && ids.contains(pending.assistantMessageId)) {
+        _pendingContinuations.remove(chatId);
+      }
+    }
     notifyListeners();
   }
 
@@ -551,6 +777,8 @@ class ChatProvider with ChangeNotifier {
   Future<void> _loadFromLocal() async {
     if (_initialized) return;
     _initialized = true;
+    _abortControllers.clear();
+    _pendingContinuations.clear();
 
     final chats =
         await isar.chatSessions.where().sortByLastUpdatedDesc().findAll();

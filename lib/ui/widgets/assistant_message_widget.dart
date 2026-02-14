@@ -11,15 +11,19 @@ class AssistantMessageWidget extends StatefulWidget {
   final Message message;
   final bool isGenerating;
   final bool showResendButton;
+  final bool showContinueButton;
   final VoidCallback onDelete;
   final VoidCallback? onResend;
+  final VoidCallback? onContinue;
   const AssistantMessageWidget({
     super.key,
     required this.message,
     required this.isGenerating,
     required this.showResendButton,
+    this.showContinueButton = false,
     required this.onDelete,
     this.onResend,
+    this.onContinue,
   });
 
   @override
@@ -208,6 +212,16 @@ class _AssistantMessageWidgetState extends State<AssistantMessageWidget>
                       onPressed: widget.onResend,
                       icon: Icon(size: 20, Icons.refresh_outlined),
                       tooltip: "重新发送",
+                    ),
+                  if (widget.showContinueButton)
+                    TextButton.icon(
+                      onPressed: widget.onContinue,
+                      icon: const Icon(Icons.play_arrow_rounded, size: 18),
+                      label: const Text('继续'),
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                      ),
                     ),
                   const Spacer(),
 

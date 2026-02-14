@@ -9,6 +9,41 @@ import 'package:now_chat/util/app_logger.dart';
 import '../models/ai_provider_config.dart';
 import '../models/chat_session.dart';
 
+class GenerationAbortedException implements Exception {
+  final String message;
+  const GenerationAbortedException([
+    this.message = 'generation aborted by user',
+  ]);
+
+  @override
+  String toString() => message;
+}
+
+class GenerationAbortController {
+  bool _aborted = false;
+  final List<void Function()> _listeners = <void Function()>[];
+
+  bool get isAborted => _aborted;
+
+  void onAbort(void Function() listener) {
+    if (_aborted) {
+      listener();
+      return;
+    }
+    _listeners.add(listener);
+  }
+
+  void abort() {
+    if (_aborted) return;
+    _aborted = true;
+    final snapshot = List<void Function()>.from(_listeners);
+    _listeners.clear();
+    for (final listener in snapshot) {
+      listener();
+    }
+  }
+}
+
 class ApiService {
   static const Duration _fetchModelsTimeout = Duration(seconds: 15);
   static const int _maxFileTextChars = 12000;
@@ -524,6 +559,10 @@ class ApiService {
             .sortByTimestamp()
             .findAll();
 
+    return _filterMessagesForRequest(messages);
+  }
+
+  static List<Message> _filterMessagesForRequest(List<Message> messages) {
     return messages
         .where(
           (m) =>
@@ -533,11 +572,28 @@ class ApiService {
         .toList();
   }
 
+  static Future<List<Message>> _resolveRequestMessages(
+    Isar isar,
+    ChatSession session, {
+    List<Message>? overrideMessages,
+  }) async {
+    if (overrideMessages != null) {
+      return _filterMessagesForRequest(overrideMessages);
+    }
+    return _loadFilteredMessages(isar, session);
+  }
+
+  static bool _isAbortTriggered(GenerationAbortController? controller) {
+    return controller?.isAborted ?? false;
+  }
+
   // 流式对话
   static Future<void> sendChatRequestStreaming({
     required AIProviderConfig provider,
     required ChatSession session,
     required Isar isar,
+    GenerationAbortController? abortController,
+    List<Message>? overrideMessages,
     FutureOr<void> Function(String deltaContent, String? deltaReasoning)?
     onStream,
     FutureOr<void> Function()? onDone,
@@ -548,6 +604,8 @@ class ApiService {
           provider: provider,
           session: session,
           isar: isar,
+          abortController: abortController,
+          overrideMessages: overrideMessages,
           onStream: onStream,
           onDone: onDone,
         );
@@ -557,6 +615,8 @@ class ApiService {
           provider: provider,
           session: session,
           isar: isar,
+          abortController: abortController,
+          overrideMessages: overrideMessages,
           onStream: onStream,
           onDone: onDone,
         );
@@ -566,6 +626,8 @@ class ApiService {
           provider: provider,
           session: session,
           isar: isar,
+          abortController: abortController,
+          overrideMessages: overrideMessages,
           onStream: onStream,
           onDone: onDone,
         );
@@ -577,15 +639,27 @@ class ApiService {
     required AIProviderConfig provider,
     required ChatSession session,
     required Isar isar,
+    GenerationAbortController? abortController,
+    List<Message>? overrideMessages,
     FutureOr<void> Function(String deltaContent, String? deltaReasoning)?
     onStream,
     FutureOr<void> Function()? onDone,
   }) async {
     final client = http.Client();
-    final filteredMessages = await _loadFilteredMessages(isar, session);
+    abortController?.onAbort(() {
+      client.close();
+    });
+    final filteredMessages = await _resolveRequestMessages(
+      isar,
+      session,
+      overrideMessages: overrideMessages,
+    );
     bool doneEmitted = false;
 
     try {
+      if (abortController?.isAborted ?? false) {
+        throw const GenerationAbortedException();
+      }
       final base = _normalizeBaseUrl(provider.baseUrl);
       final path = _resolvePath(provider);
       final uri = _buildUri(base, path);
@@ -630,8 +704,14 @@ class ApiService {
       String buffer = '';
 
       await for (final chunk in utf8Stream) {
+        if (abortController?.isAborted ?? false) {
+          throw const GenerationAbortedException();
+        }
         buffer += chunk;
         while (true) {
+          if (abortController?.isAborted ?? false) {
+            throw const GenerationAbortedException();
+          }
           final newlineIndex = buffer.indexOf('\n');
           if (newlineIndex == -1) break;
 
@@ -687,7 +767,14 @@ class ApiService {
         doneEmitted = true;
         await onDone?.call();
       }
+    } on GenerationAbortedException {
+      AppLogger.i("(OpenAI) 流式请求已中断");
+      rethrow;
     } catch (e, st) {
+      if (_isAbortTriggered(abortController)) {
+        AppLogger.i("(OpenAI) 流式请求在中断后关闭连接");
+        throw const GenerationAbortedException();
+      }
       AppLogger.e("流接收错误: $e\n$st");
       rethrow;
     } finally {
@@ -699,15 +786,23 @@ class ApiService {
     required AIProviderConfig provider,
     required ChatSession session,
     required Isar isar,
+    GenerationAbortController? abortController,
+    List<Message>? overrideMessages,
     FutureOr<void> Function(String deltaContent, String? deltaReasoning)?
     onStream,
     FutureOr<void> Function()? onDone,
   }) async {
     final client = http.Client();
+    abortController?.onAbort(() {
+      client.close();
+    });
     bool doneEmitted = false;
     String? lastSnapshot;
 
     try {
+      if (abortController?.isAborted ?? false) {
+        throw const GenerationAbortedException();
+      }
       final base = _normalizeBaseUrl(provider.baseUrl);
       final model = _resolveModel(provider, session);
       final rawPath = _resolvePath(provider);
@@ -722,7 +817,11 @@ class ApiService {
         queryParameters['key'] = apiKey;
       }
       final uri = _buildUri(base, streamPath, queryParameters: queryParameters);
-      final filteredMessages = await _loadFilteredMessages(isar, session);
+      final filteredMessages = await _resolveRequestMessages(
+        isar,
+        session,
+        overrideMessages: overrideMessages,
+      );
       final allowVision = _supportsVisionForSessionModel(provider, session);
       final systemPrompt = _resolvedSystemPrompt(session);
       final geminiSystemInstruction = _buildGeminiSystemInstruction(
@@ -760,6 +859,9 @@ class ApiService {
       await _consumeSseEvents(
         source: utf8Stream,
         onEvent: (event, data) async {
+          if (abortController?.isAborted ?? false) {
+            throw const GenerationAbortedException();
+          }
           final payloadText = data.trim();
           if (payloadText.isEmpty) return;
 
@@ -805,7 +907,14 @@ class ApiService {
         doneEmitted = true;
         await onDone?.call();
       }
+    } on GenerationAbortedException {
+      AppLogger.i("(Gemini) 流式请求已中断");
+      rethrow;
     } catch (e, st) {
+      if (_isAbortTriggered(abortController)) {
+        AppLogger.i("(Gemini) 流式请求在中断后关闭连接");
+        throw const GenerationAbortedException();
+      }
       AppLogger.e("(Gemini) 流接收错误: $e\n$st");
       rethrow;
     } finally {
@@ -817,20 +926,32 @@ class ApiService {
     required AIProviderConfig provider,
     required ChatSession session,
     required Isar isar,
+    GenerationAbortController? abortController,
+    List<Message>? overrideMessages,
     FutureOr<void> Function(String deltaContent, String? deltaReasoning)?
     onStream,
     FutureOr<void> Function()? onDone,
   }) async {
     final client = http.Client();
+    abortController?.onAbort(() {
+      client.close();
+    });
     bool doneEmitted = false;
 
     try {
+      if (abortController?.isAborted ?? false) {
+        throw const GenerationAbortedException();
+      }
       final base = _normalizeBaseUrl(provider.baseUrl);
       final path = _resolvePath(provider);
       final uri = _buildUri(base, path);
       final model = _resolveModel(provider, session);
       final apiKey = (provider.apiKey ?? '').trim();
-      final filteredMessages = await _loadFilteredMessages(isar, session);
+      final filteredMessages = await _resolveRequestMessages(
+        isar,
+        session,
+        overrideMessages: overrideMessages,
+      );
       final allowVision = _supportsVisionForSessionModel(provider, session);
       final systemPrompt = _resolvedSystemPrompt(session);
       final messages = await _buildClaudeMessagesPayload(
@@ -869,6 +990,9 @@ class ApiService {
       await _consumeSseEvents(
         source: utf8Stream,
         onEvent: (event, data) async {
+          if (abortController?.isAborted ?? false) {
+            throw const GenerationAbortedException();
+          }
           final payloadText = data.trim();
           if (payloadText.isEmpty) return;
 
@@ -925,7 +1049,14 @@ class ApiService {
         doneEmitted = true;
         await onDone?.call();
       }
+    } on GenerationAbortedException {
+      AppLogger.i("(Claude) 流式请求已中断");
+      rethrow;
     } catch (e, st) {
+      if (_isAbortTriggered(abortController)) {
+        AppLogger.i("(Claude) 流式请求在中断后关闭连接");
+        throw const GenerationAbortedException();
+      }
       AppLogger.e("(Claude) 流接收错误: $e\n$st");
       rethrow;
     } finally {
@@ -938,6 +1069,8 @@ class ApiService {
     required AIProviderConfig provider,
     required ChatSession session,
     required Isar isar,
+    GenerationAbortController? abortController,
+    List<Message>? overrideMessages,
   }) async {
     switch (provider.requestMode) {
       case RequestMode.openaiChat:
@@ -945,18 +1078,24 @@ class ApiService {
           provider: provider,
           session: session,
           isar: isar,
+          abortController: abortController,
+          overrideMessages: overrideMessages,
         );
       case RequestMode.geminiGenerateContent:
         return _sendGeminiRequest(
           provider: provider,
           session: session,
           isar: isar,
+          abortController: abortController,
+          overrideMessages: overrideMessages,
         );
       case RequestMode.claudeMessages:
         return _sendClaudeRequest(
           provider: provider,
           session: session,
           isar: isar,
+          abortController: abortController,
+          overrideMessages: overrideMessages,
         );
     }
   }
@@ -965,13 +1104,19 @@ class ApiService {
     required AIProviderConfig provider,
     required ChatSession session,
     required Isar isar,
+    GenerationAbortController? abortController,
+    List<Message>? overrideMessages,
   }) async {
     final logger = Logger();
     final base = _normalizeBaseUrl(provider.baseUrl);
     final path = _resolvePath(provider);
     final uri = _buildUri(base, path);
     final model = _resolveModel(provider, session);
-    final filteredMessages = await _loadFilteredMessages(isar, session);
+    final filteredMessages = await _resolveRequestMessages(
+      isar,
+      session,
+      overrideMessages: overrideMessages,
+    );
     final allowVision = _supportsVisionForSessionModel(provider, session);
     final systemPrompt = _resolvedSystemPrompt(session);
 
@@ -994,31 +1139,53 @@ class ApiService {
     };
 
     logger.i("(OpenAI) 向 $uri 发送对话请求");
-    final response = await http.post(
-      uri,
-      headers: headers,
-      body: jsonEncode(body),
-    );
-    logger.i("返回体: ${response.body}");
+    final client = http.Client();
+    abortController?.onAbort(() {
+      client.close();
+    });
+    try {
+      if (abortController?.isAborted ?? false) {
+        throw const GenerationAbortedException();
+      }
+      final response = await client.post(
+        uri,
+        headers: headers,
+        body: jsonEncode(body),
+      );
+      logger.i("返回体: ${response.body}");
 
-    if (response.statusCode != 200) {
-      throw Exception('请求失败: ${response.statusCode} ${response.body}');
+      if (response.statusCode != 200) {
+        throw Exception('请求失败: ${response.statusCode} ${response.body}');
+      }
+      final data = jsonDecode(response.body);
+      final content =
+          data['choices']?[0]?['message']?['content'] ??
+          data['output'] ??
+          data['response'] ??
+          data['message'] ??
+          '（无返回内容）';
+
+      return {'content': content, 'reasoning': null, 'reasoningTimeMs': null};
+    } on GenerationAbortedException {
+      logger.i("(OpenAI) 请求已中断");
+      rethrow;
+    } catch (e) {
+      if (_isAbortTriggered(abortController)) {
+        logger.i("(OpenAI) 请求在中断后关闭连接");
+        throw const GenerationAbortedException();
+      }
+      rethrow;
+    } finally {
+      client.close();
     }
-    final data = jsonDecode(response.body);
-    final content =
-        data['choices']?[0]?['message']?['content'] ??
-        data['output'] ??
-        data['response'] ??
-        data['message'] ??
-        '（无返回内容）';
-
-    return {'content': content, 'reasoning': null, 'reasoningTimeMs': null};
   }
 
   static Future<Map<String, dynamic>> _sendGeminiRequest({
     required AIProviderConfig provider,
     required ChatSession session,
     required Isar isar,
+    GenerationAbortController? abortController,
+    List<Message>? overrideMessages,
   }) async {
     final logger = Logger();
     final base = _normalizeBaseUrl(provider.baseUrl);
@@ -1034,7 +1201,11 @@ class ApiService {
       resolvedPath,
       queryParameters: apiKey.isEmpty ? null : {'key': apiKey},
     );
-    final filteredMessages = await _loadFilteredMessages(isar, session);
+    final filteredMessages = await _resolveRequestMessages(
+      isar,
+      session,
+      overrideMessages: overrideMessages,
+    );
     final allowVision = _supportsVisionForSessionModel(provider, session);
     final systemPrompt = _resolvedSystemPrompt(session);
     final geminiSystemInstruction = _buildGeminiSystemInstruction(systemPrompt);
@@ -1055,37 +1226,59 @@ class ApiService {
     };
 
     logger.i("(Gemini) 向 $uri 发送对话请求");
-    final response = await http.post(
-      uri,
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(body),
-    );
-    logger.i("返回体: ${response.body}");
+    final client = http.Client();
+    abortController?.onAbort(() {
+      client.close();
+    });
+    try {
+      if (abortController?.isAborted ?? false) {
+        throw const GenerationAbortedException();
+      }
+      final response = await client.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      );
+      logger.i("返回体: ${response.body}");
 
-    if (response.statusCode != 200) {
-      throw Exception('请求失败: ${response.statusCode} ${response.body}');
-    }
+      if (response.statusCode != 200) {
+        throw Exception('请求失败: ${response.statusCode} ${response.body}');
+      }
 
-    final data = jsonDecode(response.body);
-    final candidates = data['candidates'];
-    if (candidates is! List || candidates.isEmpty) {
-      throw Exception('Gemini 响应缺少 candidates');
+      final data = jsonDecode(response.body);
+      final candidates = data['candidates'];
+      if (candidates is! List || candidates.isEmpty) {
+        throw Exception('Gemini 响应缺少 candidates');
+      }
+      final parts = candidates[0]?['content']?['parts'];
+      if (parts is! List || parts.isEmpty) {
+        throw Exception('Gemini 响应缺少内容');
+      }
+      final content = parts
+          .map((part) => part['text']?.toString() ?? '')
+          .where((text) => text.isNotEmpty)
+          .join('\n');
+      return {'content': content, 'reasoning': null, 'reasoningTimeMs': null};
+    } on GenerationAbortedException {
+      logger.i("(Gemini) 请求已中断");
+      rethrow;
+    } catch (e) {
+      if (_isAbortTriggered(abortController)) {
+        logger.i("(Gemini) 请求在中断后关闭连接");
+        throw const GenerationAbortedException();
+      }
+      rethrow;
+    } finally {
+      client.close();
     }
-    final parts = candidates[0]?['content']?['parts'];
-    if (parts is! List || parts.isEmpty) {
-      throw Exception('Gemini 响应缺少内容');
-    }
-    final content = parts
-        .map((part) => part['text']?.toString() ?? '')
-        .where((text) => text.isNotEmpty)
-        .join('\n');
-    return {'content': content, 'reasoning': null, 'reasoningTimeMs': null};
   }
 
   static Future<Map<String, dynamic>> _sendClaudeRequest({
     required AIProviderConfig provider,
     required ChatSession session,
     required Isar isar,
+    GenerationAbortController? abortController,
+    List<Message>? overrideMessages,
   }) async {
     final logger = Logger();
     final base = _normalizeBaseUrl(provider.baseUrl);
@@ -1093,7 +1286,11 @@ class ApiService {
     final uri = _buildUri(base, path);
     final model = _resolveModel(provider, session);
     final apiKey = (provider.apiKey ?? '').trim();
-    final filteredMessages = await _loadFilteredMessages(isar, session);
+    final filteredMessages = await _resolveRequestMessages(
+      isar,
+      session,
+      overrideMessages: overrideMessages,
+    );
     final allowVision = _supportsVisionForSessionModel(provider, session);
     final systemPrompt = _resolvedSystemPrompt(session);
     final messages = await _buildClaudeMessagesPayload(
@@ -1111,31 +1308,51 @@ class ApiService {
     };
 
     logger.i("(Claude) 向 $uri 发送对话请求");
-    final response = await http.post(
-      uri,
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: jsonEncode(body),
-    );
-    logger.i("返回体: ${response.body}");
+    final client = http.Client();
+    abortController?.onAbort(() {
+      client.close();
+    });
+    try {
+      if (abortController?.isAborted ?? false) {
+        throw const GenerationAbortedException();
+      }
+      final response = await client.post(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: jsonEncode(body),
+      );
+      logger.i("返回体: ${response.body}");
 
-    if (response.statusCode != 200) {
-      throw Exception('请求失败: ${response.statusCode} ${response.body}');
-    }
+      if (response.statusCode != 200) {
+        throw Exception('请求失败: ${response.statusCode} ${response.body}');
+      }
 
-    final data = jsonDecode(response.body);
-    final contentList = data['content'];
-    if (contentList is! List || contentList.isEmpty) {
-      throw Exception('Claude 响应缺少 content');
+      final data = jsonDecode(response.body);
+      final contentList = data['content'];
+      if (contentList is! List || contentList.isEmpty) {
+        throw Exception('Claude 响应缺少 content');
+      }
+      final content = contentList
+          .map((item) => item['text']?.toString() ?? '')
+          .where((text) => text.isNotEmpty)
+          .join('\n');
+      return {'content': content, 'reasoning': null, 'reasoningTimeMs': null};
+    } on GenerationAbortedException {
+      logger.i("(Claude) 请求已中断");
+      rethrow;
+    } catch (e) {
+      if (_isAbortTriggered(abortController)) {
+        logger.i("(Claude) 请求在中断后关闭连接");
+        throw const GenerationAbortedException();
+      }
+      rethrow;
+    } finally {
+      client.close();
     }
-    final content = contentList
-        .map((item) => item['text']?.toString() ?? '')
-        .where((text) => text.isNotEmpty)
-        .join('\n');
-    return {'content': content, 'reasoning': null, 'reasoningTimeMs': null};
   }
 
   // 获取模型列表
