@@ -5,6 +5,7 @@ import 'package:now_chat/app/router.dart';
 import 'package:now_chat/core/models/chat_session.dart';
 import 'package:now_chat/core/models/ai_provider_config.dart';
 import 'package:now_chat/providers/chat_provider.dart';
+import 'package:now_chat/providers/settings_provider.dart';
 import 'package:now_chat/ui/widgets/assistant_message_widget.dart';
 import 'package:now_chat/ui/widgets/message_input.dart';
 import 'package:now_chat/ui/widgets/system_prompt_message_item.dart';
@@ -48,6 +49,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         _scrollToLatestOnEnter();
       });
     } else {
+      final settings = context.read<SettingsProvider>();
+      _providerId = settings.defaultProviderId;
+      _model = settings.defaultModel;
+      _isStreaming = settings.defaultStreaming;
       context.read<ChatProvider>().loadInitialMessages(null);
     }
   }
@@ -345,6 +350,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             modelSupportsTools: selectedModelFeatures.supportsTools,
             attachments: _pendingAttachmentPaths,
             onSend: (text, attachments) async {
+              final settings = context.read<SettingsProvider>();
               final attachmentsToSend = List<String>.from(attachments);
               // 如果还没有会话，则新建
               if (chat == null) {
@@ -358,15 +364,50 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                 final title =
                     rawTitle.length > 20 ? rawTitle.substring(0, 20) : rawTitle;
                 chatProvider.renameChat(newChat.id, title);
+                String? candidateProviderId = _providerId?.trim();
+                if (candidateProviderId == null || candidateProviderId.isEmpty) {
+                  candidateProviderId = settings.defaultProviderId?.trim();
+                }
+                if (candidateProviderId != null &&
+                    candidateProviderId.isEmpty) {
+                  candidateProviderId = null;
+                }
+
+                String? candidateModel = _model?.trim();
+                if (candidateModel == null || candidateModel.isEmpty) {
+                  candidateModel = settings.defaultModel?.trim();
+                }
+                if (candidateModel != null && candidateModel.isEmpty) {
+                  candidateModel = null;
+                }
+
+                final providerForNewChat =
+                    candidateProviderId == null
+                        ? null
+                        : chatProvider.getProviderById(candidateProviderId);
+                if (providerForNewChat == null) {
+                  candidateModel = null;
+                } else if (candidateModel != null &&
+                    !providerForNewChat.models.contains(candidateModel)) {
+                  candidateModel = null;
+                }
+                final supportsStreaming =
+                    providerForNewChat?.requestMode.supportsStreaming ?? true;
+                final isStreamingForNewChat =
+                    supportsStreaming
+                        ? (_chat?.isStreaming ?? _isStreaming)
+                        : false;
+
                 chatProvider.updateChat(
                   newChat,
-                  model: _model,
-                  providerId: _providerId,
+                  model: candidateModel,
+                  providerId: providerForNewChat?.id,
                   systemPrompt: _pendingSystemPrompt.trim(),
-                  isStreaming:
-                      streamingSupported
-                          ? (_chat?.isStreaming ?? _isStreaming)
-                          : false,
+                  temperature: settings.defaultTemperature,
+                  topP: settings.defaultTopP,
+                  maxTokens: settings.defaultMaxTokens,
+                  maxConversationTurns: settings.defaultMaxConversationTurns,
+                  isStreaming: isStreamingForNewChat,
                 );
                 setState(() {
                   _chat = newChat;

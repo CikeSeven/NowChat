@@ -151,7 +151,7 @@ ChatSession _chatSessionDeserialize(
     isGenerating: reader.readBoolOrNull(offsets[1]) ?? true,
     isStreaming: reader.readBoolOrNull(offsets[2]) ?? true,
     lastUpdated: reader.readDateTime(offsets[3]),
-    maxConversationTurns: reader.readLongOrNull(offsets[4]) ?? 20,
+    maxConversationTurns: reader.readLongOrNull(offsets[4]) ?? 50,
     maxTokens: reader.readLongOrNull(offsets[5]) ?? 4096,
     model: reader.readStringOrNull(offsets[6]),
     providerId: reader.readStringOrNull(offsets[7]),
@@ -180,7 +180,7 @@ P _chatSessionDeserializeProp<P>(
     case 3:
       return (reader.readDateTime(offset)) as P;
     case 4:
-      return (reader.readLongOrNull(offset) ?? 20) as P;
+      return (reader.readLongOrNull(offset) ?? 50) as P;
     case 5:
       return (reader.readLongOrNull(offset) ?? 4096) as P;
     case 6:

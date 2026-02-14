@@ -1,5 +1,3 @@
-import 'dart:ffi';
-
 import 'package:isar/isar.dart';
 import '../models/chat_session.dart';
 import '../models/message.dart';

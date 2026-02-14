@@ -1,15 +1,10 @@
 import 'dart:convert';
 
 import 'package:now_chat/core/models/ai_provider_config.dart';
-import 'package:now_chat/core/models/message.dart';
 import 'package:now_chat/util/app_logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../core/models/chat_session.dart';
-
-
 class Storage {
-  static const _kChatSessionKey = 'chat_sessions';
   static const _kAPIProvider = 'api_provider';
 
   // 读取api列表

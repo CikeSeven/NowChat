@@ -143,7 +143,7 @@ class _AssistantMenuSheetState extends State<_AssistantMenuSheet> {
                             item.onTap?.call();
                           },
                         );
-                      }).toList(),
+                      }),
                     ]
                   )
                 ),

@@ -3,8 +3,6 @@ import 'package:now_chat/providers/chat_provider.dart';
 import 'package:now_chat/ui/widgets/select_model_list_item.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/models/ai_provider_config.dart';
-
 class ModelSelectorBottomSheet extends StatelessWidget {
   final void Function(String, String) onModelSelected;
   final String? model;

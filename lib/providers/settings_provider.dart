@@ -2,10 +2,40 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
+  static const double defaultTemperatureValue = 0.7;
+  static const double defaultTopPValue = 1.0;
+  static const int defaultMaxTokensValue = 4096;
+  static const int defaultMaxConversationTurnsValue = 50;
+  static const bool defaultStreamingValue = true;
+
   static const _themeKey = 'theme_mode';
+  static const _defaultProviderIdKey = 'default_provider_id';
+  static const _defaultModelKey = 'default_model';
+  static const _defaultTemperatureKey = 'default_temperature';
+  static const _defaultTopPKey = 'default_top_p';
+  static const _defaultMaxTokensKey = 'default_max_tokens';
+  static const _defaultMaxConversationTurnsKey =
+      'default_max_conversation_turns';
+  static const _defaultStreamingKey = 'default_streaming';
 
   ThemeMode _themeMode = ThemeMode.system;
+  String? _defaultProviderId;
+  String? _defaultModel;
+  double _defaultTemperature = defaultTemperatureValue;
+  double _defaultTopP = defaultTopPValue;
+  int _defaultMaxTokens = defaultMaxTokensValue;
+  int _defaultMaxConversationTurns = defaultMaxConversationTurnsValue;
+  bool _defaultStreaming = defaultStreamingValue;
+
   ThemeMode get themeMode => _themeMode;
+  String? get defaultProviderId => _defaultProviderId;
+  String? get defaultModel => _defaultModel;
+  double get defaultTemperature => _defaultTemperature;
+  double get defaultTopP => _defaultTopP;
+  int get defaultMaxTokens => _defaultMaxTokens;
+  int get defaultMaxConversationTurns => _defaultMaxConversationTurns;
+  bool get defaultStreaming => _defaultStreaming;
+
   ThemeMode get effectiveThemeMode {
     if (_themeMode != ThemeMode.system) return _themeMode;
     final brightness =
@@ -17,16 +47,30 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   SettingsProvider() {
     WidgetsBinding.instance.addObserver(this);
-    _loadTheme();
+    _loadSettings();
   }
 
-  Future<void> _loadTheme() async {
+  Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     final index = prefs.getInt(_themeKey);
     if (index != null && index >= 0 && index < ThemeMode.values.length) {
       _themeMode = ThemeMode.values[index];
-      notifyListeners();
     }
+    final providerId = prefs.getString(_defaultProviderIdKey)?.trim();
+    final model = prefs.getString(_defaultModelKey)?.trim();
+    _defaultProviderId =
+        (providerId == null || providerId.isEmpty) ? null : providerId;
+    _defaultModel = (model == null || model.isEmpty) ? null : model;
+    _defaultTemperature =
+        prefs.getDouble(_defaultTemperatureKey) ?? defaultTemperatureValue;
+    _defaultTopP = prefs.getDouble(_defaultTopPKey) ?? defaultTopPValue;
+    _defaultMaxTokens = prefs.getInt(_defaultMaxTokensKey) ?? defaultMaxTokensValue;
+    _defaultMaxConversationTurns =
+        prefs.getInt(_defaultMaxConversationTurnsKey) ??
+        defaultMaxConversationTurnsValue;
+    _defaultStreaming =
+        prefs.getBool(_defaultStreamingKey) ?? defaultStreamingValue;
+    notifyListeners();
   }
 
   Future<void> setThemeMode(ThemeMode mode) async {
@@ -35,6 +79,91 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_themeKey, mode.index);
+  }
+
+  Future<void> setDefaultModel({
+    required String? providerId,
+    required String? model,
+  }) async {
+    final normalizedProvider = providerId?.trim();
+    final normalizedModel = model?.trim();
+    final nextProvider =
+        (normalizedProvider == null || normalizedProvider.isEmpty)
+            ? null
+            : normalizedProvider;
+    final nextModel =
+        (normalizedModel == null || normalizedModel.isEmpty)
+            ? null
+            : normalizedModel;
+    _defaultProviderId = nextProvider;
+    _defaultModel = nextModel;
+    notifyListeners();
+
+    final prefs = await SharedPreferences.getInstance();
+    if (nextProvider == null || nextModel == null) {
+      await prefs.remove(_defaultProviderIdKey);
+      await prefs.remove(_defaultModelKey);
+      return;
+    }
+    await prefs.setString(_defaultProviderIdKey, nextProvider);
+    await prefs.setString(_defaultModelKey, nextModel);
+  }
+
+  Future<void> setDefaultTemperature(double value) async {
+    _defaultTemperature = value;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_defaultTemperatureKey, value);
+  }
+
+  Future<void> setDefaultTopP(double value) async {
+    _defaultTopP = value;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_defaultTopPKey, value);
+  }
+
+  Future<void> setDefaultMaxTokens(int value) async {
+    if (value <= 0) return;
+    _defaultMaxTokens = value;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_defaultMaxTokensKey, value);
+  }
+
+  Future<void> setDefaultMaxConversationTurns(int value) async {
+    if (value <= 0) return;
+    _defaultMaxConversationTurns = value;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_defaultMaxConversationTurnsKey, value);
+  }
+
+  Future<void> setDefaultStreaming(bool value) async {
+    _defaultStreaming = value;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_defaultStreamingKey, value);
+  }
+
+  Future<void> restoreDefaultChatParams() async {
+    _defaultProviderId = null;
+    _defaultModel = null;
+    _defaultTemperature = defaultTemperatureValue;
+    _defaultTopP = defaultTopPValue;
+    _defaultMaxTokens = defaultMaxTokensValue;
+    _defaultMaxConversationTurns = defaultMaxConversationTurnsValue;
+    _defaultStreaming = defaultStreamingValue;
+    notifyListeners();
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_defaultProviderIdKey);
+    await prefs.remove(_defaultModelKey);
+    await prefs.remove(_defaultTemperatureKey);
+    await prefs.remove(_defaultTopPKey);
+    await prefs.remove(_defaultMaxTokensKey);
+    await prefs.remove(_defaultMaxConversationTurnsKey);
+    await prefs.remove(_defaultStreamingKey);
   }
 
   void toggleTheme() {

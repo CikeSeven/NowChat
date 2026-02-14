@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:now_chat/ui/pages/chat_settings_page.dart';
+import 'package:now_chat/ui/pages/default_chat_params_page.dart';
 import 'package:now_chat/ui/pages/edit_message_page.dart';
 import 'package:now_chat/ui/pages/provider_form_page.dart';
 
@@ -11,6 +12,7 @@ class AppRoutes {
   static const home = '/';
   static const chatDetail = '/chat/detail';
   static const chatSettings = '/chat/settings';
+  static const defaultChatParams = '/settings/default_chat_params';
   static const providerForm = '/provider/form';
   static const editMessage = '/edit_message';
 
@@ -40,6 +42,11 @@ class AppRoutes {
         }
         return _buildSlideRoute(
           builder: (_) => ChatSettingsPage(chatId: chatId),
+        );
+
+      case defaultChatParams:
+        return _buildSlideRoute(
+          builder: (_) => const DefaultChatParamsPage(),
         );
 
       case providerForm:

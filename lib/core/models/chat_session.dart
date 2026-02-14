@@ -12,7 +12,7 @@ class ChatSession {
   double temperature = 0.7;
   double topP = 1.0;
   int maxTokens = 4096;
-  int maxConversationTurns = 20;
+  int maxConversationTurns = 50;
   bool isStreaming = true;
   bool isGenerating = true;
   late final DateTime createdAt;
@@ -26,7 +26,7 @@ class ChatSession {
     this.temperature = 0.7,
     this.topP = 1.0,
     this.maxTokens = 4096,
-    this.maxConversationTurns = 20,
+    this.maxConversationTurns = 50,
     this.isStreaming = true,
     this.isGenerating = true,
     required this.createdAt,
@@ -112,7 +112,7 @@ class ChatSession {
     temperature: (json['temperature'] ?? 0.7).toDouble(),
     topP: (json['topP'] ?? 1.0).toDouble(),
     maxTokens: json['maxTokens'] ?? 4096,
-    maxConversationTurns: json['maxConversationTurns'] ?? 20,
+    maxConversationTurns: json['maxConversationTurns'] ?? 50,
     isStreaming: json['isStreaming'] as bool? ?? true,
     isGenerating: json['isGenerating'] as bool? ?? true,
     createdAt: DateTime.parse(json['createdAt']),

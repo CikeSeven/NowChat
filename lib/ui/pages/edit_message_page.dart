@@ -33,7 +33,7 @@ class _EditMessagePageState extends State<EditMessagePage> {
     final updatedMessage = widget.message..content = newContent;
     final chatProvider = context.read<ChatProvider>();
     await chatProvider.saveMessage(updatedMessage);
-
+    if (!mounted) return;
     Navigator.of(context).pop(updatedMessage);
   }
 
