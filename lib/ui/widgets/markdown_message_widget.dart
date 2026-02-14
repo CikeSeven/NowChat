@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_highlight/flutter_highlight.dart';
 import 'package:flutter_highlight/themes/github.dart';
+import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:highlight/highlight.dart' as hi;
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:markdown/markdown.dart' as md;
@@ -28,9 +29,12 @@ class MarkdownMessageWidget extends StatelessWidget {
         }
       },
       builders: {
+        'latex': LatexElementBuilder(context, displayMode: false),
+        'latex_block': LatexElementBuilder(context, displayMode: true),
         'code': CodeBlockBuilder(context),
         'hr': HorizontalRuleBuilder(context),
       },
+      inlineSyntaxes: [LatexBlockSyntax(), LatexInlineSyntax()],
       styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
         p: baseText,
         h1: baseText.copyWith(fontSize: 22, fontWeight: FontWeight.w700),
@@ -91,6 +95,106 @@ class MarkdownMessageWidget extends StatelessWidget {
           ),
         ),
         img: TextStyle(fontSize: 0),
+      ),
+    );
+  }
+}
+
+String _extractNodeText(md.Node node) {
+  if (node is md.Text) {
+    return node.text;
+  } else if (node is md.Element) {
+    final buffer = StringBuffer();
+    for (final child in node.children ?? <md.Node>[]) {
+      buffer.write(_extractNodeText(child));
+    }
+    return buffer.toString();
+  }
+  return '';
+}
+
+class LatexBlockSyntax extends md.InlineSyntax {
+  LatexBlockSyntax()
+    : super(r'(?<!\\)\$\$([\s\S]+?)(?<!\\)\$\$', startCharacter: 36);
+
+  @override
+  bool onMatch(md.InlineParser parser, Match match) {
+    final expression = match.group(1);
+    if (expression == null || expression.trim().isEmpty) {
+      parser.addNode(md.Text(match.group(0)!));
+      return true;
+    }
+    parser.addNode(md.Element.text('latex_block', expression));
+    return true;
+  }
+}
+
+class LatexInlineSyntax extends md.InlineSyntax {
+  LatexInlineSyntax()
+    : super(r'(?<!\\)\$([^\$\n]+?)(?<!\\)\$', startCharacter: 36);
+
+  @override
+  bool onMatch(md.InlineParser parser, Match match) {
+    final expression = match.group(1);
+    if (expression == null || expression.trim().isEmpty) {
+      parser.addNode(md.Text(match.group(0)!));
+      return true;
+    }
+    parser.addNode(md.Element.text('latex', expression));
+    return true;
+  }
+}
+
+class LatexElementBuilder extends MarkdownElementBuilder {
+  final BuildContext context;
+  final bool displayMode;
+
+  LatexElementBuilder(this.context, {required this.displayMode});
+
+  String _normalizeExpression(String source) {
+    return source.replaceAll(r'\$', r'$').trim();
+  }
+
+  @override
+  Widget? visitElementAfter(md.Element element, TextStyle? preferredStyle) {
+    final expression = _normalizeExpression(_extractNodeText(element));
+    if (expression.isEmpty) return null;
+
+    final color = Theme.of(context).colorScheme;
+    final textStyle = TextStyle(
+      color: color.onSurface,
+      fontSize: displayMode ? 17 : 16,
+      height: 1.4,
+    );
+
+    final widget = Math.tex(
+      expression,
+      mathStyle: displayMode ? MathStyle.display : MathStyle.text,
+      textStyle: textStyle,
+      onErrorFallback:
+          (_) =>
+              Text(expression, style: textStyle.copyWith(color: color.error)),
+    );
+
+    if (!displayMode) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 1, vertical: 1),
+        child: widget,
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.surfaceContainerHighest.withAlpha(110),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.outline.withAlpha(60)),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: widget,
       ),
     );
   }
@@ -187,16 +291,7 @@ class CodeBlockBuilder extends MarkdownElementBuilder {
   }
 
   String _extractText(md.Node node) {
-    if (node is md.Text) {
-      return node.text;
-    } else if (node is md.Element) {
-      final buffer = StringBuffer();
-      for (final child in node.children ?? <md.Node>[]) {
-        buffer.write(_extractText(child));
-      }
-      return buffer.toString();
-    }
-    return '';
+    return _extractNodeText(node);
   }
 
   void _showClosableSnackBar(String message) {

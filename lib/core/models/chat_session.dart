@@ -12,6 +12,7 @@ class ChatSession {
   double temperature = 0.7;
   double topP = 1.0;
   int maxTokens = 4096;
+  int maxConversationTurns = 20;
   bool isStreaming = true;
   bool isGenerating = true;
   late final DateTime createdAt;
@@ -25,6 +26,7 @@ class ChatSession {
     this.temperature = 0.7,
     this.topP = 1.0,
     this.maxTokens = 4096,
+    this.maxConversationTurns = 20,
     this.isStreaming = true,
     this.isGenerating = true,
     required this.createdAt,
@@ -38,6 +40,7 @@ class ChatSession {
     double? temperature,
     double? topP,
     int? maxTokens,
+    int? maxConversationTurns,
     bool? isStreaming,
     bool? isGenerating,
     DateTime? lastUpdated,
@@ -48,6 +51,9 @@ class ChatSession {
     if (temperature != null) this.temperature = temperature;
     if (topP != null) this.topP = topP;
     if (maxTokens != null) this.maxTokens = maxTokens;
+    if (maxConversationTurns != null) {
+      this.maxConversationTurns = maxConversationTurns;
+    }
     if (isStreaming != null) this.isStreaming = isStreaming;
     if (isGenerating != null) this.isGenerating = isGenerating;
     if (lastUpdated != null) this.lastUpdated = lastUpdated;
@@ -61,6 +67,7 @@ class ChatSession {
     double? temperature,
     double? topP,
     int? maxTokens,
+    int? maxConversationTurns,
     bool? isStreaming,
     bool? isGenerating,
     DateTime? lastUpdated,
@@ -73,6 +80,7 @@ class ChatSession {
       temperature: temperature ?? this.temperature,
       topP: topP ?? this.topP,
       maxTokens: maxTokens ?? this.maxTokens,
+      maxConversationTurns: maxConversationTurns ?? this.maxConversationTurns,
       isStreaming: isStreaming ?? this.isStreaming,
       createdAt: createdAt,
       isGenerating: isGenerating ?? this.isGenerating,
@@ -90,6 +98,7 @@ class ChatSession {
     'temperature': temperature,
     'topP': topP,
     'maxTokens': maxTokens,
+    'maxConversationTurns': maxConversationTurns,
     'isStreaming': isStreaming,
     'isGenerating': isGenerating,
     "lastUpdated": lastUpdated.toIso8601String(),
@@ -103,6 +112,7 @@ class ChatSession {
     temperature: (json['temperature'] ?? 0.7).toDouble(),
     topP: (json['topP'] ?? 1.0).toDouble(),
     maxTokens: json['maxTokens'] ?? 4096,
+    maxConversationTurns: json['maxConversationTurns'] ?? 20,
     isStreaming: json['isStreaming'] as bool? ?? true,
     isGenerating: json['isGenerating'] as bool? ?? true,
     createdAt: DateTime.parse(json['createdAt']),

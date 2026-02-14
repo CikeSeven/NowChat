@@ -520,7 +520,8 @@ Future<List<Message>> _loadFilteredMessages(
           .chatIdEqualTo(session.id)
           .sortByTimestamp()
           .findAll();
-  return _filterMessagesForRequest(messages);
+  final filtered = _filterMessagesForRequest(messages);
+  return _applyConversationTurnLimit(filtered, session.maxConversationTurns);
 }
 
 /// 过滤无效 assistant 消息，避免污染上下文。
@@ -534,6 +535,49 @@ List<Message> _filterMessagesForRequest(List<Message> messages) {
       .toList();
 }
 
+/// 按“用户 + AI 回复”为 1 轮，截取最近 N 轮消息。
+List<Message> _applyConversationTurnLimit(
+  List<Message> messages,
+  int maxConversationTurns,
+) {
+  if (maxConversationTurns <= 0 || messages.isEmpty) {
+    return messages;
+  }
+
+  final rounds = <List<Message>>[];
+  var currentRound = <Message>[];
+
+  for (final message in messages) {
+    if (message.role == 'user') {
+      if (currentRound.isNotEmpty) {
+        rounds.add(currentRound);
+      }
+      currentRound = <Message>[message];
+      continue;
+    }
+
+    if (currentRound.isEmpty) {
+      rounds.add(<Message>[message]);
+      continue;
+    }
+    currentRound.add(message);
+  }
+
+  if (currentRound.isNotEmpty) {
+    rounds.add(currentRound);
+  }
+
+  if (rounds.length <= maxConversationTurns) {
+    return messages;
+  }
+
+  final start = rounds.length - maxConversationTurns;
+  return rounds
+      .sublist(start)
+      .expand((round) => round)
+      .toList(growable: false);
+}
+
 /// 获取本次请求使用的消息（优先覆盖列表）。
 Future<List<Message>> _resolveRequestMessages(
   Isar isar,
@@ -541,7 +585,8 @@ Future<List<Message>> _resolveRequestMessages(
   List<Message>? overrideMessages,
 }) async {
   if (overrideMessages != null) {
-    return _filterMessagesForRequest(overrideMessages);
+    final filtered = _filterMessagesForRequest(overrideMessages);
+    return _applyConversationTurnLimit(filtered, session.maxConversationTurns);
   }
   return _loadFilteredMessages(isar, session);
 }

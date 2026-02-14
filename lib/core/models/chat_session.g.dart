@@ -37,38 +37,43 @@ const ChatSessionSchema = CollectionSchema(
       name: r'lastUpdated',
       type: IsarType.dateTime,
     ),
-    r'maxTokens': PropertySchema(
+    r'maxConversationTurns': PropertySchema(
       id: 4,
+      name: r'maxConversationTurns',
+      type: IsarType.long,
+    ),
+    r'maxTokens': PropertySchema(
+      id: 5,
       name: r'maxTokens',
       type: IsarType.long,
     ),
     r'model': PropertySchema(
-      id: 5,
+      id: 6,
       name: r'model',
       type: IsarType.string,
     ),
     r'providerId': PropertySchema(
-      id: 6,
+      id: 7,
       name: r'providerId',
       type: IsarType.string,
     ),
     r'systemPrompt': PropertySchema(
-      id: 7,
+      id: 8,
       name: r'systemPrompt',
       type: IsarType.string,
     ),
     r'temperature': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'temperature',
       type: IsarType.double,
     ),
     r'title': PropertySchema(
-      id: 9,
+      id: 10,
       name: r'title',
       type: IsarType.string,
     ),
     r'topP': PropertySchema(
-      id: 10,
+      id: 11,
       name: r'topP',
       type: IsarType.double,
     )
@@ -125,13 +130,14 @@ void _chatSessionSerialize(
   writer.writeBool(offsets[1], object.isGenerating);
   writer.writeBool(offsets[2], object.isStreaming);
   writer.writeDateTime(offsets[3], object.lastUpdated);
-  writer.writeLong(offsets[4], object.maxTokens);
-  writer.writeString(offsets[5], object.model);
-  writer.writeString(offsets[6], object.providerId);
-  writer.writeString(offsets[7], object.systemPrompt);
-  writer.writeDouble(offsets[8], object.temperature);
-  writer.writeString(offsets[9], object.title);
-  writer.writeDouble(offsets[10], object.topP);
+  writer.writeLong(offsets[4], object.maxConversationTurns);
+  writer.writeLong(offsets[5], object.maxTokens);
+  writer.writeString(offsets[6], object.model);
+  writer.writeString(offsets[7], object.providerId);
+  writer.writeString(offsets[8], object.systemPrompt);
+  writer.writeDouble(offsets[9], object.temperature);
+  writer.writeString(offsets[10], object.title);
+  writer.writeDouble(offsets[11], object.topP);
 }
 
 ChatSession _chatSessionDeserialize(
@@ -145,13 +151,14 @@ ChatSession _chatSessionDeserialize(
     isGenerating: reader.readBoolOrNull(offsets[1]) ?? true,
     isStreaming: reader.readBoolOrNull(offsets[2]) ?? true,
     lastUpdated: reader.readDateTime(offsets[3]),
-    maxTokens: reader.readLongOrNull(offsets[4]) ?? 4096,
-    model: reader.readStringOrNull(offsets[5]),
-    providerId: reader.readStringOrNull(offsets[6]),
-    systemPrompt: reader.readStringOrNull(offsets[7]),
-    temperature: reader.readDoubleOrNull(offsets[8]) ?? 0.7,
-    title: reader.readString(offsets[9]),
-    topP: reader.readDoubleOrNull(offsets[10]) ?? 1.0,
+    maxConversationTurns: reader.readLongOrNull(offsets[4]) ?? 20,
+    maxTokens: reader.readLongOrNull(offsets[5]) ?? 4096,
+    model: reader.readStringOrNull(offsets[6]),
+    providerId: reader.readStringOrNull(offsets[7]),
+    systemPrompt: reader.readStringOrNull(offsets[8]),
+    temperature: reader.readDoubleOrNull(offsets[9]) ?? 0.7,
+    title: reader.readString(offsets[10]),
+    topP: reader.readDoubleOrNull(offsets[11]) ?? 1.0,
   );
   object.id = id;
   return object;
@@ -173,18 +180,20 @@ P _chatSessionDeserializeProp<P>(
     case 3:
       return (reader.readDateTime(offset)) as P;
     case 4:
-      return (reader.readLongOrNull(offset) ?? 4096) as P;
+      return (reader.readLongOrNull(offset) ?? 20) as P;
     case 5:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readLongOrNull(offset) ?? 4096) as P;
     case 6:
       return (reader.readStringOrNull(offset)) as P;
     case 7:
       return (reader.readStringOrNull(offset)) as P;
     case 8:
-      return (reader.readDoubleOrNull(offset) ?? 0.7) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 9:
-      return (reader.readString(offset)) as P;
+      return (reader.readDoubleOrNull(offset) ?? 0.7) as P;
     case 10:
+      return (reader.readString(offset)) as P;
+    case 11:
       return (reader.readDoubleOrNull(offset) ?? 1.0) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -461,6 +470,62 @@ extension ChatSessionQueryFilter
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.between(
         property: r'lastUpdated',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<ChatSession, ChatSession, QAfterFilterCondition>
+      maxConversationTurnsEqualTo(int value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'maxConversationTurns',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<ChatSession, ChatSession, QAfterFilterCondition>
+      maxConversationTurnsGreaterThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'maxConversationTurns',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<ChatSession, ChatSession, QAfterFilterCondition>
+      maxConversationTurnsLessThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'maxConversationTurns',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<ChatSession, ChatSession, QAfterFilterCondition>
+      maxConversationTurnsBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'maxConversationTurns',
         lower: lower,
         includeLower: includeLower,
         upper: upper,
@@ -1300,6 +1365,20 @@ extension ChatSessionQuerySortBy
     });
   }
 
+  QueryBuilder<ChatSession, ChatSession, QAfterSortBy>
+      sortByMaxConversationTurns() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'maxConversationTurns', Sort.asc);
+    });
+  }
+
+  QueryBuilder<ChatSession, ChatSession, QAfterSortBy>
+      sortByMaxConversationTurnsDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'maxConversationTurns', Sort.desc);
+    });
+  }
+
   QueryBuilder<ChatSession, ChatSession, QAfterSortBy> sortByMaxTokens() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'maxTokens', Sort.asc);
@@ -1449,6 +1528,20 @@ extension ChatSessionQuerySortThenBy
     });
   }
 
+  QueryBuilder<ChatSession, ChatSession, QAfterSortBy>
+      thenByMaxConversationTurns() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'maxConversationTurns', Sort.asc);
+    });
+  }
+
+  QueryBuilder<ChatSession, ChatSession, QAfterSortBy>
+      thenByMaxConversationTurnsDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'maxConversationTurns', Sort.desc);
+    });
+  }
+
   QueryBuilder<ChatSession, ChatSession, QAfterSortBy> thenByMaxTokens() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'maxTokens', Sort.asc);
@@ -1561,6 +1654,13 @@ extension ChatSessionQueryWhereDistinct
     });
   }
 
+  QueryBuilder<ChatSession, ChatSession, QDistinct>
+      distinctByMaxConversationTurns() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'maxConversationTurns');
+    });
+  }
+
   QueryBuilder<ChatSession, ChatSession, QDistinct> distinctByMaxTokens() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'maxTokens');
@@ -1637,6 +1737,13 @@ extension ChatSessionQueryProperty
   QueryBuilder<ChatSession, DateTime, QQueryOperations> lastUpdatedProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'lastUpdated');
+    });
+  }
+
+  QueryBuilder<ChatSession, int, QQueryOperations>
+      maxConversationTurnsProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'maxConversationTurns');
     });
   }
 

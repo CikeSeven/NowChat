@@ -15,6 +15,8 @@ class ChatSettingsPage extends StatefulWidget {
 class _ChatSettingsPageState extends State<ChatSettingsPage> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _maxTokensController = TextEditingController();
+  final TextEditingController _maxConversationTurnsController =
+      TextEditingController();
   final TextEditingController _systemPromptController = TextEditingController();
 
   bool _initialized = false;
@@ -39,6 +41,8 @@ class _ChatSettingsPageState extends State<ChatSettingsPage> {
       _topP = chat.topP;
       _isStreaming = chat.isStreaming;
       _maxTokensController.text = chat.maxTokens.toString();
+      _maxConversationTurnsController.text = chat.maxConversationTurns
+          .toString();
       _systemPromptController.text = chat.systemPrompt ?? '';
     }
   }
@@ -47,6 +51,7 @@ class _ChatSettingsPageState extends State<ChatSettingsPage> {
   void dispose() {
     _titleController.dispose();
     _maxTokensController.dispose();
+    _maxConversationTurnsController.dispose();
     _systemPromptController.dispose();
     super.dispose();
   }
@@ -57,15 +62,25 @@ class _ChatSettingsPageState extends State<ChatSettingsPage> {
     return value;
   }
 
+  int? get _maxConversationTurns {
+    final value = int.tryParse(_maxConversationTurnsController.text.trim());
+    if (value == null || value <= 0) return null;
+    return value;
+  }
+
   bool get _canSave =>
       _chat != null &&
       _maxTokens != null &&
+      _maxConversationTurns != null &&
       _titleController.text.trim().isNotEmpty;
 
   Future<void> _save() async {
     final chat = _chat;
     final maxTokens = _maxTokens;
-    if (chat == null || maxTokens == null) return;
+    final maxConversationTurns = _maxConversationTurns;
+    if (chat == null || maxTokens == null || maxConversationTurns == null) {
+      return;
+    }
     final title = _titleController.text.trim();
     if (title.isEmpty) return;
     final systemPrompt = _systemPromptController.text.trim();
@@ -86,6 +101,7 @@ class _ChatSettingsPageState extends State<ChatSettingsPage> {
       temperature: _temperature,
       topP: _topP,
       maxTokens: maxTokens,
+      maxConversationTurns: maxConversationTurns,
       isStreaming: streamingSupported ? _isStreaming : false,
       lastUpdated: DateTime.now(),
     );
@@ -269,6 +285,23 @@ class _ChatSettingsPageState extends State<ChatSettingsPage> {
                                   _maxTokens != null
                               ? null
                               : 'max_tokens 无效',
+                      border: const OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _maxConversationTurnsController,
+                    keyboardType: TextInputType.number,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      labelText: '最大消息轮次',
+                      helperText: '按“用户+AI”算1轮，仅发送最近N轮上下文',
+                      errorText:
+                          _maxConversationTurnsController.text.isEmpty ||
+                                  _maxConversationTurns != null
+                              ? null
+                              : '轮次无效',
                       border: const OutlineInputBorder(),
                     ),
                   ),

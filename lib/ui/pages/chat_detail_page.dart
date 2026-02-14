@@ -23,6 +23,7 @@ class ChatDetailPage extends StatefulWidget {
 
 class _ChatDetailPageState extends State<ChatDetailPage> {
   final ScrollController _scrollController = ScrollController();
+  static const double _scrollBottomButtonThreshold = 420;
 
   ChatSession? _chat;
 
@@ -31,27 +32,69 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   bool _isStreaming = true;
   String _pendingSystemPrompt = '';
   List<String> _pendingAttachmentPaths = <String>[];
-  int _lastAutoScrollMessageCount = -1;
-  int? _lastAutoScrollChatId;
+  bool _isRequestingMoreHistory = false;
 
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_handleScroll);
     final chatProvider = context.read<ChatProvider>();
     // 如果有传入 chatId，则加载对应会话
     if (widget.chatId != null) {
       _chat = chatProvider.getChatById(widget.chatId!); // 加载当前会话的消息
       _pendingSystemPrompt = _chat?.systemPrompt ?? '';
-      context.read<ChatProvider>().loadMessages(widget.chatId!);
+      context.read<ChatProvider>().loadInitialMessages(widget.chatId!).then((_) {
+        if (!mounted) return;
+        _scrollToLatestOnEnter();
+      });
     } else {
-      context.read<ChatProvider>().loadMessages(null);
+      context.read<ChatProvider>().loadInitialMessages(null);
     }
   }
 
   @override
   void dispose() {
+    _scrollController.removeListener(_handleScroll);
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _handleScroll() {
+    if (!_scrollController.hasClients) return;
+    if (_scrollController.position.pixels > 120) return;
+    _tryLoadMoreHistory();
+  }
+
+  Future<void> _tryLoadMoreHistory() async {
+    if (_isRequestingMoreHistory) return;
+    if (!_scrollController.hasClients) return;
+    final chatProvider = context.read<ChatProvider>();
+    if (!chatProvider.hasMoreHistory || chatProvider.isLoadingMoreHistory) {
+      return;
+    }
+
+    _isRequestingMoreHistory = true;
+    final oldMaxExtent = _scrollController.position.maxScrollExtent;
+    final oldOffset = _scrollController.position.pixels;
+    try {
+      await chatProvider.loadMoreHistory();
+      if (!mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_scrollController.hasClients) {
+          _isRequestingMoreHistory = false;
+          return;
+        }
+        final newMaxExtent = _scrollController.position.maxScrollExtent;
+        final delta = newMaxExtent - oldMaxExtent;
+        final targetOffset = (oldOffset + delta).clamp(0.0, newMaxExtent);
+        _scrollController.jumpTo(targetOffset);
+        _isRequestingMoreHistory = false;
+      });
+    } finally {
+      if (!_scrollController.hasClients) {
+        _isRequestingMoreHistory = false;
+      }
+    }
   }
 
   void _scrollToLatest({bool animated = false}) {
@@ -72,6 +115,34 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     } else {
       _scrollController.jumpTo(target);
     }
+  }
+
+  void _scrollToLatestOnEnter() {
+    _scrollToLatest();
+    Future<void>.delayed(const Duration(milliseconds: 120), () {
+      if (!mounted) return;
+      _scrollToLatest();
+    });
+    Future<void>.delayed(const Duration(milliseconds: 320), () {
+      if (!mounted) return;
+      _scrollToLatest();
+    });
+    Future<void>.delayed(const Duration(milliseconds: 650), () {
+      if (!mounted) return;
+      _scrollToLatest();
+    });
+  }
+
+  void _scrollToLatestAfterSend() {
+    _scrollToLatest(animated: true);
+    Future<void>.delayed(const Duration(milliseconds: 120), () {
+      if (!mounted) return;
+      _scrollToLatest(animated: true);
+    });
+    Future<void>.delayed(const Duration(milliseconds: 320), () {
+      if (!mounted) return;
+      _scrollToLatest(animated: true);
+    });
   }
 
   @override
@@ -101,20 +172,14 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             : const ModelFeatureOptions();
     final streamingSupported =
         selectedProvider?.requestMode.supportsStreaming ?? true;
+    final shouldShowScrollToBottomButton =
+        _scrollController.hasClients &&
+        (_scrollController.position.maxScrollExtent -
+                _scrollController.position.pixels >
+            _scrollBottomButtonThreshold);
     final activeSystemPrompt =
         (chat?.systemPrompt ?? _pendingSystemPrompt).trim();
     final hasSystemPrompt = activeSystemPrompt.isNotEmpty;
-    if (chat != null) {
-      final changedChat = _lastAutoScrollChatId != chat.id;
-      final changedCount = _lastAutoScrollMessageCount != messages.length;
-      if (changedChat || changedCount) {
-        _lastAutoScrollChatId = chat.id;
-        _lastAutoScrollMessageCount = messages.length;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _scrollToLatest();
-        });
-      }
-    }
     if (chat != null && _pendingSystemPrompt != (chat.systemPrompt ?? '')) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -123,7 +188,6 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         });
       });
     }
-
     return Scaffold(
       appBar: AppBar(
         title: Text(chat?.title ?? "新会话"),
@@ -152,7 +216,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                     _pendingSystemPrompt = returnedPrompt;
                   }
                 });
-                await chatProvider.loadMessages(chat.id);
+                await chatProvider.loadInitialMessages(chat.id);
               },
             ),
         ],
@@ -161,7 +225,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         children: [
           // 聊天内容区
           Expanded(
-            child:
+            child: Stack(
+              children: [
                 chat == null
                     ? ListView(
                       controller: _scrollController,
@@ -178,19 +243,43 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                     )
                     : ListView.builder(
                       controller: _scrollController,
-                      itemCount: messages.length + (hasSystemPrompt ? 1 : 0),
+                      itemCount:
+                          messages.length +
+                          (hasSystemPrompt ? 1 : 0) +
+                          (chatProvider.isLoadingMoreHistory ? 1 : 0),
                       itemBuilder: (context, index) {
-                        if (hasSystemPrompt && index == 0) {
+                        var cursor = index;
+                        if (hasSystemPrompt && cursor == 0) {
                           return SystemPromptMessageItem(
                             text: activeSystemPrompt,
                             onTap: () => _showSystemPromptEditor(chat: chat),
                           );
                         }
-                        final msgIndex = hasSystemPrompt ? index - 1 : index;
-                        final msg = messages[msgIndex];
-                        final isLastMessage = msgIndex == messages.length - 1;
+                        if (hasSystemPrompt) {
+                          cursor -= 1;
+                        }
+                        if (chatProvider.isLoadingMoreHistory && cursor == 0) {
+                          return const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 10),
+                            child: Center(
+                              child: SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            ),
+                          );
+                        }
+                        if (chatProvider.isLoadingMoreHistory) {
+                          cursor -= 1;
+                        }
+                        final msg = messages[cursor];
+                        final isLastMessage = cursor == messages.length - 1;
                         if (msg.role == "user") {
                           return UserMessageWidget(
+                            key: ValueKey('user-${msg.isarId}'),
                             message: msg,
                             onDelete:
                                 () => chatProvider.deleteMessage(msg.isarId),
@@ -203,8 +292,12 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                                 msg.isarId,
                               );
                           return AssistantMessageWidget(
+                            key: ValueKey('assistant-${msg.isarId}'),
                             message: msg,
                             isGenerating: chat.isGenerating,
+                            isStreamingMessage: chatProvider.isMessageStreaming(
+                              msg.isarId,
+                            ),
                             showResendButton: isLastMessage,
                             showContinueButton: showContinueButton,
                             onResend: () async {
@@ -227,6 +320,20 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                         return const SizedBox.shrink();
                       },
                     ),
+                if (chat != null && shouldShowScrollToBottomButton)
+                  Positioned(
+                    right: 14,
+                    bottom: 16,
+                    child: FloatingActionButton.small(
+                      heroTag: 'chat_scroll_to_bottom_btn',
+                      onPressed: () {
+                        _scrollToLatest(animated: true);
+                      },
+                      child: const Icon(Icons.keyboard_arrow_down_rounded),
+                    ),
+                  ),
+              ],
+            ),
           ),
 
           // 输入框
@@ -265,6 +372,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                   _chat = newChat;
                 });
               }
+              _scrollToLatestAfterSend();
               await chatProvider.sendMessage(
                 _chat!.id,
                 text,

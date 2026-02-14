@@ -2,14 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:now_chat/app/router.dart';
 import 'package:now_chat/core/models/message.dart';
-import 'package:now_chat/providers/chat_provider.dart';
 import 'package:now_chat/ui/widgets/markdown_message_widget.dart';
-import 'package:provider/provider.dart';
 import 'message_bottom_sheet_menu.dart';
 
 class AssistantMessageWidget extends StatefulWidget {
+  static const int streamingSnapshotLineThreshold = 1;
+  static const int streamingSnapshotCharThreshold = 120;
+  static const Duration streamingMarkdownMaxInterval = Duration(
+    milliseconds: 450,
+  );
+
   final Message message;
   final bool isGenerating;
+  final bool isStreamingMessage;
   final bool showResendButton;
   final bool showContinueButton;
   final VoidCallback onDelete;
@@ -19,6 +24,7 @@ class AssistantMessageWidget extends StatefulWidget {
     super.key,
     required this.message,
     required this.isGenerating,
+    this.isStreamingMessage = false,
     required this.showResendButton,
     this.showContinueButton = false,
     required this.onDelete,
@@ -34,6 +40,10 @@ class _AssistantMessageWidgetState extends State<AssistantMessageWidget>
     with SingleTickerProviderStateMixin {
   bool _expanded = false;
   late final AnimationController _controller;
+  String _markdownSnapshot = '';
+  int _markdownSnapshotLength = 0;
+  int _markdownSnapshotLineCount = 0;
+  DateTime _lastSnapshotAt = DateTime.fromMillisecondsSinceEpoch(0);
 
   @override
   void initState() {
@@ -42,12 +52,80 @@ class _AssistantMessageWidgetState extends State<AssistantMessageWidget>
       duration: const Duration(milliseconds: 200),
       vsync: this,
     );
+    _setMarkdownSnapshot(widget.message.content, force: true);
   }
 
   @override
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant AssistantMessageWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.message.isarId != widget.message.isarId) {
+      _expanded = false;
+      _controller.value = 0;
+      _setMarkdownSnapshot(widget.message.content, force: true);
+      return;
+    }
+
+    // 注意：Message 在 Provider 中是原地更新，同一实例会跨 rebuild 复用。
+    // 不能依赖 oldWidget.message.content 与 widget.message.content 比较，
+    // 需要和本地快照比较才知道内容是否增长。
+    final contentChanged = widget.message.content != _markdownSnapshot;
+    final streamingStateChanged =
+        oldWidget.isStreamingMessage != widget.isStreamingMessage;
+    if (!contentChanged && !streamingStateChanged) {
+      return;
+    }
+
+    if (!widget.isStreamingMessage) {
+      _setMarkdownSnapshot(widget.message.content, force: true);
+      return;
+    }
+
+    final currentContent = widget.message.content;
+    if (currentContent.length < _markdownSnapshotLength) {
+      _setMarkdownSnapshot(currentContent, force: true);
+      return;
+    }
+
+    final deltaLength = currentContent.length - _markdownSnapshotLength;
+    final elapsed = DateTime.now().difference(_lastSnapshotAt);
+    final currentLineCount = _lineCount(currentContent);
+    final lineDelta = currentLineCount - _markdownSnapshotLineCount;
+    if (lineDelta >= AssistantMessageWidget.streamingSnapshotLineThreshold ||
+        deltaLength >= AssistantMessageWidget.streamingSnapshotCharThreshold ||
+        elapsed >= AssistantMessageWidget.streamingMarkdownMaxInterval) {
+      _setMarkdownSnapshot(currentContent, force: true);
+    }
+  }
+
+  int _lineCount(String text) {
+    if (text.isEmpty) return 0;
+    return '\n'.allMatches(text).length + 1;
+  }
+
+  void _setMarkdownSnapshot(String content, {bool force = false}) {
+    if (!force && content == _markdownSnapshot) {
+      return;
+    }
+    final snapshot = content;
+    if (mounted) {
+      setState(() {
+        _markdownSnapshot = snapshot;
+        _markdownSnapshotLength = snapshot.length;
+        _markdownSnapshotLineCount = _lineCount(snapshot);
+        _lastSnapshotAt = DateTime.now();
+      });
+      return;
+    }
+    _markdownSnapshot = snapshot;
+    _markdownSnapshotLength = snapshot.length;
+    _markdownSnapshotLineCount = _lineCount(snapshot);
+    _lastSnapshotAt = DateTime.now();
   }
 
   void _toggleExpand() {
@@ -63,10 +141,8 @@ class _AssistantMessageWidgetState extends State<AssistantMessageWidget>
 
   @override
   Widget build(BuildContext context) {
-    final chatProvider = context.watch<ChatProvider>();
     final colors = Theme.of(context).colorScheme;
     final message = widget.message;
-    final chat = chatProvider.getChatById(message.chatId)!;
     final reasoningSeconds = (message.reasoningTimeMs ?? 0) / 1000.0;
 
     return InkWell(
@@ -111,7 +187,7 @@ class _AssistantMessageWidgetState extends State<AssistantMessageWidget>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (message.content.isEmpty &&
-                chat.isGenerating &&
+                widget.isGenerating &&
                 (message.reasoning == null ? true : message.reasoning!.isEmpty))
               Padding(
                 padding: const EdgeInsets.only(left: 16),
@@ -200,7 +276,7 @@ class _AssistantMessageWidgetState extends State<AssistantMessageWidget>
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
-              child: MarkdownMessageWidget(data: message.content),
+              child: _buildMessageBody(context, message),
             ),
 
             // 底部按钮
@@ -255,5 +331,32 @@ class _AssistantMessageWidgetState extends State<AssistantMessageWidget>
         ),
       ),
     );
+  }
+
+  Widget _buildMessageBody(BuildContext context, Message message) {
+    final color = Theme.of(context).colorScheme;
+    if (widget.isStreamingMessage) {
+      final snapshot = _markdownSnapshot;
+      final tailLength = message.content.length - snapshot.length;
+      final tail =
+          tailLength > 0 ? message.content.substring(snapshot.length) : '';
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (snapshot.isNotEmpty)
+            MarkdownMessageWidget(data: snapshot),
+          if (tail.isNotEmpty)
+            SelectableText(
+              tail,
+              style: TextStyle(
+                fontSize: 16,
+                color: color.onSurface,
+                height: 1.58,
+              ),
+            ),
+        ],
+      );
+    }
+    return MarkdownMessageWidget(data: message.content);
   }
 }
