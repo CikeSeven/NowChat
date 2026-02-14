@@ -122,13 +122,9 @@ class SettingsPage extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.info_outline),
             title: const Text('关于'),
+            trailing: const Icon(Icons.chevron_right_rounded),
             onTap: () {
-              showAboutDialog(
-                context: context,
-                applicationName: 'Now Chat',
-                applicationVersion: '0.1.0',
-                applicationLegalese: '© 2026 Now Chat Team',
-              );
+              Navigator.pushNamed(context, AppRoutes.about);
             },
           ),
         ],
