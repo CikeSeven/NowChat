@@ -199,6 +199,20 @@ class CodeBlockBuilder extends MarkdownElementBuilder {
     return '';
   }
 
+  void _showClosableSnackBar(String message) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(message),
+        action: SnackBarAction(
+          label: '关闭',
+          onPressed: messenger.hideCurrentSnackBar,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget? visitElementAfter(md.Element element, TextStyle? preferredStyle) {
     final rawCode = _extractText(element);
@@ -212,18 +226,28 @@ class CodeBlockBuilder extends MarkdownElementBuilder {
     final isMultiline = rawCode.contains('\n') || language.isNotEmpty;
 
     if (!isMultiline) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        decoration: BoxDecoration(
-          color: color.primaryContainer.withAlpha(120),
-          borderRadius: BorderRadius.circular(5),
-        ),
-        child: Text(
-          code,
-          style: TextStyle(
-            fontFamily: 'monospace',
-            fontSize: 13.5,
-            color: color.onPrimaryContainer,
+      return MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            Clipboard.setData(ClipboardData(text: code));
+            _showClosableSnackBar('已复制代码');
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: color.primaryContainer.withAlpha(120),
+              borderRadius: BorderRadius.circular(5),
+            ),
+            child: Text(
+              code,
+              style: TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 13.5,
+                color: color.onPrimaryContainer,
+              ),
+            ),
           ),
         ),
       );
@@ -276,9 +300,7 @@ class CodeBlockBuilder extends MarkdownElementBuilder {
                     tooltip: '复制代码',
                     onPressed: () {
                       Clipboard.setData(ClipboardData(text: code));
-                      ScaffoldMessenger.of(
-                        context,
-                      ).showSnackBar(const SnackBar(content: Text('已复制到剪贴板')));
+                      _showClosableSnackBar('已复制到剪贴板');
                     },
                   ),
                 ),
