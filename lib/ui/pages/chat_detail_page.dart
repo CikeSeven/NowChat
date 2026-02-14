@@ -6,10 +6,8 @@ import 'package:now_chat/core/models/chat_session.dart';
 import 'package:now_chat/core/models/ai_provider_config.dart';
 import 'package:now_chat/providers/chat_provider.dart';
 import 'package:now_chat/providers/settings_provider.dart';
-import 'package:now_chat/ui/widgets/assistant_message_widget.dart';
+import 'package:now_chat/ui/widgets/chat_message_list_panel.dart';
 import 'package:now_chat/ui/widgets/message_input.dart';
-import 'package:now_chat/ui/widgets/system_prompt_message_item.dart';
-import 'package:now_chat/ui/widgets/user_message_widget.dart';
 import 'package:provider/provider.dart';
 import '../widgets/model_selector_bottom_sheet.dart.dart';
 
@@ -249,114 +247,38 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         children: [
           // 聊天内容区
           Expanded(
-            child: Stack(
-              children: [
-                chat == null
-                    ? ListView(
-                      controller: _scrollController,
-                      padding: const EdgeInsets.only(top: 8),
-                      children: [
-                        SystemPromptMessageItem(
-                          text: _pendingSystemPrompt,
-                          isPlaceholder: _pendingSystemPrompt.trim().isEmpty,
-                          onTap: () => _showSystemPromptEditor(chat: null),
-                        ),
-                        const SizedBox(height: 24),
-                        const Center(child: Text("发送消息以开始新的会话")),
-                      ],
-                    )
-                    : ListView.builder(
-                      controller: _scrollController,
-                      itemCount:
-                          messages.length +
-                          (hasSystemPrompt ? 1 : 0) +
-                          (chatProvider.isLoadingMoreHistory ? 1 : 0),
-                      itemBuilder: (context, index) {
-                        var cursor = index;
-                        if (hasSystemPrompt && cursor == 0) {
-                          return SystemPromptMessageItem(
-                            text: activeSystemPrompt,
-                            onTap: () => _showSystemPromptEditor(chat: chat),
-                          );
-                        }
-                        if (hasSystemPrompt) {
-                          cursor -= 1;
-                        }
-                        if (chatProvider.isLoadingMoreHistory && cursor == 0) {
-                          return const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 10),
-                            child: Center(
-                              child: SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              ),
-                            ),
-                          );
-                        }
-                        if (chatProvider.isLoadingMoreHistory) {
-                          cursor -= 1;
-                        }
-                        final msg = messages[cursor];
-                        final isLastMessage = cursor == messages.length - 1;
-                        if (msg.role == "user") {
-                          return UserMessageWidget(
-                            key: ValueKey('user-${msg.isarId}'),
-                            message: msg,
-                            onDelete:
-                                () => chatProvider.deleteMessage(msg.isarId),
-                          );
-                        } else if (msg.role == "assistant") {
-                          final showContinueButton =
-                              isLastMessage &&
-                              chatProvider.canContinueAssistantMessage(
-                                chat.id,
-                                msg.isarId,
-                              );
-                          return AssistantMessageWidget(
-                            key: ValueKey('assistant-${msg.isarId}'),
-                            message: msg,
-                            isGenerating: chat.isGenerating,
-                            isStreamingMessage: chatProvider.isMessageStreaming(
-                              msg.isarId,
-                            ),
-                            showResendButton: isLastMessage,
-                            showContinueButton: showContinueButton,
-                            onResend: () async {
-                              await chatProvider.regenerateMessage(
-                                chat.id,
-                                chat.isStreaming,
-                              );
-                            },
-                            onContinue: () async {
-                              await chatProvider
-                                  .continueGeneratingAssistantMessage(
-                                    chat.id,
-                                    chat.isStreaming,
-                                  );
-                            },
-                            onDelete:
-                                () => chatProvider.deleteMessage(msg.isarId),
-                          );
-                        }
-                        return const SizedBox.shrink();
-                      },
-                    ),
-                if (chat != null && shouldShowScrollToBottomButton)
-                  Positioned(
-                    right: 14,
-                    bottom: 16,
-                    child: FloatingActionButton.small(
-                      heroTag: 'chat_scroll_to_bottom_btn',
-                      onPressed: () {
-                        _scrollToLatest(animated: true);
-                      },
-                      child: const Icon(Icons.keyboard_arrow_down_rounded),
-                    ),
+            child: ChatMessageListPanel(
+              chat: chat,
+              scrollController: _scrollController,
+              messages: messages,
+              hasSystemPrompt: hasSystemPrompt,
+              activeSystemPrompt: activeSystemPrompt,
+              isLoadingMoreHistory: chatProvider.isLoadingMoreHistory,
+              shouldShowScrollToBottomButton: shouldShowScrollToBottomButton,
+              onTapSystemPrompt: () => _showSystemPromptEditor(chat: chat),
+              onScrollToBottom: () => _scrollToLatest(animated: true),
+              onResendLastAssistant:
+                  () => chatProvider.regenerateMessage(
+                    chat!.id,
+                    chat.isStreaming,
                   ),
-              ],
+              onContinueLastAssistant:
+                  () => chatProvider.continueGeneratingAssistantMessage(
+                    chat!.id,
+                    chat.isStreaming,
+                  ),
+              onDeleteMessage: (messageIsarId) async {
+                await chatProvider.deleteMessage(messageIsarId);
+              },
+              isMessageStreaming: chatProvider.isMessageStreaming,
+              canContinueAssistantMessage:
+                  (messageIsarId) =>
+                      chat == null
+                          ? false
+                          : chatProvider.canContinueAssistantMessage(
+                            chat.id,
+                            messageIsarId,
+                          ),
             ),
           ),
 
