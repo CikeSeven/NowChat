@@ -2,8 +2,6 @@
 
 Now Chat 是一款面向移动端的多模型 AI 聊天应用，支持多提供方接入、会话级参数配置、智能体（Agent）能力，以及图片/文件输入。
 
-项目地址：`https://github.com/CikeSeven/NowChat`
-
 ## 界面截图
 | 会话列表页 | API 管理页 |
 | --- | --- |
