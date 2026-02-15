@@ -59,14 +59,26 @@ class _DefaultChatParamsPageState extends State<DefaultChatParamsPage> {
           providerId: _providerId,
           model: _model,
           onModelSelected: (providerId, model) {
-            setState(() {
-              _providerId = providerId;
-              _model = model;
-            });
             Navigator.of(sheetContext).pop();
+            _applyAndSaveModel(providerId: providerId, model: model);
           },
         );
       },
+    );
+  }
+
+  /// 应用并立即保存默认模型，避免用户额外点击保存按钮。
+  Future<void> _applyAndSaveModel({
+    required String? providerId,
+    required String? model,
+  }) async {
+    setState(() {
+      _providerId = providerId;
+      _model = model;
+    });
+    await context.read<SettingsProvider>().setDefaultModel(
+      providerId: providerId,
+      model: model,
     );
   }
 
@@ -98,6 +110,26 @@ class _DefaultChatParamsPageState extends State<DefaultChatParamsPage> {
   }
 
   Future<void> _restoreDefaults() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (dialogContext) => AlertDialog(
+            title: const Text('恢复默认参数'),
+            content: const Text('确认恢复默认对话参数吗？此操作会覆盖当前设置。'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('恢复'),
+              ),
+            ],
+          ),
+    );
+    if (confirmed != true || !mounted) return;
+
     await context.read<SettingsProvider>().restoreDefaultChatParams();
     if (!mounted) return;
     setState(() {
@@ -150,12 +182,8 @@ class _DefaultChatParamsPageState extends State<DefaultChatParamsPage> {
                 if (_model != null)
                   IconButton(
                     tooltip: '清除',
-                    onPressed: () {
-                      setState(() {
-                        _providerId = null;
-                        _model = null;
-                      });
-                    },
+                    onPressed:
+                        () => _applyAndSaveModel(providerId: null, model: null),
                     icon: const Icon(Icons.clear_rounded),
                   ),
                 const Icon(Icons.chevron_right_rounded),

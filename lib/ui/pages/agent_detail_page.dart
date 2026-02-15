@@ -22,6 +22,7 @@ class AgentDetailPage extends StatefulWidget {
 class _AgentDetailPageState extends State<AgentDetailPage> {
   final TextEditingController _inputController = TextEditingController();
   bool _renderMarkdown = true;
+  bool _isSummaryExpanded = false;
 
   @override
   void initState() {
@@ -157,7 +158,7 @@ class _AgentDetailPageState extends State<AgentDetailPage> {
       );
     }
     final summary = agent.summary.trim().isEmpty
-        ? agent.prompt.trim()
+        ? '该智能体无说明'
         : agent.summary.trim();
     final runtime = _resolveRuntime(
       agent: agent,
@@ -169,26 +170,10 @@ class _AgentDetailPageState extends State<AgentDetailPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              agent.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            Text(
-              summary,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 12.5,
-                color: color.onSurfaceVariant,
-                fontWeight: FontWeight.w400,
-              ),
-            ),
-          ],
+        title: Text(
+          agent.name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
         actions: [
           IconButton(
@@ -219,6 +204,64 @@ class _AgentDetailPageState extends State<AgentDetailPage> {
             MediaQuery.of(context).viewInsets.bottom + 12,
           ),
           children: [
+            Row(
+              children: [
+                Text(
+                  '说明',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: color.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const Spacer(),
+                TextButton.icon(
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _isSummaryExpanded = !_isSummaryExpanded;
+                    });
+                  },
+                  icon: Icon(
+                    _isSummaryExpanded
+                        ? Icons.keyboard_arrow_up_rounded
+                        : Icons.keyboard_arrow_down_rounded,
+                    size: 16,
+                  ),
+                  label: Text(_isSummaryExpanded ? '收起说明' : '展开说明'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+              decoration: BoxDecoration(
+                color: color.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: color.outlineVariant.withAlpha(130)),
+              ),
+              child: Text(
+                summary,
+                maxLines: _isSummaryExpanded ? null : 2,
+                overflow: _isSummaryExpanded
+                    ? TextOverflow.visible
+                    : TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 14,
+                  height: 1.45,
+                  color: color.onSurfaceVariant,
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
             TextField(
               controller: _inputController,
               minLines: 4,

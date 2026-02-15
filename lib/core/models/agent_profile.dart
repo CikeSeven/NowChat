@@ -8,7 +8,7 @@ class AgentProfile {
   /// 智能体名称。
   String name;
 
-  /// 智能体简述（列表展示）。
+  /// 智能体说明（列表展示）。
   String summary;
 
   /// 智能体提示词（作为 system prompt）。

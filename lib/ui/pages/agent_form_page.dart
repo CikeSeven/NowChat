@@ -120,10 +120,6 @@ class _AgentFormPageState extends State<AgentFormPage> {
       _showSnackBar('名称不能为空');
       return;
     }
-    if (summary.isEmpty) {
-      _showSnackBar('简述不能为空');
-      return;
-    }
     if (prompt.isEmpty) {
       _showSnackBar('提示词不能为空');
       return;
@@ -246,8 +242,8 @@ class _AgentFormPageState extends State<AgentFormPage> {
             decoration: const InputDecoration(
               border: OutlineInputBorder(),
               isDense: true,
-              labelText: '简述',
-              hintText: '列表展示文本（最多建议两行）',
+              labelText: '说明',
+              hintText: '列表展示文本（可选，最多建议两行）',
             ),
           ),
           const SizedBox(height: 10),

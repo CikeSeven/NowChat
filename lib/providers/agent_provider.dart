@@ -52,6 +52,11 @@ class AgentOneShotRequest {
 /// 智能体数据与一次性对话状态管理。
 class AgentProvider with ChangeNotifier {
   final Isar isar;
+  static const String _builtInTranslatorName = '翻译助手（例）';
+  static const String _builtInTranslatorSummary =
+      'AI大模型驱动的翻译助手，自动识别语言翻译为中文，推荐使用速度快，价格低的模型';
+  static const String _builtInTranslatorPrompt =
+      '你是一个语言翻译专家，需要将非中文语言翻译为中文，收到用户发送的内容后，直接准确地翻译为对应的中文，不要加任何多余的内容。';
 
   final List<AgentProfile> _agents = <AgentProfile>[];
   bool _initialized = false;
@@ -76,7 +81,11 @@ class AgentProvider with ChangeNotifier {
     if (_initialized) return;
     _initialized = true;
     final loaded = await Storage.loadAgentProfiles();
+    final patched = _patchBuiltInAgentContent(loaded);
     await _seedExampleAgentIfNeeded(loaded);
+    if (patched) {
+      await Storage.saveAgentProfiles(loaded);
+    }
     _agents
       ..clear()
       ..addAll(loaded);
@@ -228,14 +237,26 @@ class AgentProvider with ChangeNotifier {
     if (loaded.isEmpty) {
       loaded.add(
         AgentProfile.create(
-          name: '翻译助手（例）',
-          summary: '将非中文内容直接翻译为中文，只返回译文。',
-          prompt:
-              '你是一个语言翻译专家，需要将非中文语言翻译为中文，收到用户发送的内容后，直接准确地翻译为对应的中文，不要加任何多余的内容。',
+          name: _builtInTranslatorName,
+          summary: _builtInTranslatorSummary,
+          prompt: _builtInTranslatorPrompt,
         ),
       );
       await Storage.saveAgentProfiles(loaded);
     }
     await Storage.markAgentExampleSeeded();
+  }
+
+  /// 同步内置示例智能体文案，兼容历史数据。
+  bool _patchBuiltInAgentContent(List<AgentProfile> loaded) {
+    var changed = false;
+    for (final agent in loaded) {
+      if (agent.name != _builtInTranslatorName) continue;
+      if (agent.summary == _builtInTranslatorSummary) continue;
+      agent.summary = _builtInTranslatorSummary;
+      agent.updatedAt = DateTime.now();
+      changed = true;
+    }
+    return changed;
   }
 }
