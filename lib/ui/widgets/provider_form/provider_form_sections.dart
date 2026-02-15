@@ -348,7 +348,7 @@ class ProviderModelsSection extends StatelessWidget {
   }
 }
 
-class FetchedModelsSection extends StatelessWidget {
+class FetchedModelsSection extends StatefulWidget {
   final bool loadingModels;
   final String? loadError;
   final List<String> addableModels;
@@ -363,8 +363,32 @@ class FetchedModelsSection extends StatelessWidget {
   });
 
   @override
+  State<FetchedModelsSection> createState() => _FetchedModelsSectionState();
+}
+
+class _FetchedModelsSectionState extends State<FetchedModelsSection> {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final color = Theme.of(context).colorScheme;
+    final normalizedQuery = _searchQuery.trim().toLowerCase();
+    final visibleModels =
+        normalizedQuery.isEmpty
+            ? widget.addableModels
+            : widget.addableModels
+                .where(
+                  (model) => model.toLowerCase().contains(normalizedQuery),
+                )
+                .toList();
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -380,23 +404,62 @@ class FetchedModelsSection extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 6),
-            if (loadingModels)
+            TextField(
+              controller: _searchController,
+              onChanged: (value) {
+                setState(() {
+                  _searchQuery = value;
+                });
+              },
+              decoration: InputDecoration(
+                isDense: true,
+                hintText: '搜索模型',
+                prefixIcon: const Icon(Icons.search, size: 18),
+                suffixIcon:
+                    _searchQuery.trim().isEmpty
+                        ? null
+                        : IconButton(
+                            tooltip: '清空',
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() {
+                                _searchQuery = '';
+                              });
+                            },
+                            icon: const Icon(Icons.close, size: 16),
+                          ),
+                border: const OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (widget.loadingModels)
               const Center(
                 child: Padding(
                   padding: EdgeInsets.symmetric(vertical: 10),
                   child: CircularProgressIndicator(strokeWidth: 2.5),
                 ),
               )
-            else if (loadError != null)
-              Text('加载失败：$loadError', style: TextStyle(fontSize: 13, color: color.error))
-            else if (addableModels.isEmpty)
-              Text('暂无可添加模型', style: TextStyle(fontSize: 13, color: color.outline))
+            else if (widget.loadError != null)
+              Text(
+                '加载失败：${widget.loadError}',
+                style: TextStyle(fontSize: 13, color: color.error),
+              )
+            else if (widget.addableModels.isEmpty)
+              Text(
+                '暂无可添加模型',
+                style: TextStyle(fontSize: 13, color: color.outline),
+              )
+            else if (visibleModels.isEmpty)
+              Text(
+                '没有匹配的模型',
+                style: TextStyle(fontSize: 13, color: color.outline),
+              )
             else
-              ...addableModels.map(
+              ...visibleModels.map(
                 (model) => FetchedModelListItem(
                   model: model,
                   backgroundColor: color.surfaceContainer,
-                  onAdd: () => onAddModel(model),
+                  onAdd: () => widget.onAddModel(model),
                 ),
               ),
           ],
