@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// 应用关于页，展示应用信息并提供开源协议入口。
 class AboutPage extends StatefulWidget {
@@ -14,6 +15,7 @@ class _AboutPageState extends State<AboutPage> {
   static const String _fallbackVersion = '0.2.0+2';
   static const String _fallbackPackageName = 'com.nowchat';
   static const String _iconAssetPath = 'assets/icon/app_icon.png';
+  static const String _projectUrl = 'https://github.com/CikeSeven/NowChat';
 
   String _appName = _fallbackAppName;
   String _version = _fallbackVersion;
@@ -98,8 +100,31 @@ class _AboutPageState extends State<AboutPage> {
                     _InfoLine(label: '版本号', value: _version),
                     const SizedBox(height: 10),
                     _InfoLine(label: '包名', value: _packageName),
+                    const SizedBox(height: 10),
+                    _InfoLine(label: '项目地址', value: _projectUrl),
                   ],
                 ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.code_outlined),
+                title: const Text('项目主页'),
+                subtitle: const Text(_projectUrl),
+                trailing: const Icon(Icons.open_in_new_rounded),
+                onTap: () async {
+                  final uri = Uri.parse(_projectUrl);
+                  final success = await launchUrl(
+                    uri,
+                    mode: LaunchMode.externalApplication,
+                  );
+                  if (!success && mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('无法打开项目地址')),
+                    );
+                  }
+                },
               ),
             ),
             const SizedBox(height: 10),
