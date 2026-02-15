@@ -12,7 +12,7 @@ class AboutPage extends StatefulWidget {
 
 class _AboutPageState extends State<AboutPage> {
   static const String _fallbackAppName = 'Now Chat';
-  static const String _fallbackVersion = '0.2.0+2';
+  static const String _fallbackVersion = '0.3.0+3';
   static const String _fallbackPackageName = 'com.nowchat';
   static const String _iconAssetPath = 'assets/icon/app_icon.png';
   static const String _projectUrl = 'https://github.com/CikeSeven/NowChat';
@@ -100,8 +100,6 @@ class _AboutPageState extends State<AboutPage> {
                     _InfoLine(label: '版本号', value: _version),
                     const SizedBox(height: 10),
                     _InfoLine(label: '包名', value: _packageName),
-                    const SizedBox(height: 10),
-                    _InfoLine(label: '项目地址', value: _projectUrl),
                   ],
                 ),
               ),
