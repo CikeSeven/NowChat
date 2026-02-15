@@ -10,7 +10,12 @@ import 'package:url_launcher/url_launcher.dart';
 
 class MarkdownMessageWidget extends StatelessWidget {
   final String data;
-  const MarkdownMessageWidget({super.key, required this.data});
+  final bool selectable;
+  const MarkdownMessageWidget({
+    super.key,
+    required this.data,
+    this.selectable = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -23,6 +28,7 @@ class MarkdownMessageWidget extends StatelessWidget {
     );
     return MarkdownBody(
       data: data,
+      selectable: selectable,
       onTapLink: (text, href, title) {
         if (href != null) {
           launchUrl(Uri.parse(href));

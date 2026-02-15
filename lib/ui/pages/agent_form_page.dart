@@ -25,7 +25,6 @@ class _AgentFormPageState extends State<AgentFormPage> {
   bool _initialized = false;
   bool _isEditing = false;
   String? _agentId;
-  bool _overrideModel = false;
   bool _overrideParams = false;
 
   String? _providerId;
@@ -41,8 +40,8 @@ class _AgentFormPageState extends State<AgentFormPage> {
     _initialized = true;
 
     final settings = context.read<SettingsProvider>();
-    _providerId = settings.defaultProviderId;
-    _model = settings.defaultModel;
+    _providerId = null;
+    _model = null;
     _temperature = settings.defaultTemperature;
     _topP = settings.defaultTopP;
     _streaming = settings.defaultStreaming;
@@ -59,8 +58,8 @@ class _AgentFormPageState extends State<AgentFormPage> {
     _summaryController.text = existing.summary;
     _promptController.text = existing.prompt;
 
-    _overrideModel = existing.providerId != null && existing.model != null;
-    if (_overrideModel) {
+    if ((existing.providerId ?? '').trim().isNotEmpty &&
+        (existing.model ?? '').trim().isNotEmpty) {
       _providerId = existing.providerId;
       _model = existing.model;
     }
@@ -89,6 +88,9 @@ class _AgentFormPageState extends State<AgentFormPage> {
   }
 
   Future<void> _showModelSelector() async {
+    final settings = context.read<SettingsProvider>();
+    final initialProviderId = _providerId ?? settings.defaultProviderId;
+    final initialModel = _model ?? settings.defaultModel;
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -96,8 +98,8 @@ class _AgentFormPageState extends State<AgentFormPage> {
       backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
       builder: (sheetContext) {
         return ModelSelectorBottomSheet(
-          providerId: _providerId,
-          model: _model,
+          providerId: initialProviderId,
+          model: initialModel,
           onModelSelected: (providerId, model) {
             setState(() {
               _providerId = providerId;
@@ -127,11 +129,13 @@ class _AgentFormPageState extends State<AgentFormPage> {
       return;
     }
 
-    if (_overrideModel) {
-      if ((_providerId ?? '').trim().isEmpty || (_model ?? '').trim().isEmpty) {
-        _showSnackBar('已开启模型覆盖，请选择模型');
-        return;
-      }
+    final normalizedProviderId = (_providerId ?? '').trim();
+    final normalizedModel = (_model ?? '').trim();
+    final hasProvider = normalizedProviderId.isNotEmpty;
+    final hasModel = normalizedModel.isNotEmpty;
+    if (hasProvider != hasModel) {
+      _showSnackBar('模型配置不完整，请重新选择模型或清除');
+      return;
     }
 
     int? maxTokens;
@@ -143,8 +147,8 @@ class _AgentFormPageState extends State<AgentFormPage> {
       }
     }
 
-    final providerId = _overrideModel ? _providerId?.trim() : null;
-    final model = _overrideModel ? _model?.trim() : null;
+    final providerId = hasProvider ? normalizedProviderId : null;
+    final model = hasModel ? normalizedModel : null;
     final temperature = _overrideParams ? _temperature : null;
     final topP = _overrideParams ? _topP : null;
     final streaming = _overrideParams ? _streaming : null;
@@ -194,12 +198,26 @@ class _AgentFormPageState extends State<AgentFormPage> {
   @override
   Widget build(BuildContext context) {
     final chatProvider = context.watch<ChatProvider>();
+    final settings = context.watch<SettingsProvider>();
     final selectedProvider =
         _providerId == null ? null : chatProvider.getProviderById(_providerId!);
-    final selectedModelDisplay =
-        selectedProvider != null && _model != null
-            ? selectedProvider.displayNameForModel(_model!)
-            : null;
+    final selectedModelDisplay = selectedProvider != null && _model != null
+        ? selectedProvider.displayNameForModel(_model!)
+        : null;
+    final defaultProviderId = settings.defaultProviderId;
+    final defaultModel = settings.defaultModel;
+    final defaultProvider = defaultProviderId == null
+        ? null
+        : chatProvider.getProviderById(defaultProviderId);
+    final defaultModelDisplay = defaultProvider != null && defaultModel != null
+        ? defaultProvider.displayNameForModel(defaultModel)
+        : null;
+    final hasBoundModel = selectedProvider != null && selectedModelDisplay != null;
+    final modelSubtitle = hasBoundModel
+        ? '已绑定：${selectedProvider.name} · $selectedModelDisplay'
+        : (defaultProvider != null && defaultModelDisplay != null
+            ? '默认：${defaultProvider.name} · $defaultModelDisplay'
+            : '未设置（请先在设置中配置默认模型或在此绑定模型）');
 
     return Scaffold(
       appBar: AppBar(
@@ -247,32 +265,30 @@ class _AgentFormPageState extends State<AgentFormPage> {
           Card(
             child: Column(
               children: [
-                SwitchListTile(
-                  title: const Text('覆盖默认模型'),
-                  subtitle: const Text('关闭后使用“设置-默认对话参数”中的模型'),
-                  value: _overrideModel,
-                  onChanged: (value) {
-                    setState(() {
-                      _overrideModel = value;
-                      if (!value) {
-                        _providerId = null;
-                        _model = null;
-                      }
-                    });
-                  },
-                ),
-                if (_overrideModel)
-                  ListTile(
-                    leading: const Icon(Icons.smart_toy_outlined),
-                    title: const Text('选择模型'),
-                    subtitle: Text(
-                      selectedModelDisplay == null || _model == null
-                          ? '未选择'
-                          : '${selectedProvider?.name ?? '未知提供方'} · $selectedModelDisplay',
-                    ),
-                    trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: _showModelSelector,
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                  leading: const Icon(Icons.smart_toy_outlined),
+                  title: const Text('模型'),
+                  subtitle: Text(modelSubtitle),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_model != null)
+                        IconButton(
+                          tooltip: '清除绑定，回退默认模型',
+                          onPressed: () {
+                            setState(() {
+                              _providerId = null;
+                              _model = null;
+                            });
+                          },
+                          icon: const Icon(Icons.clear_rounded),
+                        ),
+                      const Icon(Icons.chevron_right_rounded),
+                    ],
                   ),
+                  onTap: _showModelSelector,
+                ),
               ],
             ),
           ),
