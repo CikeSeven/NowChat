@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class Storage {
   static const _kAPIProvider = 'api_provider';
   static const _kAgentProfiles = 'agent_profiles';
+  static const _kAgentExampleSeeded = 'agent_example_seeded';
 
   // 读取api列表
   static Future<List<AIProviderConfig>> loadProviders() async {
@@ -68,5 +69,17 @@ class Storage {
     final prefs = await SharedPreferences.getInstance();
     final payload = profiles.map((item) => item.toJson()).toList();
     await prefs.setString(_kAgentProfiles, json.encode(payload));
+  }
+
+  /// 是否已写入过首次示例智能体。
+  static Future<bool> isAgentExampleSeeded() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_kAgentExampleSeeded) ?? false;
+  }
+
+  /// 标记首次示例智能体已写入。
+  static Future<void> markAgentExampleSeeded() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kAgentExampleSeeded, true);
   }
 }

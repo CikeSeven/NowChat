@@ -76,6 +76,7 @@ class AgentProvider with ChangeNotifier {
     if (_initialized) return;
     _initialized = true;
     final loaded = await Storage.loadAgentProfiles();
+    await _seedExampleAgentIfNeeded(loaded);
     _agents
       ..clear()
       ..addAll(loaded);
@@ -217,5 +218,24 @@ class AgentProvider with ChangeNotifier {
 
   void _sortAgents() {
     _agents.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+  }
+
+  /// 首次进入应用时自动写入一个示例智能体，方便用户快速体验。
+  Future<void> _seedExampleAgentIfNeeded(List<AgentProfile> loaded) async {
+    final seeded = await Storage.isAgentExampleSeeded();
+    if (seeded) return;
+
+    if (loaded.isEmpty) {
+      loaded.add(
+        AgentProfile.create(
+          name: '翻译助手（例）',
+          summary: '将非中文内容直接翻译为中文，只返回译文。',
+          prompt:
+              '你是一个语言翻译专家，需要将非中文语言翻译为中文，收到用户发送的内容后，直接准确地翻译为对应的中文，不要加任何多余的内容。',
+        ),
+      );
+      await Storage.saveAgentProfiles(loaded);
+    }
+    await Storage.markAgentExampleSeeded();
   }
 }
