@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:isar/isar.dart';
 import 'package:now_chat/app/ChatApp.dart';
+import 'package:now_chat/providers/agent_provider.dart';
 import 'package:now_chat/providers/chat_provider.dart';
 import 'package:now_chat/providers/settings_provider.dart';
 import 'package:path_provider/path_provider.dart';
@@ -26,6 +27,7 @@ void main() async {
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => ChatProvider(isar)),
+        ChangeNotifierProvider(create: (_) => AgentProvider(isar)),
         ChangeNotifierProvider(create: (_) => SettingsProvider()),
       ],
       child: const ChatApp(),

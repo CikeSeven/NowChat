@@ -1,11 +1,13 @@
 import 'dart:convert';
 
 import 'package:now_chat/core/models/ai_provider_config.dart';
+import 'package:now_chat/core/models/agent_profile.dart';
 import 'package:now_chat/util/app_logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class Storage {
   static const _kAPIProvider = 'api_provider';
+  static const _kAgentProfiles = 'agent_profiles';
 
   // 读取api列表
   static Future<List<AIProviderConfig>> loadProviders() async {
@@ -35,4 +37,36 @@ class Storage {
     await prefs.setString(_kAPIProvider, json.encode(jsonList));
   }
 
+  /// 读取智能体配置列表。
+  static Future<List<AgentProfile>> loadAgentProfiles() async {
+    AppLogger.i("读取智能体配置");
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_kAgentProfiles);
+    if (raw == null || raw.isEmpty) {
+      AppLogger.i("未读取到智能体配置，返回空列表");
+      return <AgentProfile>[];
+    }
+    try {
+      final decoded = json.decode(raw) as List<dynamic>;
+      return decoded
+          .whereType<Map>()
+          .map(
+            (item) => AgentProfile.fromJson(
+              Map<String, dynamic>.from(item),
+            ),
+          )
+          .toList();
+    } catch (e) {
+      AppLogger.e("读取智能体配置失败", e);
+      return <AgentProfile>[];
+    }
+  }
+
+  /// 保存智能体配置列表。
+  static Future<void> saveAgentProfiles(List<AgentProfile> profiles) async {
+    AppLogger.i("保存智能体配置");
+    final prefs = await SharedPreferences.getInstance();
+    final payload = profiles.map((item) => item.toJson()).toList();
+    await prefs.setString(_kAgentProfiles, json.encode(payload));
+  }
 }

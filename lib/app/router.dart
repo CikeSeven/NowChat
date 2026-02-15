@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:now_chat/ui/pages/about_page.dart';
+import 'package:now_chat/ui/pages/agent_detail_page.dart';
+import 'package:now_chat/ui/pages/agent_form_page.dart';
 import 'package:now_chat/ui/pages/chat_settings_page.dart';
 import 'package:now_chat/ui/pages/default_chat_params_page.dart';
 import 'package:now_chat/ui/pages/edit_message_page.dart';
@@ -15,6 +17,8 @@ class AppRoutes {
   static const chatSettings = '/chat/settings';
   static const defaultChatParams = '/settings/default_chat_params';
   static const about = '/settings/about';
+  static const agentForm = '/agent/form';
+  static const agentDetail = '/agent/detail';
   static const providerForm = '/provider/form';
   static const editMessage = '/edit_message';
 
@@ -54,6 +58,25 @@ class AppRoutes {
       case about:
         return _buildSlideRoute(
           builder: (_) => const AboutPage(),
+        );
+
+      case agentForm:
+        final args = settings.arguments as Map<String, dynamic>?;
+        final agentId = args?['agentId']?.toString();
+        return _buildSlideRoute(
+          builder: (_) => AgentFormPage(agentId: agentId),
+        );
+
+      case agentDetail:
+        final args = settings.arguments as Map<String, dynamic>?;
+        final agentId = args?['agentId']?.toString();
+        if (agentId == null || agentId.trim().isEmpty) {
+          return MaterialPageRoute(
+            builder: (_) => const Scaffold(body: Center(child: Text('智能体不存在'))),
+          );
+        }
+        return _buildSlideRoute(
+          builder: (_) => AgentDetailPage(agentId: agentId),
         );
 
       case providerForm:
