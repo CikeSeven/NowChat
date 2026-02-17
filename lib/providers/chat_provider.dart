@@ -692,14 +692,22 @@ class ChatProvider with ChangeNotifier {
             },
           );
         } on GenerationAbortedException {
+          reasoningTimer?.cancel();
+          if (reasoningStartTime != null) {
+            aiMsg.reasoningTimeMs =
+                DateTime.now().difference(reasoningStartTime!).inMilliseconds;
+          }
           interrupted = true;
         } catch (e) {
+          reasoningTimer?.cancel();
           if (_hasMessageOutput(aiMsg)) {
             interrupted = true;
             AppLogger.w("重新生成流式异常，保留已生成内容并允许继续：$e");
           } else {
             failureReason = e.toString();
           }
+        } finally {
+          reasoningTimer?.cancel();
         }
       } else {
         try {
@@ -875,8 +883,14 @@ class ChatProvider with ChangeNotifier {
             },
           );
         } on GenerationAbortedException {
+          reasoningTimer?.cancel();
+          if (reasoningStartTime != null) {
+            currentAiMsg.reasoningTimeMs =
+                DateTime.now().difference(reasoningStartTime!).inMilliseconds;
+          }
           interrupted = true;
         } catch (e) {
+          reasoningTimer?.cancel();
           if (_hasMessageOutput(currentAiMsg)) {
             interrupted = true;
             AppLogger.w("流式异常中断，保留已生成内容并允许继续：$e");
@@ -884,6 +898,8 @@ class ChatProvider with ChangeNotifier {
             currentAiMsg.content = "AI 响应出错：${e.toString()}";
             await endStreamingMessage(currentAiMsg);
           }
+        } finally {
+          reasoningTimer?.cancel();
         }
       } else {
         try {
