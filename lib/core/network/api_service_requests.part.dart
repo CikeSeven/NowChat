@@ -74,7 +74,7 @@ Future<Map<String, dynamic>> _sendOpenAIChatRequest({
     ),
     'temperature': session.temperature,
     'top_p': session.topP,
-    'max_tokens': session.maxTokens,
+    if (session.maxTokens > 0) 'max_tokens': session.maxTokens,
   };
 
   logger.i("(OpenAI) 向 $uri 发送对话请求");
@@ -160,7 +160,7 @@ Future<Map<String, dynamic>> _sendGeminiRequest({
     'generationConfig': {
       'temperature': session.temperature,
       'topP': session.topP,
-      'maxOutputTokens': session.maxTokens,
+      if (session.maxTokens > 0) 'maxOutputTokens': session.maxTokens,
     },
   };
 
@@ -240,7 +240,7 @@ Future<Map<String, dynamic>> _sendClaudeRequest({
 
   final body = {
     'model': model,
-    'max_tokens': session.maxTokens,
+    if (session.maxTokens > 0) 'max_tokens': session.maxTokens,
     'temperature': session.temperature,
     'top_p': session.topP,
     'messages': messages,

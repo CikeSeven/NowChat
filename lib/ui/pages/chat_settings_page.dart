@@ -25,6 +25,7 @@ class _ChatSettingsPageState extends State<ChatSettingsPage> {
   double _temperature = 0.7;
   double _topP = 1.0;
   bool _isStreaming = true;
+  bool _useMaxTokens = false;
 
   @override
   void didChangeDependencies() {
@@ -40,7 +41,9 @@ class _ChatSettingsPageState extends State<ChatSettingsPage> {
       _temperature = chat.temperature;
       _topP = chat.topP;
       _isStreaming = chat.isStreaming;
-      _maxTokensController.text = chat.maxTokens.toString();
+      _useMaxTokens = chat.maxTokens > 0 && chat.maxTokens != 4096;
+      _maxTokensController.text =
+          _useMaxTokens ? chat.maxTokens.toString() : '16000';
       _maxConversationTurnsController.text = chat.maxConversationTurns
           .toString();
       _systemPromptController.text = chat.systemPrompt ?? '';
@@ -70,13 +73,13 @@ class _ChatSettingsPageState extends State<ChatSettingsPage> {
 
   bool get _canSave =>
       _chat != null &&
-      _maxTokens != null &&
+      (!_useMaxTokens || _maxTokens != null) &&
       _maxConversationTurns != null &&
       _titleController.text.trim().isNotEmpty;
 
   Future<void> _save() async {
     final chat = _chat;
-    final maxTokens = _maxTokens;
+    final maxTokens = _useMaxTokens ? _maxTokens : 0;
     final maxConversationTurns = _maxConversationTurns;
     if (chat == null || maxTokens == null || maxConversationTurns == null) {
       return;
@@ -272,16 +275,48 @@ class _ChatSettingsPageState extends State<ChatSettingsPage> {
                     ),
                   ),
                   const SizedBox(height: 10),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    title: const Text('启用 max_tokens'),
+                    subtitle: Text(
+                      _useMaxTokens
+                          ? '已启用，超过上限时模型可能提前结束'
+                          : '关闭后请求默认不传 max_tokens',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
+                    value: _useMaxTokens,
+                    onChanged: (value) {
+                      setState(() {
+                        _useMaxTokens = value;
+                        if (_useMaxTokens) {
+                          final parsed = int.tryParse(
+                            _maxTokensController.text.trim(),
+                          );
+                          if (parsed == null || parsed <= 0) {
+                            _maxTokensController.text = '16000';
+                          }
+                        }
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 4),
                   TextField(
                     controller: _maxTokensController,
                     keyboardType: TextInputType.number,
+                    enabled: _useMaxTokens,
                     onChanged: (_) => setState(() {}),
                     decoration: InputDecoration(
                       isDense: true,
                       labelText: 'max_tokens',
-                      helperText: '请输入大于 0 的整数',
+                      helperText:
+                          _useMaxTokens ? '请输入大于 0 的整数（默认 16000）' : '当前未启用',
                       errorText:
-                          _maxTokensController.text.isEmpty ||
+                          !_useMaxTokens ||
+                                  _maxTokensController.text.isEmpty ||
                                   _maxTokens != null
                               ? null
                               : 'max_tokens 无效',

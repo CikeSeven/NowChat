@@ -11,7 +11,7 @@ class ChatSession {
   String? systemPrompt;
   double temperature = 0.7;
   double topP = 1.0;
-  int maxTokens = 4096;
+  int maxTokens = 0;
   int maxConversationTurns = 50;
   bool isStreaming = true;
   bool isGenerating = true;
@@ -25,7 +25,7 @@ class ChatSession {
     this.systemPrompt,
     this.temperature = 0.7,
     this.topP = 1.0,
-    this.maxTokens = 4096,
+    this.maxTokens = 0,
     this.maxConversationTurns = 50,
     this.isStreaming = true,
     this.isGenerating = true,
@@ -111,7 +111,7 @@ class ChatSession {
     systemPrompt: json['systemPrompt']?.toString(),
     temperature: (json['temperature'] ?? 0.7).toDouble(),
     topP: (json['topP'] ?? 1.0).toDouble(),
-    maxTokens: json['maxTokens'] ?? 4096,
+    maxTokens: json['maxTokens'] ?? 0,
     maxConversationTurns: json['maxConversationTurns'] ?? 50,
     isStreaming: json['isStreaming'] as bool? ?? true,
     isGenerating: json['isGenerating'] as bool? ?? true,

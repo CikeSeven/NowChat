@@ -98,7 +98,7 @@ Future<void> _sendOpenAIChatStreaming({
       ),
       'temperature': session.temperature,
       'top_p': session.topP,
-      'max_tokens': session.maxTokens,
+      if (session.maxTokens > 0) 'max_tokens': session.maxTokens,
       'stream': true,
     };
 
@@ -246,7 +246,7 @@ Future<void> _sendGeminiRequestStreaming({
       'generationConfig': {
         'temperature': session.temperature,
         'topP': session.topP,
-        'maxOutputTokens': session.maxTokens,
+        if (session.maxTokens > 0) 'maxOutputTokens': session.maxTokens,
       },
     };
 
@@ -369,7 +369,7 @@ Future<void> _sendClaudeRequestStreaming({
 
     final body = {
       'model': model,
-      'max_tokens': session.maxTokens,
+      if (session.maxTokens > 0) 'max_tokens': session.maxTokens,
       'temperature': session.temperature,
       'top_p': session.topP,
       'messages': messages,

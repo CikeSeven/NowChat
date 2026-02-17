@@ -338,7 +338,6 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                   systemPrompt: _pendingSystemPrompt.trim(),
                   temperature: settings.defaultTemperature,
                   topP: settings.defaultTopP,
-                  maxTokens: settings.defaultMaxTokens,
                   maxConversationTurns: settings.defaultMaxConversationTurns,
                   isStreaming: isStreamingForNewChat,
                 );

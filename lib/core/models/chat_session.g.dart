@@ -152,7 +152,7 @@ ChatSession _chatSessionDeserialize(
     isStreaming: reader.readBoolOrNull(offsets[2]) ?? true,
     lastUpdated: reader.readDateTime(offsets[3]),
     maxConversationTurns: reader.readLongOrNull(offsets[4]) ?? 50,
-    maxTokens: reader.readLongOrNull(offsets[5]) ?? 4096,
+    maxTokens: reader.readLongOrNull(offsets[5]) ?? 0,
     model: reader.readStringOrNull(offsets[6]),
     providerId: reader.readStringOrNull(offsets[7]),
     systemPrompt: reader.readStringOrNull(offsets[8]),

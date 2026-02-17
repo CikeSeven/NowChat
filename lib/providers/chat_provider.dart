@@ -270,6 +270,12 @@ class ChatProvider with ChangeNotifier {
     _dirtyStreamingMessageIds.remove(messageId);
   }
 
+  /// 判断消息是否已产出可展示内容（正文或推理内容）。
+  bool _hasMessageOutput(Message message) {
+    return message.content.trim().isNotEmpty ||
+        ((message.reasoning ?? '').trim().isNotEmpty);
+  }
+
   void _scheduleStreamingNotify() {
     if (_streamingNotifyTimer != null) return;
     _streamingNotifyTimer = Timer(_streamingUiThrottle, () {
@@ -562,7 +568,12 @@ class ChatProvider with ChangeNotifier {
       interrupted = true;
       AppLogger.i("继续生成已中断(chatId=$chatId)");
     } catch (e) {
-      AppLogger.w("继续生成失败(chatId=$chatId): $e");
+      if (_hasMessageOutput(assistantMessage)) {
+        interrupted = true;
+        AppLogger.w("继续生成流式异常，保留已生成内容并允许继续(chatId=$chatId): $e");
+      } else {
+        AppLogger.w("继续生成失败(chatId=$chatId): $e");
+      }
     } finally {
       if (usedStreaming && isMessageStreaming(assistantMessage.isarId)) {
         await endStreamingMessage(assistantMessage);
@@ -571,7 +582,7 @@ class ChatProvider with ChangeNotifier {
       await _setChatGenerating(chat, false);
     }
 
-    final hasAnyOutput = assistantMessage.content.trim().isNotEmpty;
+    final hasAnyOutput = _hasMessageOutput(assistantMessage);
     if (interrupted && hasAnyOutput) {
       // 用户手动中断时，无论本次是否已开始新增输出，都保留“继续”入口。
       _pendingContinuations[chatId] = pending;
@@ -683,7 +694,12 @@ class ChatProvider with ChangeNotifier {
         } on GenerationAbortedException {
           interrupted = true;
         } catch (e) {
-          failureReason = e.toString();
+          if (_hasMessageOutput(aiMsg)) {
+            interrupted = true;
+            AppLogger.w("重新生成流式异常，保留已生成内容并允许继续：$e");
+          } else {
+            failureReason = e.toString();
+          }
         }
       } else {
         try {
@@ -709,8 +725,7 @@ class ChatProvider with ChangeNotifier {
       }
 
       final hasAnyOutput =
-          aiMsg.content.trim().isNotEmpty ||
-          ((aiMsg.reasoning ?? '').trim().isNotEmpty);
+          _hasMessageOutput(aiMsg);
       final shouldRestoreOldReply = !responseStarted && !interrupted;
       final shouldKeepInterruptedPartial = interrupted && hasAnyOutput;
       if (shouldRestoreOldReply) {
@@ -862,8 +877,13 @@ class ChatProvider with ChangeNotifier {
         } on GenerationAbortedException {
           interrupted = true;
         } catch (e) {
-          currentAiMsg.content = "AI 响应出错：${e.toString()}";
-          await endStreamingMessage(currentAiMsg);
+          if (_hasMessageOutput(currentAiMsg)) {
+            interrupted = true;
+            AppLogger.w("流式异常中断，保留已生成内容并允许继续：$e");
+          } else {
+            currentAiMsg.content = "AI 响应出错：${e.toString()}";
+            await endStreamingMessage(currentAiMsg);
+          }
         }
       } else {
         try {
@@ -890,8 +910,7 @@ class ChatProvider with ChangeNotifier {
       }
 
       final hasAnyOutput =
-          currentAiMsg.content.trim().isNotEmpty ||
-          ((currentAiMsg.reasoning ?? '').trim().isNotEmpty);
+          _hasMessageOutput(currentAiMsg);
       if (interrupted && hasAnyOutput) {
         _pendingContinuations[chatId] = _PendingContinuation(
           assistantMessageId: currentAiMsg.isarId,
