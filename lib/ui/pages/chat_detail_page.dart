@@ -202,14 +202,6 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     final activeSystemPrompt =
         (chat?.systemPrompt ?? _pendingSystemPrompt).trim();
     final hasSystemPrompt = activeSystemPrompt.isNotEmpty;
-    if (chat != null && _pendingSystemPrompt != (chat.systemPrompt ?? '')) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        setState(() {
-          _pendingSystemPrompt = chat.systemPrompt ?? '';
-        });
-      });
-    }
     return Scaffold(
       appBar: AppBar(
         title: Text(chat?.title ?? "新会话"),
@@ -413,15 +405,18 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   Future<void> _showSystemPromptEditor({required ChatSession? chat}) async {
     final chatProvider = context.read<ChatProvider>();
     final initial = chat?.systemPrompt ?? _pendingSystemPrompt;
-    final controller = TextEditingController(text: initial);
+    var draft = initial;
 
     final result = await showDialog<String>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
           title: const Text('设置 System Prompt'),
-          content: TextField(
-            controller: controller,
+          content: TextFormField(
+            initialValue: initial,
+            onChanged: (value) {
+              draft = value;
+            },
             minLines: 4,
             maxLines: 10,
             decoration: const InputDecoration(
@@ -439,15 +434,13 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
               child: const Text('清空'),
             ),
             FilledButton(
-              onPressed:
-                  () => Navigator.pop(dialogContext, controller.text.trim()),
+              onPressed: () => Navigator.pop(dialogContext, draft.trim()),
               child: const Text('保存'),
             ),
           ],
         );
       },
     );
-    controller.dispose();
 
     if (result == null) return;
     if (chat != null) {
