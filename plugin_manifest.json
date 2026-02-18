@@ -2,41 +2,41 @@
   "manifestVersion": 1,
   "core": {
     "id": "python-core",
-    "name": "Python Core Runtime",
-    "description": "Now Chat Python 核心运行时",
-    "version": "3.11.8-android-arm64-v1",
-    "url": "https://github.com/CikeSeven/NowChat/releases/download/python-plugin-v1/python-core-3.11.8-android-arm64.zip",
-    "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "name": "Python Core (Chaquopy)",
+    "description": "Chaquopy runtime metadata for Now Chat.",
+    "version": "3.11",
+    "url": "https://example.com/python-core-3.11.zip",
+    "sha256": "replace_with_real_sha256",
     "sizeBytes": 0,
-    "targetDir": "core/3.11.8-android-arm64-v1",
-    "entryPoint": "bin/python3",
+    "targetDir": "core/3.11",
     "pythonPathEntries": [
-      "lib/python3.11/site-packages"
-    ]
+      "."
+    ],
+    "entryPoint": "bin/python3"
   },
   "libraries": [
     {
-      "id": "python-lib-numpy",
-      "name": "NumPy (Basic)",
-      "description": "按需安装的基础数值库包示例",
-      "version": "1.26.4-v1",
-      "url": "https://github.com/CikeSeven/NowChat/releases/download/python-plugin-v1/python-lib-numpy-1.26.4.zip",
-      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "id": "numpy",
+      "name": "NumPy",
+      "description": "Numerical computing package.",
+      "version": "1.26.4",
+      "url": "https://example.com/python-lib-numpy-1.26.4.zip",
+      "sha256": "replace_with_real_sha256",
       "sizeBytes": 0,
-      "targetDir": "libs/numpy/1.26.4-v1",
+      "targetDir": "libs/numpy/1.26.4",
       "pythonPathEntries": [
         "."
       ]
     },
     {
-      "id": "python-lib-pandas",
-      "name": "Pandas (Basic)",
-      "description": "按需安装的数据处理库包示例",
-      "version": "2.2.2-v1",
-      "url": "https://github.com/CikeSeven/NowChat/releases/download/python-plugin-v1/python-lib-pandas-2.2.2.zip",
-      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "id": "pandas",
+      "name": "Pandas",
+      "description": "Data analysis package.",
+      "version": "2.2.2",
+      "url": "https://example.com/python-lib-pandas-2.2.2.zip",
+      "sha256": "replace_with_real_sha256",
       "sizeBytes": 0,
-      "targetDir": "libs/pandas/2.2.2-v1",
+      "targetDir": "libs/pandas/2.2.2",
       "pythonPathEntries": [
         "."
       ]

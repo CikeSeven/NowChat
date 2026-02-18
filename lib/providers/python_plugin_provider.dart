@@ -24,7 +24,6 @@ class PythonPluginProvider with ChangeNotifier {
   static const String defaultManifestUrl =
       'https://raw.githubusercontent.com/CikeSeven/NowChat/main/plugin_manifest.json';
 
-  static const _kManifestUrl = 'python_plugin_manifest_url';
   static const _kInstallState = 'python_plugin_install_state';
   static const _kCoreVersion = 'python_plugin_core_version';
   static const _kCoreTargetDir = 'python_plugin_core_target_dir';
@@ -57,7 +56,6 @@ class PythonPluginProvider with ChangeNotifier {
 
   PythonPluginInstallState get installState => _installState;
   PythonPluginManifest? get manifest => _manifest;
-  String get manifestUrl => _manifestUrl;
   String? get coreVersion => _coreVersion;
   double get downloadProgress => _downloadProgress;
   bool get isExecuting => _isExecuting;
@@ -72,10 +70,10 @@ class PythonPluginProvider with ChangeNotifier {
       _installState == PythonPluginInstallState.installing;
 
   bool get isCoreReady =>
-      _installState == PythonPluginInstallState.ready &&
-      (_coreVersion?.isNotEmpty ?? false) &&
-      (_coreTargetDir?.isNotEmpty ?? false) &&
-      (_coreEntryPoint?.isNotEmpty ?? false);
+      Platform.isAndroid
+          ? _installState != PythonPluginInstallState.broken
+          : _installState == PythonPluginInstallState.ready &&
+              (_coreVersion?.isNotEmpty ?? false);
 
   bool get hasManifest => _manifest != null;
 
@@ -86,7 +84,11 @@ class PythonPluginProvider with ChangeNotifier {
   }
 
   String? get pythonBinaryPath {
+    if (Platform.isAndroid) return null;
     if (!isCoreReady || _pluginRootDir == null) return null;
+    if ((_coreTargetDir ?? '').isEmpty || (_coreEntryPoint ?? '').isEmpty) {
+      return null;
+    }
     return _joinPaths(
       _pluginRootDir!.path,
       _coreTargetDir!,
@@ -94,21 +96,18 @@ class PythonPluginProvider with ChangeNotifier {
     );
   }
 
-  Future<void> setManifestUrl(String value) async {
-    final normalized = value.trim();
-    if (normalized.isEmpty || normalized == _manifestUrl) return;
-    _manifestUrl = normalized;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_kManifestUrl, _manifestUrl);
-    notifyListeners();
-  }
-
   Future<void> refreshManifest() async {
     _lastError = null;
     notifyListeners();
     try {
+      // 插件中心不再暴露清单地址编辑，统一使用内置远端地址。
+      _manifestUrl = defaultManifestUrl;
       final fetchedManifest = await _service.fetchManifest(_manifestUrl);
       _manifest = fetchedManifest;
+      if (Platform.isAndroid) {
+        _coreVersion = fetchedManifest.core.version;
+        _installState = PythonPluginInstallState.ready;
+      }
       notifyListeners();
     } catch (e, stackTrace) {
       _lastError = '清单加载失败: $e';
@@ -118,31 +117,22 @@ class PythonPluginProvider with ChangeNotifier {
   }
 
   Future<void> installCore() async {
-    if (_pluginRootDir == null) return;
-    final manifestCore = _manifest?.core;
-    if (manifestCore == null) {
-      _lastError = '请先刷新插件清单';
+    if (!Platform.isAndroid) {
+      _lastError = '当前仅支持 Android 平台';
       notifyListeners();
       return;
     }
 
-    _downloadProgress = 0;
+    _downloadProgress = 1;
     _lastError = null;
-    _installState = PythonPluginInstallState.downloading;
+    _installState = PythonPluginInstallState.installing;
     notifyListeners();
     try {
-      await _service.installPackage(
-        package: manifestCore,
-        pluginRootDir: _pluginRootDir!,
-        onProgress: (progress) {
-          _downloadProgress = progress;
-          notifyListeners();
-        },
-      );
+      final manifestCore = _manifest?.core;
       _installState = PythonPluginInstallState.ready;
-      _coreVersion = manifestCore.version;
-      _coreTargetDir = manifestCore.targetDir;
-      _coreEntryPoint = manifestCore.entryPoint;
+      _coreVersion = manifestCore?.version ?? 'chaquopy-embedded';
+      _coreTargetDir = null;
+      _coreEntryPoint = null;
       _downloadProgress = 1;
       await _saveLocalState();
     } catch (e, stackTrace) {
@@ -159,7 +149,7 @@ class PythonPluginProvider with ChangeNotifier {
     _lastError = null;
     notifyListeners();
     try {
-      if ((_coreTargetDir ?? '').isNotEmpty) {
+      if (!Platform.isAndroid && (_coreTargetDir ?? '').isNotEmpty) {
         await _service.uninstallByRelativeDir(
           pluginRootDir: _pluginRootDir!,
           relativeTargetDir: _coreTargetDir!,
@@ -258,7 +248,7 @@ class PythonPluginProvider with ChangeNotifier {
   Future<void> executeCode(String code, {Duration? timeout}) async {
     final normalizedCode = code.trim();
     if (normalizedCode.isEmpty) return;
-    if (!isCoreReady || pythonBinaryPath == null) {
+    if (!isCoreReady) {
       _lastError = '请先安装 Python 核心包';
       notifyListeners();
       return;
@@ -282,9 +272,10 @@ class PythonPluginProvider with ChangeNotifier {
       }
 
       final result = await _service.executeCode(
-        pythonBinaryPath: pythonBinaryPath!,
+        pythonBinaryPath: pythonBinaryPath,
         code: normalizedCode,
         timeout: timeout ?? const Duration(seconds: 20),
+        extraSysPaths: pythonPathParts,
         environment: env.isEmpty ? null : env,
         workingDirectory: _runtimeWorkDir!.path,
       );
@@ -295,7 +286,8 @@ class PythonPluginProvider with ChangeNotifier {
     } catch (e, stackTrace) {
       _lastError = '执行失败: $e';
       AppLogger.e('执行 Python 代码失败', e, stackTrace);
-      if (pythonBinaryPath == null || !File(pythonBinaryPath!).existsSync()) {
+      if (!Platform.isAndroid &&
+          (pythonBinaryPath == null || !File(pythonBinaryPath!).existsSync())) {
         _installState = PythonPluginInstallState.broken;
       }
     } finally {
@@ -326,8 +318,16 @@ class PythonPluginProvider with ChangeNotifier {
         await _runtimeWorkDir!.create(recursive: true);
       }
       await _loadLocalState();
+      if (Platform.isAndroid) {
+        // Android 使用 Chaquopy 内置 Python 运行时，核心始终可用。
+        _installState = PythonPluginInstallState.ready;
+        _coreVersion ??= 'chaquopy-embedded';
+        _coreTargetDir = null;
+        _coreEntryPoint = null;
+      }
       final binaryPath = pythonBinaryPath;
-      if (isCoreReady &&
+      if (!Platform.isAndroid &&
+          isCoreReady &&
           (binaryPath == null || !File(binaryPath).existsSync())) {
         _installState = PythonPluginInstallState.broken;
         _lastError = '检测到核心包文件缺失，请重新安装核心包';
@@ -345,10 +345,7 @@ class PythonPluginProvider with ChangeNotifier {
 
   Future<void> _loadLocalState() async {
     final prefs = await SharedPreferences.getInstance();
-    final persistedManifestUrl = prefs.getString(_kManifestUrl)?.trim();
-    if (persistedManifestUrl != null && persistedManifestUrl.isNotEmpty) {
-      _manifestUrl = persistedManifestUrl;
-    }
+    _manifestUrl = defaultManifestUrl;
     _coreVersion = prefs.getString(_kCoreVersion)?.trim();
     _coreTargetDir = prefs.getString(_kCoreTargetDir)?.trim();
     _coreEntryPoint = prefs.getString(_kCoreEntryPoint)?.trim();
@@ -385,7 +382,6 @@ class PythonPluginProvider with ChangeNotifier {
 
   Future<void> _saveLocalState() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_kManifestUrl, _manifestUrl);
     await prefs.setString(_kInstallState, _installState.name);
     if ((_coreVersion ?? '').isEmpty) {
       await prefs.remove(_kCoreVersion);

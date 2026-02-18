@@ -5,22 +5,42 @@ import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/services.dart';
 import 'package:now_chat/core/models/python_execution_result.dart';
 import 'package:now_chat/core/models/python_plugin_manifest.dart';
 
 /// Python 插件核心能力：清单拉取、包安装、代码执行。
 class PythonPluginService {
   final Dio _dio;
+  static const MethodChannel _pythonBridge = MethodChannel(
+    'nowchat/python_bridge',
+  );
 
   PythonPluginService({Dio? dio}) : _dio = dio ?? Dio();
 
   /// 拉取并解析远端插件清单。
   Future<PythonPluginManifest> fetchManifest(String manifestUrl) async {
-    final response = await _dio.getUri<dynamic>(Uri.parse(manifestUrl));
-    if (response.statusCode != 200) {
-      throw Exception('清单请求失败: ${response.statusCode}');
+    final normalizedUrl = manifestUrl.trim();
+    if (normalizedUrl.isEmpty) {
+      throw const FormatException('清单地址不能为空');
     }
-    final data = response.data;
+
+    dynamic data;
+    if (normalizedUrl.startsWith('asset://')) {
+      final assetPath = normalizedUrl.substring('asset://'.length);
+      if (assetPath.trim().isEmpty) {
+        throw const FormatException('asset 清单路径不能为空');
+      }
+      final raw = await rootBundle.loadString(assetPath);
+      data = raw;
+    } else {
+      final response = await _dio.getUri<dynamic>(Uri.parse(normalizedUrl));
+      if (response.statusCode != 200) {
+        throw Exception('清单请求失败: ${response.statusCode}');
+      }
+      data = response.data;
+    }
+
     Map<String, dynamic> jsonMap;
     if (data is Map<String, dynamic>) {
       jsonMap = data;
@@ -100,12 +120,25 @@ class PythonPluginService {
 
   /// 执行 Python 代码。
   Future<PythonExecutionResult> executeCode({
-    required String pythonBinaryPath,
+    String? pythonBinaryPath,
     required String code,
     required Duration timeout,
+    List<String>? extraSysPaths,
     Map<String, String>? environment,
     String? workingDirectory,
   }) async {
+    if (Platform.isAndroid) {
+      return _executeWithChaquopy(
+        code: code,
+        timeout: timeout,
+        extraSysPaths: extraSysPaths ?? const <String>[],
+      );
+    }
+
+    if (pythonBinaryPath == null || pythonBinaryPath.trim().isEmpty) {
+      throw Exception('未提供 Python 可执行文件路径');
+    }
+
     final start = DateTime.now();
     final binaryFile = File(pythonBinaryPath);
     if (!binaryFile.existsSync()) {
@@ -152,6 +185,42 @@ class PythonPluginService {
       exitCode: exitCode,
       duration: duration,
       timedOut: timedOut,
+    );
+  }
+
+  Future<PythonExecutionResult> _executeWithChaquopy({
+    required String code,
+    required Duration timeout,
+    required List<String> extraSysPaths,
+  }) async {
+    final normalizedPaths =
+        extraSysPaths
+            .map((item) => item.trim())
+            .where((item) => item.isNotEmpty)
+            .toList();
+    final rawResult = await _pythonBridge.invokeMethod<dynamic>(
+      'executePython',
+      <String, dynamic>{
+        'code': code,
+        'timeoutMs': timeout.inMilliseconds,
+        'extraSysPaths': normalizedPaths,
+      },
+    );
+
+    if (rawResult is! Map) {
+      throw const FormatException('Python 桥接返回格式错误');
+    }
+    final result = Map<String, dynamic>.from(rawResult);
+    final durationMsRaw = result['durationMs'];
+    final durationMs =
+        durationMsRaw is num ? durationMsRaw.toInt() : timeout.inMilliseconds;
+    return PythonExecutionResult(
+      stdout: (result['stdout'] ?? '').toString(),
+      stderr: (result['stderr'] ?? '').toString(),
+      exitCode:
+          result['exitCode'] is num ? (result['exitCode'] as num).toInt() : -1,
+      duration: Duration(milliseconds: durationMs),
+      timedOut: result['timedOut'] == true,
     );
   }
 
