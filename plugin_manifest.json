@@ -44,7 +44,8 @@
           "sizeBytes": 0,
           "targetDir": "libs/openblas/0.2.20",
           "pythonPathEntries": [
-            "."
+            ".",
+            "chaquopy/lib"
           ]
         },
         {
