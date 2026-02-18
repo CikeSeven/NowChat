@@ -91,7 +91,7 @@ class _DefaultChatParamsPageState extends State<DefaultChatParamsPage> {
     if (maxTokens == null || maxTokens <= 0) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('max tokens 必须大于 0')));
+      ).showSnackBar(const SnackBar(content: Text('最大输出tokens 必须大于 0')));
       return;
     }
     if (maxTurns == null || maxTurns <= 0) {

@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
   static const double defaultTemperatureValue = 0.7;
   static const double defaultTopPValue = 1.0;
-  static const int defaultMaxTokensValue = 4096;
+  static const int defaultMaxTokensValue = 8192;
   static const int defaultMaxConversationTurnsValue = 50;
   static const bool defaultStreamingValue = true;
 

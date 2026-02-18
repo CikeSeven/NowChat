@@ -344,7 +344,7 @@ class _AgentFormPageState extends State<AgentFormPage> {
                     trailing: Text(_topP.toStringAsFixed(2)),
                   ),
                   SwitchListTile(
-                    title: const Text('覆盖 max tokens'),
+                    title: const Text('覆盖最大输出tokens'),
                     subtitle: Text(_overrideMaxTokens ? '内容超过上限将会结束生成' : ''),
                     value: _overrideMaxTokens,
                     onChanged: (value) {

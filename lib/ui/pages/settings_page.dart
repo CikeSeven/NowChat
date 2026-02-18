@@ -111,7 +111,7 @@ class SettingsPage extends StatelessWidget {
             leading: const Icon(Icons.tune_rounded),
             title: const Text('默认对话参数'),
             subtitle: Text(
-              '模型、max tokens、最大消息轮次(默认 ${SettingsProvider.defaultMaxConversationTurnsValue})、温度、top_p、流式输出',
+              '设置默认会话参数信息',
             ),
             trailing: const Icon(Icons.chevron_right_rounded),
             onTap: () {

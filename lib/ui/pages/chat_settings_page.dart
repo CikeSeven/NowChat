@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:now_chat/core/models/chat_session.dart';
 import 'package:now_chat/providers/chat_provider.dart';
+import 'package:now_chat/providers/settings_provider.dart';
 import 'package:provider/provider.dart';
 
 class ChatSettingsPage extends StatefulWidget {
@@ -43,7 +44,7 @@ class _ChatSettingsPageState extends State<ChatSettingsPage> {
       _isStreaming = chat.isStreaming;
       _useMaxTokens = chat.maxTokens > 0 && chat.maxTokens != 4096;
       _maxTokensController.text =
-          _useMaxTokens ? chat.maxTokens.toString() : '16000';
+          _useMaxTokens ? chat.maxTokens.toString() : SettingsProvider.defaultMaxTokensValue.toString();
       _maxConversationTurnsController.text = chat.maxConversationTurns
           .toString();
       _systemPromptController.text = chat.systemPrompt ?? '';
@@ -278,7 +279,7 @@ class _ChatSettingsPageState extends State<ChatSettingsPage> {
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     dense: true,
-                    title: const Text('启用 max_tokens'),
+                    title: const Text('启用最大输出tokens'),
                     subtitle: Text('开启后生成内容超过上限时模型可能提前结束',
                       style: TextStyle(
                         fontSize: 12,
@@ -294,7 +295,7 @@ class _ChatSettingsPageState extends State<ChatSettingsPage> {
                             _maxTokensController.text.trim(),
                           );
                           if (parsed == null || parsed <= 0) {
-                            _maxTokensController.text = '16000';
+                            _maxTokensController.text = SettingsProvider.defaultMaxTokensValue.toString();
                           }
                         }
                       });
@@ -310,7 +311,7 @@ class _ChatSettingsPageState extends State<ChatSettingsPage> {
                       isDense: true,
                       labelText: 'max_tokens',
                       helperText:
-                          _useMaxTokens ? '请输入大于 0 的整数（默认 16000）' : '当前未启用',
+                          _useMaxTokens ? '请输入大于 0 的整数（默认 ${SettingsProvider.defaultMaxTokensValue}）' : '当前未启用',
                       errorText:
                           !_useMaxTokens ||
                                   _maxTokensController.text.isEmpty ||
