@@ -9,6 +9,24 @@ import 'package:flutter/services.dart';
 import 'package:now_chat/core/models/python_execution_result.dart';
 import 'package:now_chat/core/models/python_plugin_manifest.dart';
 
+/// 插件包 SHA256 校验失败时抛出的异常，包含期望值与实际值。
+class PythonPackageChecksumException implements Exception {
+  final String packageId;
+  final String expectedSha256;
+  final String actualSha256;
+
+  const PythonPackageChecksumException({
+    required this.packageId,
+    required this.expectedSha256,
+    required this.actualSha256,
+  });
+
+  @override
+  String toString() {
+    return '校验值错误(package=$packageId, expected=$expectedSha256, actual=$actualSha256)';
+  }
+}
+
 /// Python 插件核心能力：清单拉取、包安装、代码执行。
 class PythonPluginService {
   final Dio _dio;
@@ -80,8 +98,14 @@ class PythonPluginService {
       );
 
       final digest = await _calculateSha256(tempZipFile);
-      if (digest != package.sha256.toLowerCase()) {
-        throw Exception('插件包校验失败，请重试下载');
+      final expectedSha = package.sha256.toLowerCase();
+      final actualSha = digest.toLowerCase();
+      if (actualSha != expectedSha) {
+        throw PythonPackageChecksumException(
+          packageId: package.id,
+          expectedSha256: expectedSha,
+          actualSha256: actualSha,
+        );
       }
 
       if (targetDir.existsSync()) {

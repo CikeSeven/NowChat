@@ -215,6 +215,16 @@ class PythonPluginProvider with ChangeNotifier {
           : PythonPluginInstallState.notInstalled;
       _downloadProgress = 1;
       await _saveLocalState();
+    } on PythonPackageChecksumException catch (e, stackTrace) {
+      _installState = isCoreReady
+          ? PythonPluginInstallState.ready
+          : PythonPluginInstallState.notInstalled;
+      _lastError =
+          '校验值错误（${libraryPackage.id}）\n'
+          '期望 SHA256: ${e.expectedSha256}\n'
+          '实际 SHA256: ${e.actualSha256}\n'
+          '请检查清单中的 sha256 与下载链接是否对应同一个 zip 文件。';
+      AppLogger.e('安装库包校验失败: ${libraryPackage.id}', e, stackTrace);
     } catch (e, stackTrace) {
       _installState = PythonPluginInstallState.broken;
       _lastError = '库包安装失败: $e';

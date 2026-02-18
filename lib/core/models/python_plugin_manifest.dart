@@ -91,11 +91,13 @@ class PythonPluginManifest {
         json['manifestVersion'] is num
             ? (json['manifestVersion'] as num).toInt()
             : 1;
-    final coreRaw = json['core'];
+    final pluginContainer = _findPythonPluginContainer(json);
+    final coreRaw = pluginContainer != null ? pluginContainer['core'] : json['core'];
     if (coreRaw is! Map<String, dynamic>) {
       throw const FormatException('清单缺少核心包信息');
     }
-    final librariesRaw = json['libraries'];
+    final librariesRaw =
+        pluginContainer != null ? pluginContainer['libraries'] : json['libraries'];
     final libraries =
         librariesRaw is List
             ? librariesRaw
@@ -118,6 +120,23 @@ class PythonPluginManifest {
       core: core,
       libraries: libraries,
     );
+  }
+
+  static Map<String, dynamic>? _findPythonPluginContainer(
+    Map<String, dynamic> json,
+  ) {
+    final pluginsRaw = json['plugins'];
+    if (pluginsRaw is! List) return null;
+    for (final item in pluginsRaw) {
+      if (item is! Map) continue;
+      final plugin = Map<String, dynamic>.from(item);
+      final pluginId = (plugin['id'] ?? '').toString().trim().toLowerCase();
+      final pluginType = (plugin['type'] ?? '').toString().trim().toLowerCase();
+      if (pluginId == 'python' || pluginType == 'python') {
+        return plugin;
+      }
+    }
+    return null;
   }
 }
 
