@@ -279,10 +279,7 @@ class _ChatSettingsPageState extends State<ChatSettingsPage> {
                     contentPadding: EdgeInsets.zero,
                     dense: true,
                     title: const Text('启用 max_tokens'),
-                    subtitle: Text(
-                      _useMaxTokens
-                          ? '已启用，超过上限时模型可能提前结束'
-                          : '关闭后请求默认不传 max_tokens',
+                    subtitle: Text('开启后生成内容超过上限时模型可能提前结束',
                       style: TextStyle(
                         fontSize: 12,
                         color: colors.onSurfaceVariant,

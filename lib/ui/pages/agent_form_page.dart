@@ -345,7 +345,7 @@ class _AgentFormPageState extends State<AgentFormPage> {
                   ),
                   SwitchListTile(
                     title: const Text('覆盖 max tokens'),
-                    subtitle: const Text('默认关闭，开启后使用下方输入值'),
+                    subtitle: Text(_overrideMaxTokens ? '内容超过上限将会结束生成' : ''),
                     value: _overrideMaxTokens,
                     onChanged: (value) {
                       setState(() {
