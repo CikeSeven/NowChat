@@ -35,6 +35,34 @@
           ]
         },
         {
+          "id": "libgfortran",
+          "name": "libgfortran",
+          "description": "GNU Fortran runtime for OpenBLAS.",
+          "version": "4.9",
+          "url": "https://raw.githubusercontent.com/CikeSeven/NowChat/main/plugin_packages/chaquopy_libgfortran-4.9-0-py3-none-android_21_arm64_v8a.whl",
+          "sha256": "0B4CAED1147F2A19707D4BA730AFEA57F7B8F2D8C046D8A48CF49377741C4604",
+          "sizeBytes": 0,
+          "targetDir": "libs/libgfortran/4.9",
+          "pythonPathEntries": [
+            ".",
+            "chaquopy/lib"
+          ]
+        },
+        {
+          "id": "libcxx",
+          "name": "libc++",
+          "description": "C++ runtime required by NumPy/Pandas.",
+          "version": "11000",
+          "url": "https://raw.githubusercontent.com/CikeSeven/NowChat/main/plugin_packages/chaquopy_libcxx-11000-0-py3-none-android_21_arm64_v8a.whl",
+          "sha256": "0F14074F60C73F928ABF9E3E40B01DFD0D517BB99F9CF31DAE37C39E3D8A3C43",
+          "sizeBytes": 0,
+          "targetDir": "libs/libcxx/11000",
+          "pythonPathEntries": [
+            ".",
+            "chaquopy/lib"
+          ]
+        },
+        {
           "id": "openblas",
           "name": "OpenBLAS",
           "description": "Native BLAS runtime for NumPy/Pandas.",
@@ -46,6 +74,9 @@
           "pythonPathEntries": [
             ".",
             "chaquopy/lib"
+          ],
+          "dependencies": [
+            "libgfortran"
           ]
         },
         {
@@ -59,6 +90,10 @@
           "targetDir": "libs/pandas/1.5.0",
           "pythonPathEntries": [
             "."
+          ],
+          "dependencies": [
+            "numpy",
+            "libcxx"
           ]
         },
         {
@@ -72,6 +107,10 @@
           "targetDir": "libs/numpy/1.26.2",
           "pythonPathEntries": [
             "."
+          ],
+          "dependencies": [
+            "openblas",
+            "libcxx"
           ]
         }
       ]
