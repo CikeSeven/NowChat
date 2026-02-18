@@ -11,7 +11,7 @@
         "name": "Python Core (Chaquopy)",
         "description": "Chaquopy runtime metadata for Now Chat.",
         "version": "3.11",
-        "url": "",
+        "url": "https://example.com/python-core-3.11.zip",
         "sha256": "BE98236CE806790667DB7244B549BC520D18F26208B9068DD86494EC7E524A63",
         "sizeBytes": 0,
         "targetDir": "core/3.11",
@@ -30,6 +30,19 @@
           "sha256": "BE98236CE806790667DB7244B549BC520D18F26208B9068DD86494EC7E524A63",
           "sizeBytes": 0,
           "targetDir": "libs/requests/2.32.3",
+          "pythonPathEntries": [
+            "."
+          ]
+        },
+        {
+          "id": "openblas",
+          "name": "OpenBLAS",
+          "description": "Native BLAS runtime for NumPy/Pandas.",
+          "version": "0.2.20",
+          "url": "https://raw.githubusercontent.com/CikeSeven/NowChat/main/plugin_packages/openblas-0.2.20-android-arm64.zip",
+          "sha256": "10374BE78F36D826D27512B75C22E1D32AC34E79A1C2F55AB66492B20E44743E",
+          "sizeBytes": 0,
+          "targetDir": "libs/openblas/0.2.20",
           "pythonPathEntries": [
             "."
           ]
