@@ -36,6 +36,7 @@ class _ProviderFormPageState extends State<ProviderFormPage> {
   String? _activeProviderId;
   bool _isAutoSaving = false;
   bool _pendingAutoSave = false;
+  bool _isDisposed = false;
 
   String _selectedPresetId = ProviderCatalog.presets.first.id;
   ProviderType _selectedType = ProviderCatalog.presets.first.type;
@@ -87,12 +88,29 @@ class _ProviderFormPageState extends State<ProviderFormPage> {
 
   @override
   void dispose() {
+    _isDisposed = true;
     _nameController.dispose();
     _baseUrlController.dispose();
     _pathController.dispose();
     _apiKeyController.dispose();
     _presetSearchController.dispose();
     super.dispose();
+  }
+
+  /// 在生命周期安全时标记“当前已进入编辑态”。
+  ///
+  /// 这里使用下一帧更新，避免在弹窗关闭/路由切换动画期间触发同步 setState。
+  void _markEditingSaved(String providerId) {
+    _isEditing = true;
+    _activeProviderId = providerId;
+    if (!mounted || _isDisposed) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _isDisposed) return;
+      setState(() {
+        _isEditing = true;
+        _activeProviderId = providerId;
+      });
+    });
   }
 
   bool get _canSave {
@@ -119,7 +137,7 @@ class _ProviderFormPageState extends State<ProviderFormPage> {
   }
 
   Future<bool> _persistCurrentProvider() async {
-    if (!_canSave) return false;
+    if (!_canSave || !mounted || _isDisposed) return false;
 
     final chatProvider = context.read<ChatProvider>();
     final providerId = _activeProviderId ?? const Uuid().v4();
@@ -142,15 +160,9 @@ class _ProviderFormPageState extends State<ProviderFormPage> {
     } else {
       await chatProvider.createNewProvider(payload);
     }
-
-    if (mounted && (!_isEditing || _activeProviderId != providerId)) {
-      setState(() {
-        _isEditing = true;
-        _activeProviderId = providerId;
-      });
-    } else {
-      _isEditing = true;
-      _activeProviderId = providerId;
+    if (_isDisposed) return false;
+    if (!_isEditing || _activeProviderId != providerId) {
+      _markEditingSaved(providerId);
     }
     return true;
   }
@@ -166,7 +178,7 @@ class _ProviderFormPageState extends State<ProviderFormPage> {
   }
 
   void _scheduleAutoSave() {
-    if (!_canSave) return;
+    if (_isDisposed || !mounted || !_canSave) return;
     if (_isAutoSaving) {
       _pendingAutoSave = true;
       return;
@@ -176,11 +188,20 @@ class _ProviderFormPageState extends State<ProviderFormPage> {
   }
 
   Future<void> _runAutoSave() async {
+    if (_isDisposed || !mounted) {
+      _isAutoSaving = false;
+      _pendingAutoSave = false;
+      return;
+    }
     try {
       await _persistCurrentProvider();
     } catch (_) {
       // 自动保存失败不打断当前交互，用户仍可手动点击保存重试
     } finally {
+      if (_isDisposed) {
+        _isAutoSaving = false;
+        _pendingAutoSave = false;
+      }
       _isAutoSaving = false;
       if (_pendingAutoSave) {
         _pendingAutoSave = false;
@@ -313,7 +334,7 @@ class _ProviderFormPageState extends State<ProviderFormPage> {
       initialFeatures: initialFeatures,
       lockModelName: lockModelName,
     );
-    if (result == null) return;
+    if (!mounted || _isDisposed || result == null) return;
     _upsertModel(
       result.model,
       remark: result.remark,
