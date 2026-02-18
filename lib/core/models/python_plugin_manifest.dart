@@ -30,7 +30,11 @@ class PythonPluginPackage {
     this.sizeBytes,
   });
 
-  factory PythonPluginPackage.fromJson(Map<String, dynamic> json) {
+  factory PythonPluginPackage.fromJson(
+    Map<String, dynamic> json, {
+    bool requireDownloadFields = true,
+    String context = 'package',
+  }) {
     final id = (json['id'] ?? '').toString().trim();
     final name = (json['name'] ?? '').toString().trim();
     final description = (json['description'] ?? '').toString().trim();
@@ -48,13 +52,19 @@ class PythonPluginPackage {
                 .toList()
             : const <String>[];
 
-    if (id.isEmpty ||
-        name.isEmpty ||
-        version.isEmpty ||
-        url.isEmpty ||
-        sha256.isEmpty ||
-        targetDir.isEmpty) {
-      throw const FormatException('插件包字段不完整');
+    final missingFields = <String>[];
+    if (id.isEmpty) missingFields.add('id');
+    if (name.isEmpty) missingFields.add('name');
+    if (version.isEmpty) missingFields.add('version');
+    if (targetDir.isEmpty) missingFields.add('targetDir');
+    if (requireDownloadFields) {
+      if (url.isEmpty) missingFields.add('url');
+      if (sha256.isEmpty) missingFields.add('sha256');
+    }
+    if (missingFields.isNotEmpty) {
+      throw FormatException(
+        '插件包字段不完整($context): ${missingFields.join(', ')}',
+      );
     }
 
     return PythonPluginPackage(
@@ -100,17 +110,32 @@ class PythonPluginManifest {
         pluginContainer != null ? pluginContainer['libraries'] : json['libraries'];
     final libraries =
         librariesRaw is List
-            ? librariesRaw
-                .whereType<Map>()
-                .map(
-                  (item) => PythonPluginPackage.fromJson(
-                    Map<String, dynamic>.from(item),
-                  ),
-                )
-                .toList()
+            ? librariesRaw.asMap().entries.map((entry) {
+                final index = entry.key;
+                final item = entry.value;
+                if (item is! Map) {
+                  throw FormatException('插件包字段不完整(library#$index): item');
+                }
+                final map = Map<String, dynamic>.from(item);
+                final idPreview = (map['id'] ?? '').toString().trim();
+                final contextLabel =
+                    idPreview.isEmpty
+                        ? 'library#$index'
+                        : 'library:$idPreview';
+                return PythonPluginPackage.fromJson(
+                  map,
+                  requireDownloadFields: true,
+                  context: contextLabel,
+                );
+              }).toList()
             : const <PythonPluginPackage>[];
 
-    final core = PythonPluginPackage.fromJson(coreRaw);
+    final core = PythonPluginPackage.fromJson(
+      coreRaw,
+      // Android 下核心运行时由 Chaquopy 内置，允许 core 的下载字段为空。
+      requireDownloadFields: false,
+      context: 'core',
+    );
     if ((core.entryPoint ?? '').isEmpty) {
       throw const FormatException('核心包缺少 entryPoint');
     }

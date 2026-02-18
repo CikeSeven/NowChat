@@ -74,11 +74,34 @@ class _PythonPluginDetailPageState extends State<PythonPluginDetailPage> {
                             icon: const Icon(Icons.refresh_rounded),
                             label: const Text('刷新包列表'),
                           ),
+                          if (provider.isRefreshingManifest) ...[
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                const SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  '正在获取列表...',
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    color: color.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                           if (provider.isBusy) ...[
                             const SizedBox(height: 8),
                             LinearProgressIndicator(
                               value:
-                                  provider.downloadProgress > 0 &&
+                                  !provider.isRefreshingManifest &&
+                                          provider.downloadProgress > 0 &&
                                           provider.downloadProgress <= 1
                                       ? provider.downloadProgress
                                       : null,
@@ -222,7 +245,8 @@ class _PythonPluginDetailPageState extends State<PythonPluginDetailPage> {
                             children: [
                               FilledButton.icon(
                                 onPressed:
-                                    !provider.isExecuting
+                                    !provider.isExecuting &&
+                                            !provider.isRefreshingManifest
                                         ? () => provider.executeCode(
                                           _codeController.text,
                                         )
@@ -239,7 +263,8 @@ class _PythonPluginDetailPageState extends State<PythonPluginDetailPage> {
                               const SizedBox(width: 8),
                               OutlinedButton(
                                 onPressed:
-                                    provider.isExecuting
+                                    provider.isExecuting ||
+                                            provider.isRefreshingManifest
                                         ? null
                                         : () => provider.clearExecutionResult(),
                                 child: const Text('清空输出'),

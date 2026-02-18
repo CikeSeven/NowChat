@@ -44,6 +44,7 @@ class PythonPluginProvider with ChangeNotifier {
   double _downloadProgress = 0;
   bool _isInitialized = false;
   bool _isExecuting = false;
+  bool _isRefreshingManifest = false;
   String? _lastError;
   PythonExecutionResult? _lastExecutionResult;
   Directory? _pluginRootDir;
@@ -60,12 +61,14 @@ class PythonPluginProvider with ChangeNotifier {
   double get downloadProgress => _downloadProgress;
   bool get isExecuting => _isExecuting;
   bool get isInitialized => _isInitialized;
+  bool get isRefreshingManifest => _isRefreshingManifest;
   String? get lastError => _lastError;
   PythonExecutionResult? get lastExecutionResult => _lastExecutionResult;
   List<InstalledPythonLibrary> get installedLibraries =>
       _installedLibraries.values.toList();
 
   bool get isBusy =>
+      _isRefreshingManifest ||
       _installState == PythonPluginInstallState.downloading ||
       _installState == PythonPluginInstallState.installing;
 
@@ -98,6 +101,7 @@ class PythonPluginProvider with ChangeNotifier {
 
   Future<void> refreshManifest() async {
     _lastError = null;
+    _isRefreshingManifest = true;
     notifyListeners();
     try {
       // 插件中心不再暴露清单地址编辑，统一使用内置远端地址。
@@ -112,6 +116,8 @@ class PythonPluginProvider with ChangeNotifier {
     } catch (e, stackTrace) {
       _lastError = '清单加载失败: $e';
       AppLogger.e('刷新 Python 插件清单失败', e, stackTrace);
+    } finally {
+      _isRefreshingManifest = false;
       notifyListeners();
     }
   }
@@ -178,6 +184,7 @@ class PythonPluginProvider with ChangeNotifier {
   }
 
   Future<void> installLibrary(String libraryId) async {
+    if (_isRefreshingManifest) return;
     if (_pluginRootDir == null) return;
     PythonPluginPackage? libraryPackage;
     for (final item in _manifest?.libraries ?? const <PythonPluginPackage>[]) {
@@ -235,6 +242,7 @@ class PythonPluginProvider with ChangeNotifier {
   }
 
   Future<void> uninstallLibrary(String libraryId) async {
+    if (_isRefreshingManifest) return;
     if (_pluginRootDir == null) return;
     final library = _installedLibraries[libraryId];
     if (library == null) return;
@@ -256,6 +264,7 @@ class PythonPluginProvider with ChangeNotifier {
   }
 
   Future<void> executeCode(String code, {Duration? timeout}) async {
+    if (_isRefreshingManifest) return;
     final normalizedCode = code.trim();
     if (normalizedCode.isEmpty) return;
     if (!isCoreReady) {
