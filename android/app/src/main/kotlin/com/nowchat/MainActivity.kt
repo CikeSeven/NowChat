@@ -1,5 +1,6 @@
 package com.nowchat
 
+import android.util.Log
 import com.chaquo.python.PyObject
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
@@ -7,11 +8,14 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.embedding.android.FlutterActivity
+import java.io.File
+import java.util.Locale
 
 class MainActivity : FlutterActivity() {
     private val channelName = "nowchat/python_bridge"
     private val methodExecute = "executePython"
     private val methodIsReady = "isPythonReady"
+    private val loadedNativeLibs = mutableSetOf<String>()
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -43,6 +47,7 @@ class MainActivity : FlutterActivity() {
 
         Thread {
             runCatching {
+                preloadNativeLibraries(extraSysPaths)
                 ensurePythonStarted()
                 val py = Python.getInstance()
                 val module = py.getModule("runner")
@@ -64,6 +69,58 @@ class MainActivity : FlutterActivity() {
     private fun ensurePythonStarted() {
         if (!Python.isStarted()) {
             Python.start(AndroidPlatform(this))
+        }
+    }
+
+    private fun preloadNativeLibraries(extraSysPaths: List<String>) {
+        val candidates = collectNativeLibraries(extraSysPaths)
+        for (path in candidates) {
+            val alreadyLoaded = synchronized(loadedNativeLibs) {
+                loadedNativeLibs.contains(path)
+            }
+            if (alreadyLoaded) continue
+            runCatching {
+                System.load(path)
+                synchronized(loadedNativeLibs) {
+                    loadedNativeLibs.add(path)
+                }
+                Log.i("NowChatPython", "Loaded native lib: $path")
+            }.onFailure { error ->
+                Log.w("NowChatPython", "Skip native lib load: $path, reason=${error.message}")
+            }
+        }
+    }
+
+    private fun collectNativeLibraries(extraSysPaths: List<String>): List<String> {
+        val result = mutableListOf<String>()
+        for (basePath in extraSysPaths) {
+            val base = File(basePath)
+            if (!base.exists()) continue
+            if (base.isFile) {
+                if (base.name.contains(".so")) {
+                    result.add(base.absolutePath)
+                }
+                continue
+            }
+            base.walkTopDown().forEach { file ->
+                if (file.isFile && file.name.contains(".so")) {
+                    result.add(file.absolutePath)
+                }
+            }
+        }
+        result.sortWith(
+            compareBy<String> { nativeLibPriority(it) }.thenBy { it.lowercase(Locale.ROOT) },
+        )
+        return result
+    }
+
+    private fun nativeLibPriority(path: String): Int {
+        val name = File(path).name.lowercase(Locale.ROOT)
+        return when {
+            name.contains("openblas") -> 0
+            name.contains("gfortran") -> 1
+            name.contains("stdc++") || name.contains("c++") -> 2
+            else -> 9
         }
     }
 

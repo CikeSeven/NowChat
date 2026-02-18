@@ -280,12 +280,23 @@ class PythonPluginProvider with ChangeNotifier {
     try {
       final env = <String, String>{};
       final pythonPathParts = <String>[];
+      final seenPythonPaths = <String>{};
       for (final library in _installedLibraries.values) {
         final baseDir = _joinPaths(_pluginRootDir!.path, library.targetDir);
         for (final relativeEntry in library.pythonPathEntries) {
-          pythonPathParts.add(_joinPaths(baseDir, relativeEntry));
+          final path = _joinPaths(baseDir, relativeEntry);
+          if (seenPythonPaths.add(path)) {
+            pythonPathParts.add(path);
+          }
         }
+        _appendLikelyNativeLibraryDirs(
+          baseDir: baseDir,
+          seenPaths: seenPythonPaths,
+          output: pythonPathParts,
+        );
       }
+      _logPythonRuntimePathsAndSoFiles(pythonPathParts);
+
       if (pythonPathParts.isNotEmpty) {
         env['PYTHONPATH'] = pythonPathParts.join(Platform.pathSeparator);
       }
@@ -431,5 +442,59 @@ class PythonPluginProvider with ChangeNotifier {
       parts.add(third.trim());
     }
     return p.normalize(p.joinAll(parts));
+  }
+
+  void _appendLikelyNativeLibraryDirs({
+    required String baseDir,
+    required Set<String> seenPaths,
+    required List<String> output,
+  }) {
+    final candidates = <String>[
+      _joinPaths(baseDir, 'chaquopy', 'lib'),
+      _joinPaths(baseDir, 'lib'),
+      _joinPaths(baseDir, 'libs'),
+    ];
+    for (final path in candidates) {
+      final dir = Directory(path);
+      if (!dir.existsSync()) continue;
+      if (seenPaths.add(path)) {
+        output.add(path);
+      }
+    }
+  }
+
+  /// 执行前输出 Python 路径与已发现的 .so 文件，便于定位原生依赖加载问题。
+  void _logPythonRuntimePathsAndSoFiles(List<String> pythonPaths) {
+    if (!Platform.isAndroid) return;
+
+    AppLogger.i('Python extraSysPaths(${pythonPaths.length}): $pythonPaths');
+
+    for (final basePath in pythonPaths) {
+      final dir = Directory(basePath);
+      if (!dir.existsSync()) {
+        AppLogger.w('Python 路径不存在: $basePath');
+        continue;
+      }
+
+      final soFiles = <String>[];
+      try {
+        for (final entity in dir.listSync(recursive: true, followLinks: false)) {
+          if (entity is! File) continue;
+          final name = p.basename(entity.path).toLowerCase();
+          if (!name.contains('.so')) continue;
+          soFiles.add(entity.path);
+          if (soFiles.length >= 20) break;
+        }
+      } catch (e, stackTrace) {
+        AppLogger.e('扫描 .so 失败: $basePath', e, stackTrace);
+        continue;
+      }
+
+      if (soFiles.isEmpty) {
+        AppLogger.i('路径未发现 .so: $basePath');
+      } else {
+        AppLogger.i('路径发现 .so(${soFiles.length}${soFiles.length >= 20 ? "+" : ""}): $soFiles');
+      }
+    }
   }
 }
