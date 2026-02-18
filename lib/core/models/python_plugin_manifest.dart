@@ -17,6 +17,9 @@ class PythonPluginPackage {
   /// 仅核心包需要：Python 可执行文件相对路径，如 `bin/python3`。
   final String? entryPoint;
 
+  /// 当前包依赖的其他库包 id（用于安装顺序控制）。
+  final List<String> dependencies;
+
   const PythonPluginPackage({
     required this.id,
     required this.name,
@@ -26,6 +29,7 @@ class PythonPluginPackage {
     required this.sha256,
     required this.targetDir,
     required this.pythonPathEntries,
+    required this.dependencies,
     this.entryPoint,
     this.sizeBytes,
   });
@@ -43,10 +47,18 @@ class PythonPluginPackage {
     final sha256 = (json['sha256'] ?? '').toString().trim().toLowerCase();
     final targetDir = (json['targetDir'] ?? '').toString().trim();
     final entryPoint = (json['entryPoint'] ?? '').toString().trim();
+    final rawDependencies = json['dependencies'];
     final rawPythonPathEntries = json['pythonPathEntries'];
     final pythonPathEntries =
         rawPythonPathEntries is List
             ? rawPythonPathEntries
+                .map((item) => item.toString().trim())
+                .where((item) => item.isNotEmpty)
+                .toList()
+            : const <String>[];
+    final dependencies =
+        rawDependencies is List
+            ? rawDependencies
                 .map((item) => item.toString().trim())
                 .where((item) => item.isNotEmpty)
                 .toList()
@@ -79,6 +91,7 @@ class PythonPluginPackage {
       targetDir: targetDir,
       pythonPathEntries:
           pythonPathEntries.isEmpty ? const <String>['.'] : pythonPathEntries,
+      dependencies: dependencies,
       entryPoint: entryPoint.isEmpty ? null : entryPoint,
     );
   }

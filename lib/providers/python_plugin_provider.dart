@@ -186,13 +186,7 @@ class PythonPluginProvider with ChangeNotifier {
   Future<void> installLibrary(String libraryId) async {
     if (_isRefreshingManifest) return;
     if (_pluginRootDir == null) return;
-    PythonPluginPackage? libraryPackage;
-    for (final item in _manifest?.libraries ?? const <PythonPluginPackage>[]) {
-      if (item.id == libraryId) {
-        libraryPackage = item;
-        break;
-      }
-    }
+    final libraryPackage = _findLibraryPackageById(libraryId);
     if (libraryPackage == null) {
       _lastError = '找不到指定库包：$libraryId';
       notifyListeners();
@@ -203,19 +197,9 @@ class PythonPluginProvider with ChangeNotifier {
     _installState = PythonPluginInstallState.installing;
     notifyListeners();
     try {
-      await _service.installPackage(
+      await _installLibraryWithDependencies(
         package: libraryPackage,
-        pluginRootDir: _pluginRootDir!,
-        onProgress: (progress) {
-          _downloadProgress = progress;
-          notifyListeners();
-        },
-      );
-      _installedLibraries[libraryPackage.id] = InstalledPythonLibrary(
-        id: libraryPackage.id,
-        version: libraryPackage.version,
-        targetDir: libraryPackage.targetDir,
-        pythonPathEntries: libraryPackage.pythonPathEntries,
+        visiting: <String>{},
       );
       _installState = isCoreReady
           ? PythonPluginInstallState.ready
@@ -442,6 +426,53 @@ class PythonPluginProvider with ChangeNotifier {
       parts.add(third.trim());
     }
     return p.normalize(p.joinAll(parts));
+  }
+
+  PythonPluginPackage? _findLibraryPackageById(String libraryId) {
+    for (final item in _manifest?.libraries ?? const <PythonPluginPackage>[]) {
+      if (item.id == libraryId) return item;
+    }
+    return null;
+  }
+
+  Future<void> _installLibraryWithDependencies({
+    required PythonPluginPackage package,
+    required Set<String> visiting,
+  }) async {
+    if (_installedLibraries.containsKey(package.id)) return;
+    if (!visiting.add(package.id)) {
+      throw Exception('检测到循环依赖: ${package.id}');
+    }
+    try {
+      for (final dependencyId in package.dependencies) {
+        final dependency = _findLibraryPackageById(dependencyId);
+        if (dependency == null) {
+          throw Exception('缺少依赖库包: ${package.id} -> $dependencyId');
+        }
+        await _installLibraryWithDependencies(
+          package: dependency,
+          visiting: visiting,
+        );
+      }
+
+      await _service.installPackage(
+        package: package,
+        pluginRootDir: _pluginRootDir!,
+        onProgress: (progress) {
+          _downloadProgress = progress;
+          notifyListeners();
+        },
+      );
+
+      _installedLibraries[package.id] = InstalledPythonLibrary(
+        id: package.id,
+        version: package.version,
+        targetDir: package.targetDir,
+        pythonPathEntries: package.pythonPathEntries,
+      );
+    } finally {
+      visiting.remove(package.id);
+    }
   }
 
   void _appendLikelyNativeLibraryDirs({

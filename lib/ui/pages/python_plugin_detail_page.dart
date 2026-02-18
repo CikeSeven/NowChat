@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:now_chat/core/models/python_plugin_manifest.dart';
 import 'package:now_chat/providers/python_plugin_provider.dart';
 import 'package:provider/provider.dart';
 
@@ -11,6 +12,14 @@ class PythonPluginDetailPage extends StatefulWidget {
 }
 
 class _PythonPluginDetailPageState extends State<PythonPluginDetailPage> {
+  static const List<String> _baseRuntimeLibraryIds = <String>[
+    'libcxx',
+    'libgfortran',
+    'openblas',
+    'numpy',
+    'pandas',
+  ];
+
   final TextEditingController _codeController = TextEditingController(
     text: "print('Hello from Now Chat Python plugin!')",
   );
@@ -34,6 +43,57 @@ class _PythonPluginDetailPageState extends State<PythonPluginDetailPage> {
         ),
       ),
     );
+  }
+
+  String _formatSizeBytes(int? sizeBytes) {
+    if (sizeBytes == null || sizeBytes <= 0) return '未知';
+    final kb = sizeBytes / 1024;
+    if (kb < 1024) return '${kb.toStringAsFixed(1)} KB';
+    final mb = kb / 1024;
+    return '${mb.toStringAsFixed(2)} MB';
+  }
+
+  String _buildBundleSizeText(List<PythonPluginPackage> libraries) {
+    final known = libraries.where((item) => (item.sizeBytes ?? 0) > 0).toList();
+    if (known.isEmpty) return '大小：未知';
+    final total = known.fold<int>(0, (sum, item) => sum + (item.sizeBytes ?? 0));
+    return '大小：${_formatSizeBytes(total)}';
+  }
+
+  bool _isBundleInstalled(
+    PythonPluginProvider provider,
+    List<PythonPluginPackage> bundleLibraries,
+  ) {
+    if (bundleLibraries.isEmpty) return false;
+    for (final library in bundleLibraries) {
+      final installed = provider.installedLibraries.any(
+        (item) => item.id == library.id,
+      );
+      if (!installed) return false;
+    }
+    return true;
+  }
+
+  Future<void> _installBaseBundle(
+    PythonPluginProvider provider,
+    List<PythonPluginPackage> bundleLibraries,
+  ) async {
+    for (final library in bundleLibraries) {
+      await provider.installLibrary(library.id);
+      if ((provider.lastError ?? '').trim().isNotEmpty) {
+        break;
+      }
+    }
+  }
+
+  Future<void> _uninstallBaseBundle(
+    PythonPluginProvider provider,
+    List<PythonPluginPackage> bundleLibraries,
+  ) async {
+    final reversed = bundleLibraries.reversed.toList();
+    for (final library in reversed) {
+      await provider.uninstallLibrary(library.id);
+    }
   }
 
   @override
@@ -147,75 +207,206 @@ class _PythonPluginDetailPageState extends State<PythonPluginDetailPage> {
                               ),
                             )
                           else
-                            ...provider.manifest!.libraries.map((library) {
-                              final installed = provider.installedLibraries.any(
-                                (item) => item.id == library.id,
-                              );
-                              return Container(
-                                margin: const EdgeInsets.only(bottom: 8),
-                                padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-                                decoration: BoxDecoration(
-                                  border: Border.all(
-                                    color: color.outlineVariant.withAlpha(140),
-                                  ),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            '${library.name} (${library.version})',
-                                            style: TextStyle(
-                                              fontSize: 13.5,
-                                              color: color.onSurface,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                          if (library.description.isNotEmpty)
-                                            Padding(
-                                              padding: const EdgeInsets.only(
-                                                top: 2,
+                            ...() {
+                              final libraries = provider.manifest!.libraries;
+                              final byId = <String, PythonPluginPackage>{
+                                for (final item in libraries) item.id: item,
+                              };
+
+                              final baseBundleLibraries = <PythonPluginPackage>[
+                                for (final id in _baseRuntimeLibraryIds)
+                                  if (byId[id] != null) byId[id]!,
+                              ];
+                              final hiddenIds = baseBundleLibraries
+                                  .map((item) => item.id)
+                                  .toSet();
+                              final remainingLibraries = libraries
+                                  .where((item) => !hiddenIds.contains(item.id))
+                                  .toList();
+
+                              final tiles = <Widget>[];
+                              if (baseBundleLibraries.isNotEmpty) {
+                                final bundleInstalled = _isBundleInstalled(
+                                  provider,
+                                  baseBundleLibraries,
+                                );
+                                tiles.add(
+                                  Container(
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    padding: const EdgeInsets.fromLTRB(
+                                      10,
+                                      8,
+                                      10,
+                                      8,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      border: Border.all(
+                                        color: color.outlineVariant.withAlpha(
+                                          140,
+                                        ),
+                                      ),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                'Python基础库',
+                                                style: TextStyle(
+                                                  fontSize: 13.5,
+                                                  color: color.onSurface,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
                                               ),
-                                              child: Text(
-                                                library.description,
+                                              Text(
+                                                '包含 NumPy / Pandas 及其原生依赖',
                                                 style: TextStyle(
                                                   fontSize: 12.5,
                                                   color: color.onSurfaceVariant,
                                                 ),
                                               ),
-                                            ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    installed
-                                        ? OutlinedButton(
-                                          onPressed:
-                                              provider.isBusy
-                                                  ? null
-                                                  : () => provider
-                                                      .uninstallLibrary(
-                                                        library.id,
-                                                      ),
-                                          child: const Text('卸载'),
-                                        )
-                                        : FilledButton(
-                                          onPressed:
-                                              provider.isBusy
-                                                  ? null
-                                                  : () => provider.installLibrary(
-                                                    library.id,
-                                                  ),
-                                          child: const Text('安装'),
+                                              Text(
+                                                _buildBundleSizeText(
+                                                  baseBundleLibraries,
+                                                ),
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: color.onSurfaceVariant,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                         ),
-                                  ],
-                                ),
-                              );
-                            }),
+                                        const SizedBox(width: 8),
+                                        bundleInstalled
+                                            ? OutlinedButton(
+                                              onPressed:
+                                                  provider.isBusy
+                                                      ? null
+                                                      : () async {
+                                                        await _uninstallBaseBundle(
+                                                          provider,
+                                                          baseBundleLibraries,
+                                                        );
+                                                      },
+                                              child: const Text('卸载'),
+                                            )
+                                            : FilledButton(
+                                              onPressed:
+                                                  provider.isBusy
+                                                      ? null
+                                                      : () async {
+                                                        await _installBaseBundle(
+                                                          provider,
+                                                          baseBundleLibraries,
+                                                        );
+                                                      },
+                                              child: const Text('安装'),
+                                            ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              }
+
+                              for (final library in remainingLibraries) {
+                                final installed = provider.installedLibraries
+                                    .any((item) => item.id == library.id);
+                                tiles.add(
+                                  Container(
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    padding: const EdgeInsets.fromLTRB(
+                                      10,
+                                      8,
+                                      10,
+                                      8,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      border: Border.all(
+                                        color: color.outlineVariant.withAlpha(
+                                          140,
+                                        ),
+                                      ),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                '${library.name} (${library.version})',
+                                                style: TextStyle(
+                                                  fontSize: 13.5,
+                                                  color: color.onSurface,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                              if (library.description.isNotEmpty)
+                                                Padding(
+                                                  padding:
+                                                      const EdgeInsets.only(
+                                                        top: 2,
+                                                      ),
+                                                  child: Text(
+                                                    library.description,
+                                                    style: TextStyle(
+                                                      fontSize: 12.5,
+                                                      color:
+                                                          color.onSurfaceVariant,
+                                                    ),
+                                                  ),
+                                                ),
+                                              Text(
+                                                '大小：${_formatSizeBytes(library.sizeBytes)}',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: color.onSurfaceVariant,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        installed
+                                            ? OutlinedButton(
+                                              onPressed:
+                                                  provider.isBusy
+                                                      ? null
+                                                      : () async {
+                                                        await provider
+                                                            .uninstallLibrary(
+                                                              library.id,
+                                                            );
+                                                      },
+                                              child: const Text('卸载'),
+                                            )
+                                            : FilledButton(
+                                              onPressed:
+                                                  provider.isBusy
+                                                      ? null
+                                                      : () async {
+                                                        await provider
+                                                            .installLibrary(
+                                                              library.id,
+                                                            );
+                                                      },
+                                              child: const Text('安装'),
+                                            ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              }
+
+                              return tiles;
+                            }(),
                         ],
                       ),
                     ),
