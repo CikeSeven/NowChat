@@ -26,6 +26,7 @@ class _AgentFormPageState extends State<AgentFormPage> {
   bool _isEditing = false;
   String? _agentId;
   bool _overrideParams = false;
+  bool _overrideMaxTokens = false;
 
   String? _providerId;
   String? _model;
@@ -69,6 +70,7 @@ class _AgentFormPageState extends State<AgentFormPage> {
         existing.topP != null ||
         existing.maxTokens != null ||
         existing.isStreaming != null;
+    _overrideMaxTokens = existing.maxTokens != null;
     if (_overrideParams) {
       _temperature = existing.temperature ?? _temperature;
       _topP = existing.topP ?? _topP;
@@ -138,7 +140,7 @@ class _AgentFormPageState extends State<AgentFormPage> {
     }
 
     int? maxTokens;
-    if (_overrideParams) {
+    if (_overrideParams && _overrideMaxTokens) {
       maxTokens = int.tryParse(_maxTokensController.text.trim());
       if (maxTokens == null || maxTokens <= 0) {
         _showSnackBar('max tokens 必须大于 0');
@@ -297,11 +299,14 @@ class _AgentFormPageState extends State<AgentFormPage> {
               children: [
                 SwitchListTile(
                   title: const Text('覆盖默认参数'),
-                  subtitle: const Text('温度、top_p、max tokens、流式输出'),
+                  subtitle: const Text('温度、top_p、max tokens（可选）、流式输出'),
                   value: _overrideParams,
                   onChanged: (value) {
                     setState(() {
                       _overrideParams = value;
+                      if (!value) {
+                        _overrideMaxTokens = false;
+                      }
                     });
                   },
                 ),
@@ -338,18 +343,34 @@ class _AgentFormPageState extends State<AgentFormPage> {
                     ),
                     trailing: Text(_topP.toStringAsFixed(2)),
                   ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                    child: TextField(
-                      controller: _maxTokensController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                        labelText: 'max tokens',
+                  SwitchListTile(
+                    title: const Text('覆盖 max tokens'),
+                    subtitle: const Text('默认关闭，开启后使用下方输入值'),
+                    value: _overrideMaxTokens,
+                    onChanged: (value) {
+                      setState(() {
+                        _overrideMaxTokens = value;
+                        if (_overrideMaxTokens &&
+                            _maxTokensController.text.trim().isEmpty) {
+                          _maxTokensController.text =
+                              settings.defaultMaxTokens.toString();
+                        }
+                      });
+                    },
+                  ),
+                  if (_overrideMaxTokens)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                      child: TextField(
+                        controller: _maxTokensController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                          labelText: 'max tokens',
+                        ),
                       ),
                     ),
-                  ),
                   SwitchListTile(
                     title: const Text('流式输出'),
                     value: _streaming,

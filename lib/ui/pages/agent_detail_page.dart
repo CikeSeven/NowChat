@@ -7,6 +7,7 @@ import 'package:now_chat/providers/agent_provider.dart';
 import 'package:now_chat/providers/chat_provider.dart';
 import 'package:now_chat/providers/settings_provider.dart';
 import 'package:now_chat/ui/widgets/markdown_message_widget.dart';
+import 'package:now_chat/ui/widgets/model_selector_bottom_sheet.dart.dart';
 import 'package:provider/provider.dart';
 
 /// 单个智能体详情页，负责一次性对话。
@@ -78,8 +79,8 @@ class _AgentDetailPageState extends State<AgentDetailPage> {
     required ChatProvider chatProvider,
     required SettingsProvider settings,
   }) {
-    final providerId = (agent.providerId ?? settings.defaultProviderId)?.trim();
-    if (providerId == null || providerId.isEmpty) {
+    final providerId = (agent.providerId ?? '').trim();
+    if (providerId.isEmpty) {
       return null;
     }
     final provider = chatProvider.getProviderById(providerId);
@@ -87,8 +88,8 @@ class _AgentDetailPageState extends State<AgentDetailPage> {
       return null;
     }
 
-    final model = (agent.model ?? settings.defaultModel)?.trim();
-    if (model == null || model.isEmpty || !provider.models.contains(model)) {
+    final model = (agent.model ?? '').trim();
+    if (model.isEmpty || !provider.models.contains(model)) {
       return null;
     }
 
@@ -106,6 +107,57 @@ class _AgentDetailPageState extends State<AgentDetailPage> {
       maxTokens: maxTokens,
       isStreaming: streaming,
     );
+  }
+
+  /// 在智能体聊天页直接选择模型，并持久化到当前智能体。
+  Future<void> _showModelSelector({
+    required AgentProfile agent,
+    required SettingsProvider settings,
+  }) async {
+    final initialProviderId =
+        (agent.providerId ?? '').trim().isNotEmpty
+            ? agent.providerId
+            : settings.defaultProviderId;
+    final initialModel =
+        (agent.model ?? '').trim().isNotEmpty ? agent.model : settings.defaultModel;
+    final result = await showModalBottomSheet<Map<String, String>>(
+      context: context,
+      isScrollControlled: true,
+      useRootNavigator: true,
+      isDismissible: true,
+      enableDrag: true,
+      showDragHandle: true,
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
+      builder: (sheetContext) {
+        return ModelSelectorBottomSheet(
+          providerId: initialProviderId,
+          model: initialModel,
+          onModelSelected: (providerId, model) {
+            Navigator.of(sheetContext).pop({
+              'providerId': providerId,
+              'model': model,
+            });
+          },
+        );
+      },
+    );
+    if (!mounted || result == null) return;
+    final providerId = (result['providerId'] ?? '').trim();
+    final model = (result['model'] ?? '').trim();
+    if (providerId.isEmpty || model.isEmpty) return;
+
+    agent.applyUpdate(
+      name: agent.name,
+      summary: agent.summary,
+      prompt: agent.prompt,
+      providerId: providerId,
+      model: model,
+      temperature: agent.temperature,
+      topP: agent.topP,
+      maxTokens: agent.maxTokens,
+      isStreaming: agent.isStreaming,
+    );
+    await context.read<AgentProvider>().updateAgent(agent);
   }
 
   Future<void> _submitOneShot({
@@ -167,6 +219,11 @@ class _AgentDetailPageState extends State<AgentDetailPage> {
     );
     final responseText = _buildResponseText(agentProvider);
     final canCopy = responseText.trim().isNotEmpty;
+
+    final modelButtonText =
+        runtime == null
+            ? '选择模型'
+            : runtime.provider.displayNameForModel(runtime.model);
 
     return Scaffold(
       appBar: AppBar(
@@ -276,29 +333,51 @@ class _AgentDetailPageState extends State<AgentDetailPage> {
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Text(
-                  '未找到可用模型，请在设置中配置默认模型或为该智能体绑定模型。',
+                  '未找到可用模型，请先在发送按钮左侧选择模型。',
                   style: TextStyle(fontSize: 12.5, color: color.error),
                 ),
               ),
             const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.center,
-              child: FilledButton.icon(
-                onPressed: runtime == null
-                    ? null
-                    : agentProvider.isGenerating
-                        ? agentProvider.interruptOneShot
-                        : () => _submitOneShot(
-                              agent: agent,
-                              runtime: runtime,
-                            ),
-                icon: Icon(
-                  agentProvider.isGenerating
-                      ? Icons.stop_circle_outlined
-                      : Icons.send_rounded,
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                OutlinedButton.icon(
+                  onPressed:
+                      agentProvider.isGenerating
+                          ? null
+                          : () => _showModelSelector(
+                                agent: agent,
+                                settings: settings,
+                              ),
+                  icon: const Icon(Icons.tune_rounded, size: 18),
+                  label: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 140),
+                    child: Text(
+                      modelButtonText,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                 ),
-                label: Text(agentProvider.isGenerating ? '中断' : '发送'),
-              ),
+                const SizedBox(width: 10),
+                FilledButton.icon(
+                  onPressed:
+                      runtime == null
+                          ? null
+                          : agentProvider.isGenerating
+                          ? agentProvider.interruptOneShot
+                          : () => _submitOneShot(
+                                agent: agent,
+                                runtime: runtime,
+                              ),
+                  icon: Icon(
+                    agentProvider.isGenerating
+                        ? Icons.stop_circle_outlined
+                        : Icons.send_rounded,
+                  ),
+                  label: Text(agentProvider.isGenerating ? '中断' : '发送'),
+                ),
+              ],
             ),
             const SizedBox(height: 12),
             Card(
