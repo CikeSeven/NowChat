@@ -95,6 +95,9 @@ class _AgentFormPageState extends State<AgentFormPage> {
       context: context,
       isScrollControlled: true,
       useRootNavigator: true,
+      isDismissible: true,
+      enableDrag: true,
+      showDragHandle: true,
       backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
       builder: (sheetContext) {
         return ModelSelectorBottomSheet(

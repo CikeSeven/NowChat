@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:now_chat/core/models/ai_provider_config.dart';
 import 'package:now_chat/providers/chat_provider.dart';
 import 'package:provider/provider.dart';
 
@@ -69,24 +70,35 @@ class _ModelSelectorBottomSheetState extends State<ModelSelectorBottomSheet> {
     }
 
     final normalizedQuery = _query.trim().toLowerCase();
+    final visibleProviders =
+        normalizedQuery.isEmpty
+            ? providers
+            : providers.where((provider) {
+                return provider.models.any(
+                  (model) => _modelMatches(provider, model, normalizedQuery),
+                );
+              }).toList();
+
     final activeProviderId =
         _activeProviderId != null &&
-            providers.any((provider) => provider.id == _activeProviderId)
+            visibleProviders.any((provider) => provider.id == _activeProviderId)
         ? _activeProviderId
-        : providers.first.id;
-    final activeProvider = providers.firstWhere(
-      (provider) => provider.id == activeProviderId,
-    );
+        : (visibleProviders.isNotEmpty ? visibleProviders.first.id : null);
 
-    final modelsForActiveProvider = activeProvider.models.where((model) {
-      if (normalizedQuery.isEmpty) return true;
-      final display = activeProvider.displayNameForModel(model).toLowerCase();
-      final raw = model.toLowerCase();
-      final providerName = activeProvider.name.toLowerCase();
-      return display.contains(normalizedQuery) ||
-          raw.contains(normalizedQuery) ||
-          providerName.contains(normalizedQuery);
-    }).toList();
+    final activeProvider =
+        activeProviderId == null
+            ? null
+            : visibleProviders.firstWhere(
+                (provider) => provider.id == activeProviderId,
+              );
+
+    final modelsForActiveProvider =
+        activeProvider == null
+            ? <String>[]
+            : activeProvider.models.where((model) {
+                if (normalizedQuery.isEmpty) return true;
+                return _modelMatches(activeProvider, model, normalizedQuery);
+              }).toList();
 
     return SafeArea(
       child: Padding(
@@ -128,7 +140,7 @@ class _ModelSelectorBottomSheetState extends State<ModelSelectorBottomSheet> {
                 });
               },
               decoration: InputDecoration(
-                hintText: '搜索提供方或模型',
+                hintText: '搜索模型',
                 isDense: true,
                 prefixIcon: const Icon(Icons.search_rounded, size: 18),
                 suffixIcon: _query.trim().isEmpty
@@ -147,32 +159,53 @@ class _ModelSelectorBottomSheetState extends State<ModelSelectorBottomSheet> {
               ),
             ),
             const SizedBox(height: 10),
-            SizedBox(
-              height: 34,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: providers.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 6),
-                itemBuilder: (context, index) {
-                  final provider = providers[index];
-                  final selected = provider.id == activeProviderId;
-                  return ChoiceChip(
-                    selected: selected,
-                    label: Text('${provider.name} ${provider.models.length}'),
-                    onSelected: (_) {
-                      setState(() {
-                        _activeProviderId = provider.id;
-                      });
-                    },
-                    visualDensity: VisualDensity.compact,
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  );
-                },
+            if (visibleProviders.isNotEmpty)
+              SizedBox(
+                height: 34,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: visibleProviders.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 6),
+                  itemBuilder: (context, index) {
+                    final provider = visibleProviders[index];
+                    final selected = provider.id == activeProviderId;
+                    final titleColor =
+                        selected ? color.onSecondaryContainer : color.onSurface;
+                    final countColor =
+                        selected ? color.onSecondaryContainer : color.tertiary;
+                    return ChoiceChip(
+                      selected: selected,
+                      label: Text.rich(
+                        TextSpan(
+                          children: [
+                            TextSpan(
+                              text: provider.name,
+                              style: TextStyle(color: titleColor),
+                            ),
+                            TextSpan(
+                              text: ' ${provider.models.length}',
+                              style: TextStyle(
+                                color: countColor,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      onSelected: (_) {
+                        setState(() {
+                          _activeProviderId = provider.id;
+                        });
+                      },
+                      visualDensity: VisualDensity.compact,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    );
+                  },
+                ),
               ),
-            ),
             const SizedBox(height: 10),
             Expanded(
-              child: modelsForActiveProvider.isEmpty
+              child: activeProvider == null || modelsForActiveProvider.isEmpty
                   ? Center(
                       child: Text(
                         '没有匹配的模型',
@@ -277,6 +310,16 @@ class _ModelSelectorBottomSheetState extends State<ModelSelectorBottomSheet> {
         ),
       ),
     );
+  }
+
+  bool _modelMatches(
+    AIProviderConfig provider,
+    String model,
+    String normalizedQuery,
+  ) {
+    final raw = model.toLowerCase();
+    final display = provider.displayNameForModel(model).toLowerCase();
+    return raw.contains(normalizedQuery) || display.contains(normalizedQuery);
   }
 
   Widget _capabilityIcon(

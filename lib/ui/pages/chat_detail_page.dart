@@ -536,6 +536,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       useRootNavigator: true,
       context: context,
       isScrollControlled: true, // 若内容较多可滚动
+      isDismissible: true,
+      enableDrag: true,
+      showDragHandle: true,
       backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
       builder:
           (context) => ModelSelectorBottomSheet(
