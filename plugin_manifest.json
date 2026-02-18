@@ -22,14 +22,14 @@
       },
       "libraries": [
         {
-          "id": "numpy",
-          "name": "NumPy",
-          "description": "Scientific computing library.",
-          "version": "1.26.2",
-          "url": "https://raw.githubusercontent.com/CikeSeven/NowChat/main/plugin_packages/numpy-1.26.2-android-arm64.zip",
-          "sha256": "DF5A639462A905A015BB3F6BE6146E27C2C9A583421FA10ED17DE5A3249BBEAB",
+          "id": "requests",
+          "name": "Requests",
+          "description": "HTTP client library.",
+          "version": "2.32.3",
+          "url": "https://raw.githubusercontent.com/CikeSeven/NowChat/main/plugin_packages/requests-2.32.3.zip",
+          "sha256": "BE98236CE806790667DB7244B549BC520D18F26208B9068DD86494EC7E524A63",
           "sizeBytes": 0,
-          "targetDir": "libs/numpy/1.26.2",
+          "targetDir": "libs/requests/2.32.3",
           "pythonPathEntries": [
             "."
           ]
@@ -43,6 +43,19 @@
           "sha256": "5CCB00EC7BC54568402BD5AB80468D206800A4C4F75CF1BA7C14D222E3FE450D",
           "sizeBytes": 0,
           "targetDir": "libs/pandas/1.5.0",
+          "pythonPathEntries": [
+            "."
+          ]
+        },
+        {
+          "id": "numpy",
+          "name": "NumPy",
+          "description": "Scientific computing library.",
+          "version": "1.26.2",
+          "url": "https://raw.githubusercontent.com/CikeSeven/NowChat/main/plugin_packages/numpy-1.26.2-android-arm64.zip",
+          "sha256": "DF5A639462A905A015BB3F6BE6146E27C2C9A583421FA10ED17DE5A3249BBEAB",
+          "sizeBytes": 0,
+          "targetDir": "libs/numpy/1.26.2",
           "pythonPathEntries": [
             "."
           ]
