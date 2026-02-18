@@ -11,7 +11,7 @@
         "name": "Python Core (Chaquopy)",
         "description": "Chaquopy runtime metadata for Now Chat.",
         "version": "3.11",
-        "url": "",
+        "url": "url",
         "sha256": "BE98236CE806790667DB7244B549BC520D18F26208B9068DD86494EC7E524A63",
         "sizeBytes": 0,
         "targetDir": "core/3.11",
