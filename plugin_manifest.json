@@ -1,0 +1,45 @@
+{
+  "manifestVersion": 1,
+  "core": {
+    "id": "python-core",
+    "name": "Python Core (Chaquopy)",
+    "description": "Chaquopy runtime metadata for Now Chat.",
+    "version": "3.11",
+    "url": "https://example.com/python-core-3.11.zip",
+    "sha256": "replace_with_real_sha256",
+    "sizeBytes": 0,
+    "targetDir": "core/3.11",
+    "pythonPathEntries": [
+      "."
+    ],
+    "entryPoint": "bin/python3"
+  },
+  "libraries": [
+    {
+      "id": "numpy",
+      "name": "NumPy",
+      "description": "Numerical computing package.",
+      "version": "1.26.4",
+      "url": "https://example.com/python-lib-numpy-1.26.4.zip",
+      "sha256": "replace_with_real_sha256",
+      "sizeBytes": 0,
+      "targetDir": "libs/numpy/1.26.4",
+      "pythonPathEntries": [
+        "."
+      ]
+    },
+    {
+      "id": "pandas",
+      "name": "Pandas",
+      "description": "Data analysis package.",
+      "version": "2.2.2",
+      "url": "https://example.com/python-lib-pandas-2.2.2.zip",
+      "sha256": "replace_with_real_sha256",
+      "sizeBytes": 0,
+      "targetDir": "libs/pandas/2.2.2",
+      "pythonPathEntries": [
+        "."
+      ]
+    }
+  ]
+}
