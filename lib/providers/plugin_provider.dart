@@ -50,6 +50,7 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
       <String, PluginUiPageState>{};
   final Map<String, String> _pluginUiErrors = <String, String>{};
   final Set<String> _pluginUiLoadingPluginIds = <String>{};
+  final Map<String, String> _pluginReadmeCache = <String, String>{};
 
   bool _isInitialized = false;
   bool _isRefreshingManifest = false;
@@ -182,60 +183,109 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
     _pluginStates[pluginId] = PluginInstallState.installing;
     notifyListeners();
 
-    final installedPackages = <InstalledPluginPackageRecord>[];
-    final visited = <String>{};
     try {
-      Future<void> installPackage(PluginPackage package) async {
-        if (!visited.add(package.id)) return;
-        for (final dependencyId in package.dependencies) {
-          final dependency = plugin.packages.where((item) => item.id == dependencyId);
-          if (dependency.isEmpty) {
-            throw Exception('缺少依赖包: ${package.id} -> $dependencyId');
+      // 新模式：只要声明 repoUrl，就优先按 Git 仓库安装插件。
+      if (plugin.repoUrl.trim().isNotEmpty) {
+        final targetDir = p.join('remote_plugins', plugin.id, plugin.version);
+        final installedPluginRaw = await _pluginService.installPluginFromRepo(
+          repoUrl: plugin.repoUrl,
+          pluginRootDir: _pluginRootDir!,
+          targetDir: targetDir,
+          onProgress: (progress) {
+            _downloadProgress = progress;
+            notifyListeners();
+          },
+        );
+        final installedPlugin = installedPluginRaw.copyWith(
+          id: plugin.id,
+          repoUrl: plugin.repoUrl,
+        );
+        _localPluginsById[plugin.id] = installedPlugin;
+        final firstPackage =
+            installedPlugin.packages.isNotEmpty
+                ? installedPlugin.packages.first
+                : null;
+        final enabledTools =
+            installedPlugin.tools
+                .where((item) => item.enabledByDefault)
+                .map((item) => item.name)
+                .toList();
+        _installedRecords[plugin.id] = InstalledPluginRecord(
+          pluginId: plugin.id,
+          pluginVersion: installedPlugin.version,
+          enabled: true,
+          enabledTools: enabledTools,
+          packages: <InstalledPluginPackageRecord>[
+            InstalledPluginPackageRecord(
+              id: firstPackage?.id ?? 'main',
+              version: firstPackage?.version ?? installedPlugin.version,
+              targetDir: targetDir,
+              pythonPathEntries:
+                  firstPackage?.pythonPathEntries ?? const <String>['.'],
+              entryPoint: firstPackage?.entryPoint,
+            ),
+          ],
+          installedAt: DateTime.now(),
+          isLocalImport: false,
+        );
+      } else {
+        // 兼容旧模式：清单内直接带 packages 时，按包依赖安装。
+        final installedPackages = <InstalledPluginPackageRecord>[];
+        final visited = <String>{};
+        Future<void> installPackage(PluginPackage package) async {
+          if (!visited.add(package.id)) return;
+          for (final dependencyId in package.dependencies) {
+            final dependency = plugin.packages.where(
+              (item) => item.id == dependencyId,
+            );
+            if (dependency.isEmpty) {
+              throw Exception('缺少依赖包: ${package.id} -> $dependencyId');
+            }
+            await installPackage(dependency.first);
           }
-          await installPackage(dependency.first);
-        }
 
-        if (package.url.trim().isNotEmpty) {
-          await _pluginService.installPackageFromUrl(
-            package: package,
-            pluginRootDir: _pluginRootDir!,
-            onProgress: (progress) {
-              _downloadProgress = progress;
-              notifyListeners();
-            },
+          if (package.url.trim().isNotEmpty) {
+            await _pluginService.installPackageFromUrl(
+              package: package,
+              pluginRootDir: _pluginRootDir!,
+              onProgress: (progress) {
+                _downloadProgress = progress;
+                notifyListeners();
+              },
+            );
+          }
+
+          installedPackages.add(
+            InstalledPluginPackageRecord(
+              id: package.id,
+              version: package.version,
+              targetDir: package.targetDir,
+              pythonPathEntries: package.pythonPathEntries,
+              entryPoint: package.entryPoint,
+            ),
           );
         }
 
-        installedPackages.add(
-          InstalledPluginPackageRecord(
-            id: package.id,
-            version: package.version,
-            targetDir: package.targetDir,
-            pythonPathEntries: package.pythonPathEntries,
-            entryPoint: package.entryPoint,
-          ),
+        for (final package in plugin.packages) {
+          await installPackage(package);
+        }
+
+        final enabledTools =
+            plugin.tools
+                .where((item) => item.enabledByDefault)
+                .map((item) => item.name)
+                .toList();
+
+        _installedRecords[pluginId] = InstalledPluginRecord(
+          pluginId: pluginId,
+          pluginVersion: plugin.version,
+          enabled: true,
+          enabledTools: enabledTools,
+          packages: installedPackages,
+          installedAt: DateTime.now(),
+          isLocalImport: _localPluginsById.containsKey(pluginId),
         );
       }
-
-      for (final package in plugin.packages) {
-        await installPackage(package);
-      }
-
-      final enabledTools =
-          plugin.tools
-              .where((item) => item.enabledByDefault)
-              .map((item) => item.name)
-              .toList();
-
-      _installedRecords[pluginId] = InstalledPluginRecord(
-        pluginId: pluginId,
-        pluginVersion: plugin.version,
-        enabled: true,
-        enabledTools: enabledTools,
-        packages: installedPackages,
-        installedAt: DateTime.now(),
-        isLocalImport: _localPluginsById.containsKey(pluginId),
-      );
       _pluginStates[pluginId] = PluginInstallState.ready;
       _downloadProgress = 1;
       await _saveInstalledRecords();
@@ -347,10 +397,14 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
       _pluginUiPages.remove(pluginId);
       _pluginUiErrors.remove(pluginId);
       _pluginUiLoadingPluginIds.remove(pluginId);
+      _pluginReadmeCache.remove(pluginId);
 
-      // 若是本地导入插件，且清单中不存在，则同时从列表移除。
-      if (_localPluginsById.containsKey(pluginId) &&
+      // 远端仓库安装的插件，卸载后总是回退到远端清单元数据。
+      if (!record.isLocalImport) {
+        _localPluginsById.remove(pluginId);
+      } else if (_localPluginsById.containsKey(pluginId) &&
           (_manifest?.plugins.any((item) => item.id == pluginId) != true)) {
+        // 本地导入插件且清单中不存在时，卸载后从列表移除。
         _localPluginsById.remove(pluginId);
       }
       await _saveInstalledRecords();
@@ -403,7 +457,7 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
     required String pluginId,
     Map<String, dynamic>? payload,
   }) async {
-    // 非强制能力：未提供 ui/schema.py 时视为“无页面”，不当作错误处理。
+    // 非强制能力：未提供 `${pythonNamespace}/schema.py` 时视为“无页面”。
     if (!_pluginHasUiSchema(pluginId)) {
       _pluginUiPages.remove(pluginId);
       _pluginUiErrors.remove(pluginId);
@@ -519,6 +573,34 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
     notifyListeners();
   }
 
+  /// 读取插件 README 文本：优先本地已安装文件，其次远端仓库。
+  Future<String> loadPluginReadme(String pluginId) async {
+    final cached = _pluginReadmeCache[pluginId];
+    if (cached != null && cached.trim().isNotEmpty) {
+      return cached;
+    }
+    final plugin = getPluginById(pluginId);
+    if (plugin == null) {
+      throw Exception('插件不存在: $pluginId');
+    }
+
+    final localReadmePath =
+        PluginRegistry.instance.resolvePluginFilePath(pluginId, 'README.md') ??
+        PluginRegistry.instance.resolvePluginFilePath(pluginId, 'readme.md');
+    if (localReadmePath != null && localReadmePath.trim().isNotEmpty) {
+      final content = await File(localReadmePath).readAsString();
+      _pluginReadmeCache[pluginId] = content;
+      return content;
+    }
+
+    if (plugin.repoUrl.trim().isEmpty) {
+      throw Exception('插件未提供仓库链接');
+    }
+    final content = await _pluginService.fetchReadmeFromRepo(plugin.repoUrl);
+    _pluginReadmeCache[pluginId] = content;
+    return content;
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
@@ -613,10 +695,19 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
     _localPluginsById.clear();
     final root = _pluginRootDir;
     if (root == null) return;
-    final localRoot = Directory(p.join(root.path, 'local_plugins'));
-    if (!localRoot.existsSync()) return;
+    if (!root.existsSync()) {
+      await root.create(recursive: true);
+      return;
+    }
 
-    final files = localRoot.listSync(recursive: true, followLinks: false);
+    List<FileSystemEntity> files;
+    try {
+      files = root.listSync(recursive: true, followLinks: false);
+    } on FileSystemException catch (e) {
+      AppLogger.w('扫描插件目录失败，已跳过本次本地插件重载: $e');
+      return;
+    }
+
     for (final entity in files) {
       if (entity is! File) continue;
       if (p.basename(entity.path).toLowerCase() != 'plugin.json') continue;
@@ -625,12 +716,57 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
         final decoded = jsonDecode(raw);
         if (decoded is! Map<String, dynamic>) continue;
         final plugin = PluginDefinition.fromJson(decoded);
+
+        // 已安装插件优先按“安装记录 pluginId”入表，保证列表展示使用本地已安装信息。
+        final installedPluginId = _resolveInstalledPluginIdByPluginJsonPath(
+          pluginJsonPath: entity.path,
+        );
+        if (installedPluginId != null && installedPluginId.trim().isNotEmpty) {
+          final manifestRepoUrl =
+              _manifest?.plugins
+                  .where((item) => item.id == installedPluginId)
+                  .map((item) => item.repoUrl)
+                  .firstWhere(
+                    (item) => item.trim().isNotEmpty,
+                    orElse: () => plugin.repoUrl,
+                  ) ??
+              plugin.repoUrl;
+          _localPluginsById[installedPluginId] = plugin.copyWith(
+            id: installedPluginId,
+            repoUrl: manifestRepoUrl,
+          );
+          continue;
+        }
+
         _localPluginsById[plugin.id] = plugin;
       } catch (e, st) {
         AppLogger.w('忽略无效本地插件定义(${entity.path}): $e');
         AppLogger.e('解析本地插件失败', e, st);
       }
     }
+  }
+
+  /// 根据 plugin.json 所在路径反查其对应的安装记录 pluginId。
+  ///
+  /// 这样即使仓库内 `plugin.json` 的 id 与清单 id 不同，
+  /// 也能保证“已安装插件”在 UI 中按安装记录 ID 覆盖展示。
+  String? _resolveInstalledPluginIdByPluginJsonPath({
+    required String pluginJsonPath,
+  }) {
+    final root = _pluginRootDir;
+    if (root == null) return null;
+    final normalizedPluginJsonPath = p.normalize(pluginJsonPath);
+    for (final entry in _installedRecords.entries) {
+      final pluginId = entry.key;
+      final record = entry.value;
+      for (final pkg in record.packages) {
+        final pkgRoot = p.normalize(p.join(root.path, pkg.targetDir));
+        if (normalizedPluginJsonPath.startsWith(pkgRoot)) {
+          return pluginId;
+        }
+      }
+    }
+    return null;
   }
 
   void _syncRegistry() {
@@ -644,9 +780,18 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
   }
 
   bool _pluginHasUiSchema(String pluginId) {
+    final plugin = getPluginById(pluginId);
+    if (plugin == null) return false;
+    if (plugin.type == 'python' && plugin.pythonNamespace.trim().isEmpty) {
+      return false;
+    }
+    final relativePath =
+        plugin.type == 'python'
+            ? '${plugin.pythonNamespace.trim()}/schema.py'
+            : 'ui/schema.py';
     return PluginRegistry.instance.resolvePluginFilePath(
           pluginId,
-          'ui/schema.py',
+          relativePath,
         ) !=
         null;
   }

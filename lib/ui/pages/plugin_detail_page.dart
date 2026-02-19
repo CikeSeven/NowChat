@@ -108,6 +108,43 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
     );
   }
 
+  /// 二次确认弹窗，返回 `true` 表示用户确认执行。
+  Future<bool> _confirmAction({
+    required String title,
+    required String content,
+    required String confirmText,
+    bool isDanger = false,
+  }) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(title),
+          content: Text(content),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              style:
+                  isDanger
+                      ? FilledButton.styleFrom(
+                        backgroundColor: Theme.of(dialogContext).colorScheme.error,
+                        foregroundColor:
+                            Theme.of(dialogContext).colorScheme.onError,
+                      )
+                      : null,
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(confirmText),
+            ),
+          ],
+        );
+      },
+    );
+    return result == true;
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<PluginProvider>();
@@ -189,27 +226,48 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
                     children: [
                       Expanded(
                         child: FilledButton.icon(
-                          onPressed: provider.isBusy
-                              ? null
-                              : installed
+                          onPressed:
+                              provider.isBusy
                                   ? null
                                   : () async {
-                                      await provider.installPlugin(plugin.id);
-                                      if (!mounted) return;
-                                      await provider.loadPluginUiPage(
-                                        pluginId: plugin.id,
-                                      );
-                                    },
-                          icon: const Icon(Icons.download_rounded),
-                          label: const Text('安装插件'),
+                                    final confirmed = await _confirmAction(
+                                      title: '重新安装插件',
+                                      content:
+                                          '将重新下载安装并覆盖当前插件文件，确定继续吗？',
+                                      confirmText: '重新安装',
+                                    );
+                                    if (!confirmed || !mounted) return;
+                                    await provider.installPlugin(plugin.id);
+                                    if (!mounted) return;
+                                    await provider.loadPluginUiPage(
+                                      pluginId: plugin.id,
+                                    );
+                                  },
+                          icon: const Icon(Icons.refresh_rounded),
+                          label: const Text('重新安装'),
                         ),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: OutlinedButton.icon(
-                          onPressed: provider.isBusy || !installed
-                              ? null
-                              : () => provider.uninstallPlugin(plugin.id),
+                          onPressed:
+                              provider.isBusy || !installed
+                                  ? null
+                                  : () async {
+                                    final confirmed = await _confirmAction(
+                                      title: '卸载插件',
+                                      content:
+                                          '卸载后将移除插件文件与本地状态，确定卸载吗？',
+                                      confirmText: '卸载',
+                                      isDanger: true,
+                                    );
+                                    if (!confirmed || !mounted) return;
+                                    await provider.uninstallPlugin(plugin.id);
+                                    if (!mounted) return;
+                                    if (!provider.isInstalled(plugin.id)) {
+                                      Navigator.of(context).pop();
+                                    }
+                                  },
                           icon: const Icon(Icons.delete_outline_rounded),
                           label: const Text('卸载插件'),
                         ),
@@ -396,7 +454,7 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
                       (pluginUiState == null ||
                           pluginUiState.components.where((c) => c.visible).isEmpty))
                     Text(
-                      '该插件未提供配置页（ui/schema.py）或未声明可见组件',
+                      '该插件未提供配置页（pythonNamespace/schema.py）或未声明可见组件',
                       style: TextStyle(
                         fontSize: 12.5,
                         color: color.onSurfaceVariant,

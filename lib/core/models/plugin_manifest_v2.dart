@@ -186,10 +186,21 @@ class PluginHookDefinition {
 class PluginDefinition {
   final String id;
   final String name;
+  final String repoUrl;
   final String author;
   final String description;
   final String version;
   final String type;
+  /// Python 插件的 UI 命名空间目录（例如 `sample_tool_ui`）。
+  ///
+  /// 运行时会按 `${pythonNamespace}/schema.py` 查找插件配置页入口，
+  /// 用于避免多个插件共用 `ui` 包名导致的导入冲突。
+  final String pythonNamespace;
+  /// 是否将本插件的 Python 路径暴露为“全局共享路径”。
+  ///
+  /// 启用后，其他插件执行 Python 代码时也会自动追加这些路径，
+  /// 适合“基础库插件”场景（例如统一提供 numpy/pandas）。
+  final bool providesGlobalPythonPaths;
   final List<PluginPackage> packages;
   final List<PluginToolDefinition> tools;
   final List<PluginHookDefinition> hooks;
@@ -198,28 +209,72 @@ class PluginDefinition {
   const PluginDefinition({
     required this.id,
     required this.name,
+    required this.repoUrl,
     required this.author,
     required this.description,
     required this.version,
     required this.type,
+    required this.pythonNamespace,
+    required this.providesGlobalPythonPaths,
     required this.packages,
     required this.tools,
     required this.hooks,
     required this.permissions,
   });
 
+  /// 返回新对象，用于在“清单最小字段 + 仓库 plugin.json”之间做字段合并。
+  PluginDefinition copyWith({
+    String? id,
+    String? name,
+    String? repoUrl,
+    String? author,
+    String? description,
+    String? version,
+    String? type,
+    String? pythonNamespace,
+    bool? providesGlobalPythonPaths,
+    List<PluginPackage>? packages,
+    List<PluginToolDefinition>? tools,
+    List<PluginHookDefinition>? hooks,
+    List<String>? permissions,
+  }) {
+    return PluginDefinition(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      repoUrl: repoUrl ?? this.repoUrl,
+      author: author ?? this.author,
+      description: description ?? this.description,
+      version: version ?? this.version,
+      type: type ?? this.type,
+      pythonNamespace: pythonNamespace ?? this.pythonNamespace,
+      providesGlobalPythonPaths:
+          providesGlobalPythonPaths ?? this.providesGlobalPythonPaths,
+      packages: packages ?? this.packages,
+      tools: tools ?? this.tools,
+      hooks: hooks ?? this.hooks,
+      permissions: permissions ?? this.permissions,
+    );
+  }
+
   factory PluginDefinition.fromJson(Map<String, dynamic> json) {
     final id = (json['id'] ?? '').toString().trim();
-    final name = (json['name'] ?? '').toString().trim();
+    final nameRaw = (json['name'] ?? '').toString().trim();
+    final name = nameRaw.isEmpty ? id : nameRaw;
+    final repoUrl = (json['repoUrl'] ?? '').toString().trim();
     // 兼容旧插件配置，未填写作者时回退默认值，避免历史插件导入失败。
     final authorRaw = (json['author'] ?? '').toString().trim();
     final author = authorRaw.isEmpty ? 'Unknown' : authorRaw;
-    final version = (json['version'] ?? '').toString().trim();
+    final versionRaw = (json['version'] ?? '').toString().trim();
+    final version = versionRaw.isEmpty ? '0.0.0' : versionRaw;
     final description = (json['description'] ?? '').toString().trim();
-    final type = (json['type'] ?? '').toString().trim();
-    if (id.isEmpty || name.isEmpty || version.isEmpty || type.isEmpty) {
-      throw const FormatException('插件字段不完整(id/name/version/type)');
+    final typeRaw = (json['type'] ?? '').toString().trim();
+    final type = typeRaw.isEmpty ? 'python' : typeRaw;
+    final pythonNamespace = (json['pythonNamespace'] ?? '').toString().trim();
+    if (id.isEmpty) {
+      throw const FormatException('插件字段不完整(id)');
     }
+    // 清单列表阶段只解析基础信息，不在这里强制校验 pythonNamespace。
+    // 真实运行时能力在插件安装后由插件自身 plugin.json 决定。
 
     final rawPackages = json['packages'];
     final packages =
@@ -272,10 +327,13 @@ class PluginDefinition {
     return PluginDefinition(
       id: id,
       name: name,
+      repoUrl: repoUrl,
       author: author,
       description: description,
       version: version,
       type: type,
+      pythonNamespace: pythonNamespace,
+      providesGlobalPythonPaths: json['providesGlobalPythonPaths'] == true,
       packages: packages,
       tools: tools,
       hooks: hooks,
@@ -335,14 +393,24 @@ class PluginManifestV2 {
     if (rawPlugins is! List) {
       throw const FormatException('清单缺少 plugins 列表');
     }
-    final plugins = rawPlugins.asMap().entries.map((entry) {
-      final index = entry.key;
+    final plugins = <PluginDefinition>[];
+    for (final entry in rawPlugins.asMap().entries) {
       final item = entry.value;
       if (item is! Map) {
-        throw FormatException('插件定义格式错误(index=$index)');
+        // 单个插件格式错误时跳过，避免整个清单不可用。
+        continue;
       }
-      return PluginDefinition.fromJson(Map<String, dynamic>.from(item));
-    }).toList();
+      try {
+        plugins.add(PluginDefinition.fromJson(Map<String, dynamic>.from(item)));
+      } catch (_) {
+        // 单个插件字段错误时跳过，保证其余插件仍可展示。
+        continue;
+      }
+    }
+
+    if (plugins.isEmpty) {
+      throw const FormatException('清单中没有可用插件');
+    }
 
     return PluginManifestV2(
       manifestVersion: manifestVersion,

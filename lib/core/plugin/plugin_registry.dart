@@ -113,13 +113,48 @@ class PluginRegistry {
   /// 解析插件 Python 路径（含常见原生库目录）。
   List<String> resolvePythonPathsForPlugin(String pluginId) {
     final root = _pluginRootPath;
-    final record = _recordsByPluginId[pluginId];
-    if (root == null || record == null) return const <String>[];
+    if (root == null) return const <String>[];
 
     final output = <String>[];
     final seen = <String>{};
+    final requestedRecord = _recordsByPluginId[pluginId];
+    if (requestedRecord == null) return const <String>[];
+
+    // 先追加当前插件自身路径，确保私有路径优先于全局共享路径。
+    _appendPythonPathsFromRecord(
+      rootPath: root,
+      record: requestedRecord,
+      output: output,
+      seen: seen,
+    );
+
+    // 再追加所有“全局 Python 库提供者”插件路径。
+    for (final entry in _recordsByPluginId.entries) {
+      if (entry.key == pluginId) continue;
+      final providerDef = _pluginsById[entry.key];
+      if (providerDef == null || !providerDef.providesGlobalPythonPaths) {
+        continue;
+      }
+      if (!entry.value.enabled) continue;
+      _appendPythonPathsFromRecord(
+        rootPath: root,
+        record: entry.value,
+        output: output,
+        seen: seen,
+      );
+    }
+    return output;
+  }
+
+  /// 追加指定安装记录对应的 Python 路径与常见原生库目录。
+  void _appendPythonPathsFromRecord({
+    required String rootPath,
+    required InstalledPluginRecord record,
+    required List<String> output,
+    required Set<String> seen,
+  }) {
     for (final pkg in record.packages) {
-      final baseDir = p.normalize(p.join(root, pkg.targetDir));
+      final baseDir = p.normalize(p.join(rootPath, pkg.targetDir));
       for (final relativeEntry in pkg.pythonPathEntries) {
         final path = p.normalize(p.join(baseDir, relativeEntry));
         if (seen.add(path)) {
@@ -139,7 +174,6 @@ class PluginRegistry {
         }
       }
     }
-    return output;
   }
 
   /// 将插件内相对文件路径解析为本地可执行绝对路径。

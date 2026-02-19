@@ -3,11 +3,11 @@ import 'dart:convert';
 import 'package:now_chat/core/models/python_execution_result.dart';
 import 'package:now_chat/core/plugin/plugin_registry.dart';
 import 'package:now_chat/core/plugin/python_plugin_service.dart';
+import 'package:path/path.dart' as p;
 
 /// 插件运行时执行器：统一执行插件声明的 runtime 处理器。
 class PluginRuntimeExecutor {
   const PluginRuntimeExecutor._();
-  static const String _pluginUiSchemaPath = 'ui/schema.py';
 
   /// 执行插件 runtime（当前支持 `python_inline` / `python_script` / `log`）。
   static Future<PythonExecutionResult> execute({
@@ -151,7 +151,8 @@ if callable(_handler):
     dynamic value,
     Map<String, dynamic>? state,
   }) async {
-    final schemaPath = _resolveScriptPath(pluginId, _pluginUiSchemaPath);
+    final schemaRelativePath = _resolvePluginUiSchemaRelativePath(pluginId);
+    final schemaPath = _resolveScriptPath(pluginId, schemaRelativePath);
     final payloadLiteral = _toPythonJsonLiteral(payload);
     final eventTypeLiteral = _toPythonJsonLiteral(eventType);
     final componentIdLiteral = _toPythonJsonLiteral(componentId);
@@ -175,7 +176,7 @@ exec(compile(_source, schema_path, "exec"), _namespace)
 
 _factory = _namespace.get("create_page")
 if not callable(_factory):
-    raise Exception("ui/schema.py 缺少 create_page()")
+    raise Exception("$schemaRelativePath 缺少 create_page()")
 
 _page = _factory()
 if event_type:
@@ -193,7 +194,17 @@ if _result is not None:
     print(json.dumps(_result, ensure_ascii=False))
 ''';
 
-    final extraPaths = PluginRegistry.instance.resolvePythonPathsForPlugin(pluginId);
+    final extraPaths = PluginRegistry.instance
+        .resolvePythonPathsForPlugin(pluginId)
+        .toList();
+    // 强制注入 UI 包导入根路径，避免 `from <namespace> import ...` 报找不到模块。
+    final uiImportRoot = _resolveUiImportRoot(
+      schemaPath: schemaPath,
+      schemaRelativePath: schemaRelativePath,
+    );
+    if (!extraPaths.contains(uiImportRoot)) {
+      extraPaths.insert(0, uiImportRoot);
+    }
     final service = PythonPluginService();
     final result = await service.executeCode(
       code: code,
@@ -237,5 +248,44 @@ if _result is not None:
       }
     }
     throw const FormatException('插件 UI 返回格式错误：缺少 JSON 对象');
+  }
+
+  /// 根据插件定义推导 UI 入口相对路径。
+  static String _resolvePluginUiSchemaRelativePath(String pluginId) {
+    final plugin = PluginRegistry.instance.pluginById(pluginId);
+    if (plugin == null) {
+      throw Exception('找不到插件定义: $pluginId');
+    }
+    if (plugin.type == 'python') {
+      final namespace = plugin.pythonNamespace.trim();
+      if (namespace.isEmpty) {
+        throw Exception('Python 插件缺少 pythonNamespace: $pluginId');
+      }
+      return '$namespace/schema.py';
+    }
+    return 'ui/schema.py';
+  }
+
+  /// 从 schema 绝对路径和相对路径反推出 UI 包导入根目录。
+  ///
+  /// 例如：
+  /// - schemaPath: `/.../remote_plugins/a/1.0.0/python_base_ui/schema.py`
+  /// - schemaRelativePath: `python_base_ui/schema.py`
+  /// 返回：`/.../remote_plugins/a/1.0.0`
+  static String _resolveUiImportRoot({
+    required String schemaPath,
+    required String schemaRelativePath,
+  }) {
+    var current = p.normalize(schemaPath);
+    final segments =
+        schemaRelativePath
+            .replaceAll('\\', '/')
+            .split('/')
+            .where((item) => item.trim().isNotEmpty)
+            .toList();
+    for (var i = 0; i < segments.length; i += 1) {
+      current = p.dirname(current);
+    }
+    return current;
   }
 }
