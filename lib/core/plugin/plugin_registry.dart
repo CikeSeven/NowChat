@@ -62,6 +62,11 @@ class PluginRegistry {
   /// 当前注册表是否已完成初始化同步。
   bool get isReady => _pluginRootPath != null;
 
+  /// 插件运行时根目录（位于应用 files 下）。
+  ///
+  /// 仅用于构建宿主侧工作目录，不暴露给不受信任代码。
+  String? get pluginRootPath => _pluginRootPath;
+
   /// 返回当前所有插件定义。
   List<PluginDefinition> get plugins => _pluginsById.values.toList();
 

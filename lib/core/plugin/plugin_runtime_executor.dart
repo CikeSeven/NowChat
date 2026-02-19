@@ -213,13 +213,17 @@ if _result is not None:
       extraPaths.insert(0, uiImportRoot);
     }
     final service = PythonPluginService();
+    final workingDirectory = _resolveSharedRuntimeDirectoryForPlugin(
+      pluginId: pluginId,
+      fallback: uiImportRoot,
+    );
     final result = await service.executeCode(
       code: code,
       timeout: timeout,
       extraSysPaths: extraPaths,
       logContext: 'plugin:$pluginId/ui',
-      // UI DSL 默认使用插件根目录作为 cwd，避免写入只读根目录 `/`。
-      workingDirectory: uiImportRoot,
+      // UI DSL 与工具执行统一落到应用 files/runtime，避免写入插件目录。
+      workingDirectory: workingDirectory,
     );
     if (!result.isSuccess) {
       throw Exception(
@@ -301,15 +305,35 @@ if _result is not None:
 
   /// 解析 runtime 执行工作目录，避免插件脚本把输出写到只读目录。
   ///
-  /// - `python_script`：使用脚本所在目录，确保 `os.getcwd()` 指向可写路径。
-  /// - 其它 runtime：返回 null，沿用 PythonService 默认行为。
+  /// `python_*` runtime 统一使用应用 files/runtime/<pluginId>，确保输出不依赖插件目录。
   static String? _resolveRuntimeWorkingDirectory({
     required String pluginId,
     required String runtime,
     required String? scriptPath,
   }) {
-    if (runtime != 'python_script') return null;
-    final resolved = _resolveScriptPath(pluginId, scriptPath);
-    return p.dirname(resolved);
+    if (!runtime.startsWith('python_')) return null;
+    final fallback =
+        runtime == 'python_script'
+            ? p.dirname(_resolveScriptPath(pluginId, scriptPath))
+            : null;
+    return _resolveSharedRuntimeDirectoryForPlugin(
+      pluginId: pluginId,
+      fallback: fallback,
+    );
+  }
+
+  /// 解析插件共享运行目录，默认位于 `<plugin_root>/runtime/<pluginId>`。
+  ///
+  /// 该目录位于应用 files 下，插件重装/卸载时不会默认清理历史输出。
+  static String _resolveSharedRuntimeDirectoryForPlugin({
+    required String pluginId,
+    String? fallback,
+  }) {
+    final rootPath = PluginRegistry.instance.pluginRootPath;
+    if (rootPath == null || rootPath.trim().isEmpty) {
+      return (fallback ?? '.').trim();
+    }
+    final normalizedPluginId = pluginId.trim().isEmpty ? 'unknown_plugin' : pluginId.trim();
+    return p.normalize(p.join(rootPath, 'runtime', normalizedPluginId));
   }
 }

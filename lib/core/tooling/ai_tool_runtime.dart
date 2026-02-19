@@ -143,6 +143,9 @@ class AIToolRuntime {
           'status': withDuration.status,
           'durationMs': withDuration.durationMs,
           'error': withDuration.error,
+          // 透出工具执行返回值，供插件在 tool_after_execute 中记录日志。
+          'summary': withDuration.summary,
+          'toolMessageContent': withDuration.toolMessageContent,
         },
       );
       _logToolExecutionEnd(
@@ -173,6 +176,9 @@ class AIToolRuntime {
           'status': result.status,
           'durationMs': result.durationMs,
           'error': result.error,
+          // 异常分支也透出统一返回值，保证插件日志字段稳定。
+          'summary': result.summary,
+          'toolMessageContent': result.toolMessageContent,
         },
       );
       _logToolExecutionFailure(
