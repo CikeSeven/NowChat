@@ -80,7 +80,7 @@ class AppRoutes {
         final agentId = args?['agentId']?.toString();
         if (agentId == null || agentId.trim().isEmpty) {
           return MaterialPageRoute(
-            builder: (_) => const Scaffold(body: Center(child: Text('智能体不存在'))),
+            builder: (_) => const Scaffold(body: Center(child: Text('工具不存在'))),
           );
         }
         return _buildSlideRoute(

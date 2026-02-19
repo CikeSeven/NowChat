@@ -3,7 +3,7 @@ import 'package:now_chat/app/router.dart';
 import 'package:now_chat/providers/agent_provider.dart';
 import 'package:provider/provider.dart';
 
-/// 智能体主页：两列卡片列表。
+/// 工具主页：两列卡片列表。
 class AgentPage extends StatelessWidget {
   const AgentPage({super.key});
 
@@ -14,10 +14,10 @@ class AgentPage extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('智能体'),
+        title: const Text('工具'),
         actions: [
           IconButton(
-            tooltip: '新建智能体',
+            tooltip: '新建工具',
             onPressed: () {
               Navigator.pushNamed(
                 context,
@@ -31,7 +31,7 @@ class AgentPage extends StatelessWidget {
       body: agents.isEmpty
           ? Center(
               child: Text(
-                '还没有智能体，点击右上角创建',
+                '还没有工具，点击右上角创建',
                 style: TextStyle(
                   fontSize: 14,
                   color: color.onSurfaceVariant,
@@ -72,7 +72,7 @@ class AgentPage extends StatelessWidget {
                           Row(
                             children: [
                               Icon(
-                                Icons.auto_awesome_outlined,
+                                Icons.handyman_outlined,
                                 size: 18,
                                 color: color.primary,
                               ),

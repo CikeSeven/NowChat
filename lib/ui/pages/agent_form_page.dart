@@ -6,7 +6,7 @@ import 'package:now_chat/providers/settings_provider.dart';
 import 'package:now_chat/ui/widgets/model_selector_bottom_sheet.dart.dart';
 import 'package:provider/provider.dart';
 
-/// 智能体新增/编辑页面。
+/// 工具新增/编辑页面。
 class AgentFormPage extends StatefulWidget {
   final String? agentId;
 
@@ -159,7 +159,7 @@ class _AgentFormPageState extends State<AgentFormPage> {
     if (_isEditing) {
       final existing = _agentId == null ? null : agentProvider.getById(_agentId!);
       if (existing == null) {
-        _showSnackBar('智能体不存在');
+        _showSnackBar('工具不存在');
         return;
       }
       existing.applyUpdate(
@@ -223,7 +223,7 @@ class _AgentFormPageState extends State<AgentFormPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_isEditing ? '编辑智能体' : '新建智能体'),
+        title: Text(_isEditing ? '编辑工具' : '新建工具'),
         actions: [
           TextButton(onPressed: _save, child: const Text('保存')),
         ],
@@ -236,7 +236,7 @@ class _AgentFormPageState extends State<AgentFormPage> {
             decoration: const InputDecoration(
               border: OutlineInputBorder(),
               isDense: true,
-              labelText: '智能体名称',
+              labelText: '工具名称',
               hintText: '例如：翻译助手',
             ),
           ),
@@ -260,7 +260,7 @@ class _AgentFormPageState extends State<AgentFormPage> {
             decoration: const InputDecoration(
               border: OutlineInputBorder(),
               labelText: '提示词',
-              hintText: '输入该智能体的 system prompt',
+              hintText: '输入该工具的 system prompt',
             ),
           ),
           const SizedBox(height: 12),

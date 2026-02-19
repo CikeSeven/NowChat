@@ -10,7 +10,7 @@ import 'package:now_chat/ui/widgets/markdown_message_widget.dart';
 import 'package:now_chat/ui/widgets/model_selector_bottom_sheet.dart.dart';
 import 'package:provider/provider.dart';
 
-/// 单个智能体详情页，负责一次性对话。
+/// 单个工具详情页，负责一次性对话。
 class AgentDetailPage extends StatefulWidget {
   final String agentId;
 
@@ -48,7 +48,7 @@ class _AgentDetailPageState extends State<AgentDetailPage> {
       builder:
           (dialogContext) => AlertDialog(
             backgroundColor: color.surfaceContainerLow,
-            title: Text('删除智能体', style: TextStyle(color: color.onSurface)),
+            title: Text('删除工具', style: TextStyle(color: color.onSurface)),
             content: Text(
               '确认删除 "${agent.name}" 吗？',
               style: TextStyle(color: color.onSurfaceVariant),
@@ -114,7 +114,7 @@ class _AgentDetailPageState extends State<AgentDetailPage> {
     );
   }
 
-  /// 在智能体聊天页直接选择模型，并持久化到当前智能体。
+  /// 在工具聊天页直接选择模型，并持久化到当前工具。
   Future<void> _showModelSelector({
     required AgentProfile agent,
     required SettingsProvider settings,
@@ -212,12 +212,12 @@ class _AgentDetailPageState extends State<AgentDetailPage> {
 
     if (agent == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('智能体')),
-        body: const Center(child: Text('智能体不存在或已删除')),
+        appBar: AppBar(title: const Text('工具')),
+        body: const Center(child: Text('工具不存在或已删除')),
       );
     }
     final summary = agent.summary.trim().isEmpty
-        ? '该智能体无说明'
+        ? '该工具无说明'
         : agent.summary.trim();
     final runtime = _resolveRuntime(
       agent: agent,

@@ -142,7 +142,7 @@ class AgentProvider with ChangeNotifier {
     if (normalizedInput.isEmpty || _isGenerating) return;
 
     final tempSession = ChatSession(
-      title: '智能体临时会话',
+      title: '工具临时会话',
       providerId: request.provider.id,
       model: request.model,
       systemPrompt: request.agent.prompt.trim(),

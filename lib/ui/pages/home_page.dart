@@ -40,8 +40,8 @@ class _HomePageState extends State<HomePage> {
         items: [
           BottomNavigationBarItem(icon: Icon(Icons.chat), label: '会话'),
           BottomNavigationBarItem(
-            icon: Icon(Icons.auto_awesome_outlined),
-            label: '智能体',
+            icon: Icon(Icons.handyman_outlined),
+            label: '工具',
           ),
           BottomNavigationBarItem(icon: Icon(Icons.api), label: 'API'),
           BottomNavigationBarItem(icon: Icon(Icons.settings), label: '设置'),
