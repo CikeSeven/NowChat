@@ -1,119 +1,23 @@
 {
-  "manifestVersion": 1,
+  "manifestVersion": 2,
   "plugins": [
     {
-      "id": "python",
-      "name": "Python 插件",
-      "description": "Python 运行时与可选库包",
+      "id": "sample_tool_plugin",
+      "name": "示例工具插件",
+      "author": "NowChat",
+      "description": "示例插件，包含工具、Hook 与插件配置页面。",
+      "version": "1.0.0",
       "type": "python",
-      "core": {
-        "id": "python-core",
-        "name": "Python Core (Chaquopy)",
-        "description": "Chaquopy runtime metadata for Now Chat.",
-        "version": "3.11",
-        "url": "https://example.com/python-core-3.11.zip",
-        "sha256": "BE98236CE806790667DB7244B549BC520D18F26208B9068DD86494EC7E524A63",
-        "sizeBytes": 0,
-        "targetDir": "core/3.11",
-        "pythonPathEntries": [
-          "."
-        ],
-        "entryPoint": "bin/python3"
-      },
-      "libraries": [
-        {
-          "id": "requests",
-          "name": "Requests",
-          "description": "HTTP client library.",
-          "version": "2.32.3",
-          "url": "https://raw.githubusercontent.com/CikeSeven/NowChat/main/plugin_packages/requests-2.32.3.zip",
-          "sha256": "BE98236CE806790667DB7244B549BC520D18F26208B9068DD86494EC7E524A63",
-          "sizeBytes": 2902289,
-          "targetDir": "libs/requests/2.32.3",
-          "pythonPathEntries": [
-            "."
-          ]
-        },
-        {
-          "id": "libgfortran",
-          "name": "libgfortran",
-          "description": "GNU Fortran runtime for OpenBLAS.",
-          "version": "4.9",
-          "url": "https://raw.githubusercontent.com/CikeSeven/NowChat/main/plugin_packages/chaquopy_libgfortran-4.9-0-py3-none-android_21_arm64_v8a.whl",
-          "sha256": "0B4CAED1147F2A19707D4BA730AFEA57F7B8F2D8C046D8A48CF49377741C4604",
-          "sizeBytes": 495679,
-          "targetDir": "libs/libgfortran/4.9",
-          "pythonPathEntries": [
-            ".",
-            "chaquopy/lib"
-          ]
-        },
-        {
-          "id": "libcxx",
-          "name": "libc++",
-          "description": "C++ runtime required by NumPy/Pandas.",
-          "version": "11000",
-          "url": "https://raw.githubusercontent.com/CikeSeven/NowChat/main/plugin_packages/chaquopy_libcxx-11000-0-py3-none-android_21_arm64_v8a.whl",
-          "sha256": "0F14074F60C73F928ABF9E3E40B01DFD0D517BB99F9CF31DAE37C39E3D8A3C43",
-          "sizeBytes": 308604,
-          "targetDir": "libs/libcxx/11000",
-          "pythonPathEntries": [
-            ".",
-            "chaquopy/lib"
-          ]
-        },
-        {
-          "id": "openblas",
-          "name": "OpenBLAS",
-          "description": "Native BLAS runtime for NumPy/Pandas.",
-          "version": "0.2.20",
-          "url": "https://raw.githubusercontent.com/CikeSeven/NowChat/main/plugin_packages/openblas-0.2.20-android-arm64.zip",
-          "sha256": "10374BE78F36D826D27512B75C22E1D32AC34E79A1C2F55AB66492B20E44743E",
-          "sizeBytes": 10151572,
-          "targetDir": "libs/openblas/0.2.20",
-          "pythonPathEntries": [
-            ".",
-            "chaquopy/lib"
-          ],
-          "dependencies": [
-            "libgfortran"
-          ]
-        },
-        {
-          "id": "pandas",
-          "name": "Pandas",
-          "description": "Data analysis and table processing library.",
-          "version": "1.5.0",
-          "url": "https://raw.githubusercontent.com/CikeSeven/NowChat/main/plugin_packages/pandas-1.5.0-android-arm64.zip",
-          "sha256": "5CCB00EC7BC54568402BD5AB80468D206800A4C4F75CF1BA7C14D222E3FE450D",
-          "sizeBytes": 68481923,
-          "targetDir": "libs/pandas/1.5.0",
-          "pythonPathEntries": [
-            "."
-          ],
-          "dependencies": [
-            "numpy",
-            "libcxx"
-          ]
-        },
-        {
-          "id": "numpy",
-          "name": "NumPy",
-          "description": "Scientific computing library.",
-          "version": "1.26.2",
-          "url": "https://raw.githubusercontent.com/CikeSeven/NowChat/main/plugin_packages/numpy-1.26.2-android-arm64.zip",
-          "sha256": "DF5A639462A905A015BB3F6BE6146E27C2C9A583421FA10ED17DE5A3249BBEAB",
-          "sizeBytes": 17667810,
-          "targetDir": "libs/numpy/1.26.2",
-          "pythonPathEntries": [
-            "."
-          ],
-          "dependencies": [
-            "openblas",
-            "libcxx"
-          ]
-        }
-      ]
+      "repoUrl": "https://github.com/CikeSeven/sample_tool_plugin.git"
+    },
+    {
+      "id": "python_base_libs_plugin",
+      "name": "Python 基础库插件",
+      "author": "NowChat",
+      "description": "提供 Python 代码执行能力与基础库支持。",
+      "version": "0.1.0",
+      "type": "python",
+      "repoUrl": "https://github.com/CikeSeven/python_base_libs_plugin"
     }
   ]
 }
