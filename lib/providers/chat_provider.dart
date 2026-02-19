@@ -77,6 +77,14 @@ class ChatProvider with ChangeNotifier {
     _loadFromLocal();
   }
 
+  /// 强制从本地存储重载会话与提供方数据。
+  ///
+  /// 用于导入备份后立即刷新 UI。
+  Future<void> reloadFromStorage() async {
+    _initialized = false;
+    await _loadFromLocal();
+  }
+
   @override
   void dispose() {
     _streamingNotifyTimer?.cancel();

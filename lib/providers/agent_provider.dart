@@ -80,6 +80,14 @@ class AgentProvider with ChangeNotifier {
     loadAgents();
   }
 
+  /// 强制从本地存储重载智能体列表。
+  ///
+  /// 用于导入备份后立即刷新 UI。
+  Future<void> reloadFromStorage() async {
+    _initialized = false;
+    await loadAgents();
+  }
+
   /// 加载智能体列表。
   Future<void> loadAgents() async {
     if (_initialized) return;

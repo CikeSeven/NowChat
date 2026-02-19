@@ -33,7 +33,7 @@ class ChatApp extends StatelessWidget {
             Locale('en', 'US'),
           ],
           onGenerateRoute: AppRoutes.generateRoute,
-          initialRoute: AppRoutes.home,
+          initialRoute: AppRoutes.startup,
           navigatorObservers: <NavigatorObserver>[
             PluginHookNavigatorObserver(),
           ],

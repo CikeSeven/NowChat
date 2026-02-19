@@ -6,7 +6,9 @@ import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:highlight/highlight.dart' as hi;
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:markdown/markdown.dart' as md;
+import 'package:now_chat/ui/pages/image_preview_page.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'dart:io';
 
 /// MarkdownMessageWidget 组件。
 class MarkdownMessageWidget extends StatelessWidget {
@@ -40,6 +42,13 @@ class MarkdownMessageWidget extends StatelessWidget {
         'latex_block': LatexElementBuilder(context, displayMode: true),
         'code': CodeBlockBuilder(context),
         'hr': HorizontalRuleBuilder(context),
+      },
+      imageBuilder: (uri, title, alt) {
+        return _MarkdownImageTile(
+          uri: _normalizeMarkdownImageUri(uri),
+          title: title,
+          alt: alt,
+        );
       },
       inlineSyntaxes: [LatexBlockSyntax(), LatexInlineSyntax()],
       styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
@@ -102,6 +111,150 @@ class MarkdownMessageWidget extends StatelessWidget {
           ),
         ),
         img: TextStyle(fontSize: 0),
+      ),
+    );
+  }
+}
+
+/// 将 Markdown 图片 URI 转换为可加载的标准 URI。
+Uri _normalizeMarkdownImageUri(Uri uri) {
+  if (uri.scheme.isNotEmpty) {
+    return uri;
+  }
+  final raw = uri.toString();
+  if (raw.startsWith('/')) {
+    return Uri.file(raw);
+  }
+  return uri;
+}
+
+/// Markdown 图片缩略图组件，支持点击进入预览页。
+class _MarkdownImageTile extends StatelessWidget {
+  final Uri uri;
+  final String? title;
+  final String? alt;
+
+  const _MarkdownImageTile({required this.uri, this.title, this.alt});
+
+  bool get _isLocalFile {
+    return uri.scheme == 'file' || (uri.scheme.isEmpty && uri.path.startsWith('/'));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme;
+    final image = _isLocalFile
+        ? Image.file(
+            File(uri.toFilePath()),
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) {
+              return _ImageErrorPlaceholder(title: '图片加载失败', detail: uri.toString());
+            },
+          )
+        : Image.network(
+            uri.toString(),
+            fit: BoxFit.cover,
+            loadingBuilder: (context, child, progress) {
+              if (progress == null) return child;
+              return const Center(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 18),
+                  child: CircularProgressIndicator(strokeWidth: 2.2),
+                ),
+              );
+            },
+            errorBuilder: (context, error, stackTrace) {
+              return _ImageErrorPlaceholder(title: '图片加载失败', detail: uri.toString());
+            },
+          );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => ImagePreviewPage(imageUri: uri, title: title ?? alt ?? '图片预览'),
+            ),
+          );
+        },
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: color.outline.withAlpha(90)),
+            color: color.surfaceContainerHighest.withAlpha(70),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ClipRRect(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 220),
+                  child: image,
+                ),
+              ),
+              Container(
+                height: 34,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                alignment: Alignment.centerLeft,
+                child: Row(
+                  children: [
+                    Icon(Icons.zoom_in_outlined, size: 16, color: color.onSurfaceVariant),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        '点击查看详情',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 12, color: color.onSurfaceVariant),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 图片加载失败占位。
+class _ImageErrorPlaceholder extends StatelessWidget {
+  final String title;
+  final String detail;
+
+  const _ImageErrorPlaceholder({required this.title, required this.detail});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 16),
+      color: color.errorContainer.withAlpha(120),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              color: color.onErrorContainer,
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            detail,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: color.onErrorContainer, fontSize: 12),
+          ),
+        ],
       ),
     );
   }
