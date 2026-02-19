@@ -60,6 +60,7 @@ class MainActivity : FlutterActivity() {
     private fun executePython(call: MethodCall, result: MethodChannel.Result) {
         val code = call.argument<String>("code")?.trim().orEmpty()
         val timeoutMs = call.argument<Int>("timeoutMs") ?: 20_000
+        val workingDirectory = call.argument<String>("workingDirectory")?.trim().orEmpty()
         val runId = call.argument<String>("runId")?.trim().orEmpty().ifEmpty {
             UUID.randomUUID().toString()
         }
@@ -83,6 +84,7 @@ class MainActivity : FlutterActivity() {
                     code,
                     timeoutMs,
                     extraSysPaths,
+                    workingDirectory,
                     runId,
                     emitter,
                 )

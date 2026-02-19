@@ -37,12 +37,18 @@ class PluginRuntimeExecutor {
       payload: payload ?? const <String, dynamic>{},
     );
     final extraPaths = PluginRegistry.instance.resolvePythonPathsForPlugin(pluginId);
+    final workingDirectory = _resolveRuntimeWorkingDirectory(
+      pluginId: pluginId,
+      runtime: normalizedRuntime,
+      scriptPath: scriptPath,
+    );
     final service = PythonPluginService();
     return service.executeCode(
       code: wrappedCode,
       timeout: timeout,
       extraSysPaths: extraPaths,
       logContext: 'plugin:$pluginId/runtime',
+      workingDirectory: workingDirectory,
     );
   }
 
@@ -212,6 +218,8 @@ if _result is not None:
       timeout: timeout,
       extraSysPaths: extraPaths,
       logContext: 'plugin:$pluginId/ui',
+      // UI DSL 默认使用插件根目录作为 cwd，避免写入只读根目录 `/`。
+      workingDirectory: uiImportRoot,
     );
     if (!result.isSuccess) {
       throw Exception(
@@ -289,5 +297,19 @@ if _result is not None:
       current = p.dirname(current);
     }
     return current;
+  }
+
+  /// 解析 runtime 执行工作目录，避免插件脚本把输出写到只读目录。
+  ///
+  /// - `python_script`：使用脚本所在目录，确保 `os.getcwd()` 指向可写路径。
+  /// - 其它 runtime：返回 null，沿用 PythonService 默认行为。
+  static String? _resolveRuntimeWorkingDirectory({
+    required String pluginId,
+    required String runtime,
+    required String? scriptPath,
+  }) {
+    if (runtime != 'python_script') return null;
+    final resolved = _resolveScriptPath(pluginId, scriptPath);
+    return p.dirname(resolved);
   }
 }

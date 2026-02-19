@@ -194,6 +194,7 @@ def execute_code(
     code: str,
     timeout_ms: int = 20000,
     extra_sys_paths=None,
+    working_directory: str = "",
     run_id: str = "",
     log_emitter=None,
 ):
@@ -215,9 +216,17 @@ def execute_code(
         globals_scope = {"__name__": "__main__", "__builtins__": __builtins__}
         locals_scope = {}
         inserted_paths = []
+        previous_cwd = None
         realtime_stdout = _RealtimeStream("stdout", stdout_buffer, log_emitter)
         realtime_stderr = _RealtimeStream("stderr", stderr_buffer, log_emitter)
         try:
+            # 若宿主传入工作目录，则切换到该目录执行，避免默认 cwd 指向只读根目录 `/`。
+            normalized_working_directory = str(working_directory or "").strip()
+            if normalized_working_directory:
+                previous_cwd = os.getcwd()
+                os.makedirs(normalized_working_directory, exist_ok=True)
+                os.chdir(normalized_working_directory)
+
             for item in extra_sys_paths:
                 path = str(item).strip()
                 if not path:
@@ -246,6 +255,11 @@ def execute_code(
                 try:
                     sys.path.remove(path)
                 except ValueError:
+                    pass
+            if previous_cwd:
+                try:
+                    os.chdir(previous_cwd)
+                except Exception:
                     pass
 
     worker = threading.Thread(target=_worker, daemon=True)

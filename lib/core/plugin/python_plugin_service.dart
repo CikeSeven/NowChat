@@ -178,6 +178,7 @@ class PythonPluginService {
           timeout: timeout,
           extraSysPaths: extraSysPaths ?? const <String>[],
           runId: runId,
+          workingDirectory: workingDirectory,
         );
       } finally {
         _runLogListeners.remove(runId);
@@ -242,6 +243,7 @@ class PythonPluginService {
     required Duration timeout,
     required List<String> extraSysPaths,
     required String runId,
+    required String? workingDirectory,
   }) async {
     final normalizedPaths =
         extraSysPaths
@@ -255,6 +257,8 @@ class PythonPluginService {
         'timeoutMs': timeout.inMilliseconds,
         'extraSysPaths': normalizedPaths,
         'runId': runId,
+        // Android 侧通过该目录设置 Python cwd，避免脚本写入只读根目录。
+        'workingDirectory': workingDirectory?.trim(),
       },
     );
 
