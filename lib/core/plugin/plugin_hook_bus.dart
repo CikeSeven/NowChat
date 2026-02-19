@@ -22,6 +22,36 @@ class PluginHookLogEntry {
   });
 }
 
+/// 单次 Hook 分发结果，供业务层按需消费脚本输出。
+class PluginHookEmitResult {
+  /// 触发该结果的插件 ID。
+  final String pluginId;
+
+  /// 触发的 Hook 事件名。
+  final String event;
+
+  /// 运行是否成功（exit code=0 且未超时）。
+  final bool ok;
+
+  /// Hook 脚本解析出的 JSON 对象（若无有效 JSON 则为 null）。
+  final Map<String, dynamic>? data;
+
+  /// 运行标准输出（原始文本）。
+  final String stdout;
+
+  /// 运行错误输出（原始文本）。
+  final String stderr;
+
+  const PluginHookEmitResult({
+    required this.pluginId,
+    required this.event,
+    required this.ok,
+    required this.data,
+    required this.stdout,
+    required this.stderr,
+  });
+}
+
 /// 插件 Hook 事件总线（白名单 + 失败隔离）。
 class PluginHookBus {
   PluginHookBus._();
@@ -42,23 +72,24 @@ class PluginHookBus {
   /// 读取最近 Hook 日志。
   static List<PluginHookLogEntry> get logs => List<PluginHookLogEntry>.from(_logs);
 
-  /// 分发 Hook 事件到已启用插件。
-  static Future<void> emit(
+  /// 分发 Hook 事件到已启用插件，并返回每个 Hook 的执行结果。
+  static Future<List<PluginHookEmitResult>> emit(
     String event, {
     Map<String, dynamic>? payload,
   }) async {
     final normalizedEvent = event.trim();
     if (!_whitelistEvents.contains(normalizedEvent)) {
-      return;
+      return const <PluginHookEmitResult>[];
     }
     final hooks = PluginRegistry.instance.resolveHooksByEvent(normalizedEvent);
-    if (hooks.isEmpty) return;
+    if (hooks.isEmpty) return const <PluginHookEmitResult>[];
 
     final contextPayload = <String, dynamic>{
       'event': normalizedEvent,
       'payload': payload ?? const <String, dynamic>{},
       'timestamp': DateTime.now().toIso8601String(),
     };
+    final outputs = <PluginHookEmitResult>[];
 
     for (final item in hooks) {
       final plugin = item.$1;
@@ -72,6 +103,9 @@ class PluginHookBus {
           payload: contextPayload,
           timeout: const Duration(seconds: 20),
         );
+        final parsedData = result.isSuccess
+            ? _decodeJsonObjectFromStdout(result.stdout)
+            : null;
         _appendLog(
           PluginHookLogEntry(
             time: DateTime.now(),
@@ -81,6 +115,16 @@ class PluginHookBus {
             message: result.isSuccess
                 ? (result.stdout.trim().isEmpty ? 'ok' : result.stdout.trim())
                 : (result.stderr.trim().isEmpty ? 'failed' : result.stderr.trim()),
+          ),
+        );
+        outputs.add(
+          PluginHookEmitResult(
+            pluginId: plugin.id,
+            event: normalizedEvent,
+            ok: result.isSuccess,
+            data: parsedData,
+            stdout: result.stdout,
+            stderr: result.stderr,
           ),
         );
       } catch (e, st) {
@@ -99,8 +143,19 @@ class PluginHookBus {
             message: message,
           ),
         );
+        outputs.add(
+          PluginHookEmitResult(
+            pluginId: plugin.id,
+            event: normalizedEvent,
+            ok: false,
+            data: null,
+            stdout: '',
+            stderr: e.toString(),
+          ),
+        );
       }
     }
+    return outputs;
   }
 
   static void _appendLog(PluginHookLogEntry entry) {
@@ -111,6 +166,30 @@ class PluginHookBus {
     AppLogger.i(
       'PluginHook(${entry.pluginId}/${entry.event}): ${entry.ok ? "OK" : "ERR"} ${entry.message}',
     );
+  }
+
+  /// 尝试从 stdout 末尾提取 JSON 对象，允许脚本混入调试日志。
+  static Map<String, dynamic>? _decodeJsonObjectFromStdout(String stdout) {
+    final lines = stdout
+        .split('\n')
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList()
+        .reversed;
+    for (final line in lines) {
+      try {
+        final decoded = jsonDecode(line);
+        if (decoded is Map<String, dynamic>) {
+          return decoded;
+        }
+        if (decoded is Map) {
+          return decoded.map((key, value) => MapEntry(key.toString(), value));
+        }
+      } catch (_) {
+        // 当前行不是 JSON，继续尝试上一行。
+      }
+    }
+    return null;
   }
 }
 

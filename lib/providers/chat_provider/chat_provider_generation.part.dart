@@ -1,4 +1,4 @@
-﻿part of '../chat_provider.dart';
+part of '../chat_provider.dart';
 
 /// ChatProviderGeneration 扩展方法集合。
 extension ChatProviderGeneration on ChatProvider {
@@ -129,9 +129,11 @@ extension ChatProviderGeneration on ChatProvider {
             assistantMessage.isarId,
             rawLogs
                 .whereType<Map>()
-                .map((item) => ToolExecutionLog.fromJson(
-                      Map<String, dynamic>.from(item),
-                    ))
+                .map(
+                  (item) => ToolExecutionLog.fromJson(
+                    Map<String, dynamic>.from(item),
+                  ),
+                )
                 .toList(),
           );
         }
@@ -311,9 +313,11 @@ extension ChatProviderGeneration on ChatProvider {
               aiMsg.isarId,
               rawLogs
                   .whereType<Map>()
-                  .map((item) => ToolExecutionLog.fromJson(
-                        Map<String, dynamic>.from(item),
-                      ))
+                  .map(
+                    (item) => ToolExecutionLog.fromJson(
+                      Map<String, dynamic>.from(item),
+                    ),
+                  )
                   .toList(),
             );
           }
@@ -531,9 +535,11 @@ extension ChatProviderGeneration on ChatProvider {
               currentAiMsg.isarId,
               rawLogs
                   .whereType<Map>()
-                  .map((item) => ToolExecutionLog.fromJson(
-                        Map<String, dynamic>.from(item),
-                      ))
+                  .map(
+                    (item) => ToolExecutionLog.fromJson(
+                      Map<String, dynamic>.from(item),
+                    ),
+                  )
                   .toList(),
             );
           }
@@ -558,14 +564,12 @@ extension ChatProviderGeneration on ChatProvider {
         _pendingContinuations.remove(chatId);
       }
     } finally {
-      if (usedStreaming &&
-          aiMsg != null &&
-          _isMessageStreaming(aiMsg.isarId)) {
+      if (usedStreaming && aiMsg != null && _isMessageStreaming(aiMsg.isarId)) {
         await endStreamingMessage(aiMsg);
       }
       _abortControllers.remove(chatId);
       await _setChatGenerating(chat, false);
-      await PluginHookBus.emit(
+      final hookResults = await PluginHookBus.emit(
         'chat_after_send',
         payload: <String, dynamic>{
           'chatId': chatId,
@@ -576,8 +580,41 @@ extension ChatProviderGeneration on ChatProvider {
           'error': terminalError?.toString(),
         },
       );
+      await _applyAfterSendHookEffects(
+        message: aiMsg,
+        hookResults: hookResults,
+      );
     }
     _notifyStateChanged();
+  }
+
+  /// 处理 `chat_after_send` Hook 对助手消息的后置变更。
+  Future<void> _applyAfterSendHookEffects({
+    required Message? message,
+    required List<PluginHookEmitResult> hookResults,
+  }) async {
+    if (message == null) return;
+    // 仅在助手正文存在时执行后缀追加，避免空消息被重新写回数据库。
+    if (message.content.trim().isEmpty) return;
+    final suffix = _collectAssistantSuffixFromHooks(hookResults);
+    if (suffix.isEmpty) return;
+    message.content = '${message.content}$suffix';
+    await saveMessage(message);
+  }
+
+  /// 聚合 Hook 返回的 `appendAssistantSuffix` 字段，按 Hook 执行顺序拼接。
+  String _collectAssistantSuffixFromHooks(
+    List<PluginHookEmitResult> hookResults,
+  ) {
+    final buffer = StringBuffer();
+    for (final item in hookResults) {
+      if (!item.ok) continue;
+      final raw = item.data?['appendAssistantSuffix'];
+      final suffix = raw?.toString() ?? '';
+      if (suffix.trim().isEmpty) continue;
+      buffer.write(suffix);
+    }
+    return buffer.toString();
   }
 
   /// 设置会话生成中状态并写回数据库。
