@@ -841,6 +841,24 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
         null;
   }
 
+  /// 查询指定插件缺失的前置插件 ID 列表。
+  ///
+  /// 该方法用于 UI 层在“安装前”做显式提示，避免用户点击后无感失败。
+  List<String> missingRequiredPluginIdsFor(String pluginId) {
+    final plugin = getPluginById(pluginId);
+    if (plugin == null) return const <String>[];
+    return _findMissingRequiredPluginIds(plugin);
+  }
+
+  /// 返回插件展示标签：优先“名称(id)”，回退为 id。
+  String pluginDisplayLabel(String pluginId) {
+    final plugin = getPluginById(pluginId);
+    if (plugin == null) return pluginId;
+    final name = plugin.name.trim();
+    if (name.isEmpty) return pluginId;
+    return '$name($pluginId)';
+  }
+
   /// 返回当前插件缺失的前置插件 ID 列表。
   ///
   /// 仅检查“已安装”状态，不强制要求前置插件处于启用状态。
