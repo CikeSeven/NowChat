@@ -70,6 +70,7 @@ Future<Map<String, dynamic>> _sendOpenAIChatRequest({
   final shouldUseTools = _isToolCallingEnabledForSession(provider, session);
   var remainingToolCalls = session.maxToolCalls <= 0 ? 0 : session.maxToolCalls;
   final toolLogs = <Map<String, dynamic>>[];
+  // 会话级消息上下文，后续会在工具调用循环中持续追加 assistant/tool 消息。
   final conversation = await _buildOpenAIMessagesPayload(
     filteredMessages,
     allowVision: allowVision,
@@ -81,6 +82,7 @@ Future<Map<String, dynamic>> _sendOpenAIChatRequest({
   final client = http.Client();
   abortController?.onAbort(client.close);
   try {
+    // 非流式也采用“请求 -> 工具调用 -> 再请求”的多轮闭环，直到模型不再请求工具。
     while (true) {
       if (_isAbortTriggered(abortController)) {
         throw const GenerationAbortedException();
@@ -128,6 +130,7 @@ Future<Map<String, dynamic>> _sendOpenAIChatRequest({
       }
       final toolCalls = _parseOpenAIToolCallsFromMessage(message);
       if (toolCalls.isEmpty || !shouldUseTools) {
+        // 无工具调用时，说明已得到最终文本结果。
         break;
       }
       if (remainingToolCalls <= 0) {
@@ -153,6 +156,7 @@ Future<Map<String, dynamic>> _sendOpenAIChatRequest({
 
       for (final call in toolCalls) {
         if (remainingToolCalls <= 0) break;
+        // 串行执行工具，保证模型看到的 tool 响应顺序稳定。
         final result = await AIToolRuntime.execute(call);
         remainingToolCalls -= 1;
 

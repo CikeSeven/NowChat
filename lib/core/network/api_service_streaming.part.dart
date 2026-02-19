@@ -98,6 +98,7 @@ Future<void> _sendOpenAIChatStreaming({
       systemPrompt: systemPrompt,
     );
 
+    // 流式模式下同样支持工具循环：先流出文本增量，再根据 tool_calls 执行工具并继续请求。
     while (true) {
       if (_isAbortTriggered(abortController)) {
         throw const GenerationAbortedException();
@@ -130,6 +131,7 @@ Future<void> _sendOpenAIChatStreaming({
       final utf8Stream = response.stream.transform(utf8.decoder);
       var buffer = '';
       final assistantContentBuffer = StringBuffer();
+      // tool_calls 在 SSE 中会分片增量返回，这里按 index 聚合完整调用参数。
       final toolCallBuilders = <int, _StreamingToolCallBuilder>{};
 
       await for (final chunk in utf8Stream) {
@@ -187,6 +189,7 @@ Future<void> _sendOpenAIChatStreaming({
 
       final toolCalls = _finalizeOpenAIStreamingToolCalls(toolCallBuilders);
       if (toolCalls.isEmpty || !shouldUseTools) {
+        // 当前轮没有工具请求，结束整个流式对话。
         break;
       }
 
@@ -213,6 +216,7 @@ Future<void> _sendOpenAIChatStreaming({
 
       for (final call in toolCalls) {
         if (remainingToolCalls <= 0) break;
+        // 工具执行后作为 role=tool 消息回填给模型，继续下一轮生成。
         final result = await AIToolRuntime.execute(call);
         remainingToolCalls -= 1;
 

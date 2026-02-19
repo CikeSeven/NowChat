@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../providers/settings_provider.dart';
 import '../widgets/model_selector_bottom_sheet.dart.dart';
 
+/// 全局默认对话参数设置页。
 class DefaultChatParamsPage extends StatefulWidget {
   const DefaultChatParamsPage({super.key});
 
@@ -41,6 +42,7 @@ class _DefaultChatParamsPageState extends State<DefaultChatParamsPage> {
     super.dispose();
   }
 
+  /// 将界面状态与当前 SettingsProvider 值同步。
   void _syncFromSettings(SettingsProvider settings) {
     _providerId = settings.defaultProviderId;
     _model = settings.defaultModel;
@@ -53,6 +55,7 @@ class _DefaultChatParamsPageState extends State<DefaultChatParamsPage> {
     _maxToolCallsController.text = settings.defaultMaxToolCalls.toString();
   }
 
+  /// 打开模型选择弹窗，选择后立即持久化默认模型。
   Future<void> _showModelSelector() async {
     await showModalBottomSheet(
       context: context,
@@ -90,6 +93,7 @@ class _DefaultChatParamsPageState extends State<DefaultChatParamsPage> {
     );
   }
 
+  /// 保存全部默认参数到本地设置。
   Future<void> _save() async {
     final maxTokens = int.tryParse(_maxTokensController.text.trim());
     final maxTurns = int.tryParse(_maxTurnsController.text.trim());
@@ -126,6 +130,7 @@ class _DefaultChatParamsPageState extends State<DefaultChatParamsPage> {
     Navigator.of(context).pop();
   }
 
+  /// 二次确认后恢复默认值。
   Future<void> _restoreDefaults() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -276,8 +281,8 @@ class _DefaultChatParamsPageState extends State<DefaultChatParamsPage> {
           ),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('默认启用工具调用'),
-            subtitle: const Text('仅当当前模型支持工具能力时生效'),
+            title: const Text('启用工具调用'),
+            subtitle: const Text('开启后大模型可以调用工具'),
             value: _toolCallingEnabled,
             onChanged: (value) {
               setState(() {
@@ -293,7 +298,7 @@ class _DefaultChatParamsPageState extends State<DefaultChatParamsPage> {
               border: OutlineInputBorder(),
               isDense: true,
               labelText: '默认工具调用上限',
-              helperText: '单次请求最多允许工具调用次数，默认 5',
+              helperText: '单次请求最多允许工具调用次数，默认 ${SettingsProvider.defaultMaxToolCallsValue}',
             ),
           ),
         ],

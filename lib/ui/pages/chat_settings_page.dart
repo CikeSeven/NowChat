@@ -4,6 +4,7 @@ import 'package:now_chat/providers/chat_provider.dart';
 import 'package:now_chat/providers/settings_provider.dart';
 import 'package:provider/provider.dart';
 
+/// 会话级参数设置页：仅作用于当前会话。
 class ChatSettingsPage extends StatefulWidget {
   final int chatId;
 
@@ -60,24 +61,28 @@ class _ChatSettingsPageState extends State<ChatSettingsPage> {
     super.dispose();
   }
 
+  /// 解析并校验 max_tokens 输入（仅在启用时生效）。
   int? get _maxTokens {
     final value = int.tryParse(_maxTokensController.text.trim());
     if (value == null || value <= 0) return null;
     return value;
   }
 
+  /// 解析并校验最大消息轮次输入。
   int? get _maxConversationTurns {
     final value = int.tryParse(_maxConversationTurnsController.text.trim());
     if (value == null || value <= 0) return null;
     return value;
   }
 
+  /// 当前表单是否满足保存条件。
   bool get _canSave =>
       _chat != null &&
       (!_useMaxTokens || _maxTokens != null) &&
       _maxConversationTurns != null &&
       _titleController.text.trim().isNotEmpty;
 
+  /// 校验并保存当前会话设置。
   Future<void> _save() async {
     final chat = _chat;
     final maxTokens = _useMaxTokens ? _maxTokens : 0;

@@ -21,8 +21,13 @@ const int _maxToolOutputChars = 12000;
 
 /// OpenAI tool_calls 的标准化结构。
 class AIToolCall {
+  /// 工具调用唯一标识（由模型生成）。
   final String id;
+
+  /// 工具名称。
   final String name;
+
+  /// 原始 JSON 参数字符串。
   final String rawArguments;
 
   const AIToolCall({
@@ -34,10 +39,19 @@ class AIToolCall {
 
 /// 单次工具执行结果。
 class AIToolExecutionResult {
+  /// 执行状态：`success` / `error` / `skipped`。
   final String status;
+
+  /// 面向 UI 展示的简要结果。
   final String summary;
+
+  /// 回填给模型的工具结果文本（JSON 字符串）。
   final String toolMessageContent;
+
+  /// 执行耗时（毫秒）。
   final int? durationMs;
+
+  /// 可选错误信息。
   final String? error;
 
   const AIToolExecutionResult({
@@ -158,6 +172,7 @@ class AIToolRuntime {
     );
   }
 
+  /// 执行网页抓取工具。
   static Future<AIToolExecutionResult> _execWebFetch(String rawArgs) async {
     final args = _safeParseJsonObject(rawArgs);
     final url = (args['url'] ?? '').toString().trim();
@@ -218,6 +233,7 @@ class AIToolRuntime {
     );
   }
 
+  /// 执行 Python 代码工具。
   static Future<AIToolExecutionResult> _execPython(String rawArgs) async {
     final args = _safeParseJsonObject(rawArgs);
     final code = (args['code'] ?? '').toString();
@@ -269,6 +285,7 @@ class AIToolRuntime {
     );
   }
 
+  /// 解析工具参数，异常时回退为空对象，避免抛错中断主流程。
   static Map<String, dynamic> _safeParseJsonObject(String raw) {
     final text = raw.trim();
     if (text.isEmpty) return <String, dynamic>{};
@@ -286,6 +303,7 @@ class AIToolRuntime {
     return <String, dynamic>{};
   }
 
+  /// 将动态输入转成指定范围内整数，用于限制工具参数上限。
   static int _toBoundedInt(
     dynamic raw, {
     required int fallback,
@@ -301,11 +319,13 @@ class AIToolRuntime {
     return value;
   }
 
+  /// 裁剪过长输出，防止工具结果撑爆请求体与消息渲染。
   static String _truncateText(String text, int maxChars) {
     if (text.length <= maxChars) return text;
     return '${text.substring(0, maxChars)}\n...(已截断)';
   }
 
+  /// 从已安装插件记录中解析 Python 额外搜索路径（含原生库目录）。
   static Future<List<String>> _resolveInstalledPythonPaths() async {
     if (!Platform.isAndroid) return const <String>[];
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// 全局设置状态：主题、默认会话参数与工具调用默认配置。
 class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
   static const double defaultTemperatureValue = 0.7;
   static const double defaultTopPValue = 1.0;
@@ -8,7 +9,7 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
   static const int defaultMaxConversationTurnsValue = 50;
   static const bool defaultStreamingValue = true;
   static const bool defaultToolCallingEnabledValue = true;
-  static const int defaultMaxToolCallsValue = 5;
+  static const int defaultMaxToolCallsValue = 10;
 
   static const _themeKey = 'theme_mode';
   static const _defaultProviderIdKey = 'default_provider_id';
@@ -58,6 +59,7 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
     _loadSettings();
   }
 
+  /// 从本地持久化存储恢复设置。
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     final index = prefs.getInt(_themeKey);
@@ -86,6 +88,7 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
+  /// 更新主题模式并持久化。
   Future<void> setThemeMode(ThemeMode mode) async {
     _themeMode = mode;
     notifyListeners();
@@ -94,6 +97,7 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
     await prefs.setInt(_themeKey, mode.index);
   }
 
+  /// 设置默认模型（模型与提供方必须成对保存）。
   Future<void> setDefaultModel({
     required String? providerId,
     required String? model,
@@ -122,6 +126,7 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
     await prefs.setString(_defaultModelKey, nextModel);
   }
 
+  /// 设置默认 temperature。
   Future<void> setDefaultTemperature(double value) async {
     _defaultTemperature = value;
     notifyListeners();
@@ -129,6 +134,7 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
     await prefs.setDouble(_defaultTemperatureKey, value);
   }
 
+  /// 设置默认 top_p。
   Future<void> setDefaultTopP(double value) async {
     _defaultTopP = value;
     notifyListeners();
@@ -136,6 +142,7 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
     await prefs.setDouble(_defaultTopPKey, value);
   }
 
+  /// 设置默认 max tokens。
   Future<void> setDefaultMaxTokens(int value) async {
     if (value <= 0) return;
     _defaultMaxTokens = value;
@@ -144,6 +151,7 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
     await prefs.setInt(_defaultMaxTokensKey, value);
   }
 
+  /// 设置默认消息轮次上限。
   Future<void> setDefaultMaxConversationTurns(int value) async {
     if (value <= 0) return;
     _defaultMaxConversationTurns = value;
@@ -152,6 +160,7 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
     await prefs.setInt(_defaultMaxConversationTurnsKey, value);
   }
 
+  /// 设置默认是否启用流式输出。
   Future<void> setDefaultStreaming(bool value) async {
     _defaultStreaming = value;
     notifyListeners();
@@ -159,6 +168,7 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
     await prefs.setBool(_defaultStreamingKey, value);
   }
 
+  /// 设置默认是否开启工具调用。
   Future<void> setDefaultToolCallingEnabled(bool value) async {
     _defaultToolCallingEnabled = value;
     notifyListeners();
@@ -166,6 +176,7 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
     await prefs.setBool(_defaultToolCallingEnabledKey, value);
   }
 
+  /// 设置默认工具调用次数上限。
   Future<void> setDefaultMaxToolCalls(int value) async {
     if (value <= 0) return;
     _defaultMaxToolCalls = value;
@@ -174,6 +185,7 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
     await prefs.setInt(_defaultMaxToolCallsKey, value);
   }
 
+  /// 恢复所有默认对话参数并清理本地覆盖项。
   Future<void> restoreDefaultChatParams() async {
     _defaultProviderId = null;
     _defaultModel = null;
@@ -198,6 +210,7 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
     await prefs.remove(_defaultMaxToolCallsKey);
   }
 
+  /// 主题快捷切换（浅色/深色）。
   void toggleTheme() {
     if (_themeMode == ThemeMode.dark) {
       setThemeMode(ThemeMode.light);

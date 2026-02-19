@@ -6,6 +6,7 @@ import 'package:now_chat/ui/widgets/assistant_message_widget.dart';
 import 'package:now_chat/ui/widgets/system_prompt_message_item.dart';
 import 'package:now_chat/ui/widgets/user_message_widget.dart';
 
+/// 聊天消息列表面板：统一管理系统提示词、历史加载、消息项渲染与底部按钮。
 class ChatMessageListPanel extends StatelessWidget {
   final ChatSession? chat;
   final ScrollController scrollController;

@@ -6,6 +6,7 @@ import 'package:now_chat/core/models/tool_execution_log.dart';
 import 'package:now_chat/ui/widgets/markdown_message_widget.dart';
 import 'message_bottom_sheet_menu.dart';
 
+/// 助手消息气泡组件，负责渲染正文、思考区、操作按钮与工具调用日志。
 class AssistantMessageWidget extends StatefulWidget {
   static const int streamingSnapshotLineThreshold = 1;
   static const int streamingSnapshotCharThreshold = 120;
@@ -39,6 +40,7 @@ class AssistantMessageWidget extends StatefulWidget {
   State<AssistantMessageWidget> createState() => _AssistantMessageWidgetState();
 }
 
+/// 助手消息内部状态：处理思考区展开与流式渲染节流快照。
 class _AssistantMessageWidgetState extends State<AssistantMessageWidget>
     with SingleTickerProviderStateMixin {
   bool _expanded = false;
@@ -106,11 +108,13 @@ class _AssistantMessageWidgetState extends State<AssistantMessageWidget>
     }
   }
 
+  /// 统计文本行数，用于判断流式阶段是否达到刷新阈值。
   int _lineCount(String text) {
     if (text.isEmpty) return 0;
     return '\n'.allMatches(text).length + 1;
   }
 
+  /// 在流式输出中维护 Markdown 快照，降低高频完整重渲染带来的卡顿。
   void _setMarkdownSnapshot(String content, {bool force = false}) {
     if (!force && content == _markdownSnapshot) {
       return;
@@ -131,6 +135,7 @@ class _AssistantMessageWidgetState extends State<AssistantMessageWidget>
     _lastSnapshotAt = DateTime.now();
   }
 
+  /// 展开/收起思考内容区域。
   void _toggleExpand() {
     setState(() {
       _expanded = !_expanded;
@@ -338,6 +343,7 @@ class _AssistantMessageWidgetState extends State<AssistantMessageWidget>
     );
   }
 
+  /// 消息正文渲染：流式阶段采用“快照 Markdown + 增量纯文本”组合。
   Widget _buildMessageBody(BuildContext context, Message message) {
     final color = Theme.of(context).colorScheme;
     if (widget.isStreamingMessage) {
@@ -365,6 +371,7 @@ class _AssistantMessageWidgetState extends State<AssistantMessageWidget>
     return MarkdownMessageWidget(data: message.content);
   }
 
+  /// 渲染工具调用日志摘要，帮助用户快速定位模型的工具执行过程。
   Widget _buildToolLogs(BuildContext context, List<ToolExecutionLog> logs) {
     final colors = Theme.of(context).colorScheme;
     return Container(
