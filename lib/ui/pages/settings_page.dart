@@ -121,9 +121,19 @@ class SettingsPage extends StatelessWidget {
           ),
           const Divider(),
           ListTile(
+            leading: const Icon(Icons.folder_copy_outlined),
+            title: const Text('应用数据管理'),
+            subtitle: const Text('导入/导出会话、工具和 API 数据（不含插件）'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () {
+              Navigator.pushNamed(context, AppRoutes.appDataManagement);
+            },
+          ),
+          const Divider(),
+          ListTile(
             leading: const Icon(Icons.extension_rounded),
             title: const Text('插件中心'),
-            subtitle: const Text('按需下载安装 Python 执行插件'),
+            subtitle: const Text('安装、启用与管理插件及工具'),
             trailing: const Icon(Icons.chevron_right_rounded),
             onTap: () {
               Navigator.pushNamed(context, AppRoutes.plugin);

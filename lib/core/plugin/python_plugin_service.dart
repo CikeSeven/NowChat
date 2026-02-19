@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
@@ -8,6 +9,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/services.dart';
 import 'package:now_chat/core/models/python_execution_result.dart';
 import 'package:now_chat/core/models/python_plugin_manifest.dart';
+import 'package:now_chat/util/app_logger.dart';
 
 /// 插件包 SHA256 校验失败时抛出的异常，包含期望值与实际值。
 class PythonPackageChecksumException implements Exception {
@@ -33,6 +35,13 @@ class PythonPluginService {
   static const MethodChannel _pythonBridge = MethodChannel(
     'nowchat/python_bridge',
   );
+  static const EventChannel _pythonLogStream = EventChannel(
+    'nowchat/python_bridge/log_stream',
+  );
+  static final Map<String, void Function(_PythonLogEvent event)> _runLogListeners =
+      <String, void Function(_PythonLogEvent event)>{};
+  static StreamSubscription<dynamic>? _pythonLogSubscription;
+  static final Random _random = Random();
 
   PythonPluginService({Dio? dio}) : _dio = dio ?? Dio();
 
@@ -148,15 +157,32 @@ class PythonPluginService {
     required String code,
     required Duration timeout,
     List<String>? extraSysPaths,
+    String? logContext,
     Map<String, String>? environment,
     String? workingDirectory,
   }) async {
     if (Platform.isAndroid) {
-      return _executeWithChaquopy(
-        code: code,
-        timeout: timeout,
-        extraSysPaths: extraSysPaths ?? const <String>[],
-      );
+      final runId = _buildRunId();
+      await _ensurePythonLogStreamListening();
+      _runLogListeners[runId] = (
+        _PythonLogEvent event,
+      ) {
+        _emitRealtimePythonLog(
+          event: event,
+          logContext: logContext,
+        );
+      };
+      try {
+        return _executeWithChaquopy(
+          code: code,
+          timeout: timeout,
+          extraSysPaths: extraSysPaths ?? const <String>[],
+          runId: runId,
+          workingDirectory: workingDirectory,
+        );
+      } finally {
+        _runLogListeners.remove(runId);
+      }
     }
 
     if (pythonBinaryPath == null || pythonBinaryPath.trim().isEmpty) {
@@ -216,6 +242,8 @@ class PythonPluginService {
     required String code,
     required Duration timeout,
     required List<String> extraSysPaths,
+    required String runId,
+    required String? workingDirectory,
   }) async {
     final normalizedPaths =
         extraSysPaths
@@ -228,6 +256,9 @@ class PythonPluginService {
         'code': code,
         'timeoutMs': timeout.inMilliseconds,
         'extraSysPaths': normalizedPaths,
+        'runId': runId,
+        // Android 侧通过该目录设置 Python cwd，避免脚本写入只读根目录。
+        'workingDirectory': workingDirectory?.trim(),
       },
     );
 
@@ -289,5 +320,103 @@ class PythonPluginService {
     } catch (_) {
       // chmod 失败时不阻断安装流程，执行阶段会给出明确错误。
     }
+  }
+
+  /// 启动全局日志流监听，将原生事件按 runId 分发给对应执行会话。
+  static Future<void> _ensurePythonLogStreamListening() async {
+    if (_pythonLogSubscription != null) return;
+    _pythonLogSubscription = _pythonLogStream.receiveBroadcastStream().listen(
+      (dynamic raw) {
+        final event = _PythonLogEvent.tryParse(raw);
+        if (event == null) return;
+        final listener = _runLogListeners[event.runId];
+        if (listener == null) return;
+        listener(event);
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        AppLogger.e('Python 实时日志通道异常', error, stackTrace);
+      },
+    );
+  }
+
+  /// 将原生日志转换为 AppLogger，便于 Flutter 侧统一检索与排查。
+  static void _emitRealtimePythonLog({
+    required _PythonLogEvent event,
+    String? logContext,
+  }) {
+    final line = event.line.trimRight();
+    if (line.isEmpty) return;
+    final stream = event.stream.toLowerCase();
+    final context = (logContext ?? '').trim();
+    final prefix =
+        context.isEmpty
+            ? '[PyRT][${event.runId}][$stream]'
+            : '[PyRT][$context][${event.runId}][$stream]';
+    final chunks = _chunkForLog(line, 420);
+    for (var i = 0; i < chunks.length; i += 1) {
+      final chunk = chunks[i];
+      final suffix = chunks.length > 1 ? ' (${i + 1}/${chunks.length})' : '';
+      final message = '$prefix$suffix $chunk';
+      if (stream == 'stderr') {
+        final lower = chunk.toLowerCase();
+        final isErrorLevel =
+            lower.contains('traceback') ||
+            lower.contains('exception') ||
+            lower.contains('error');
+        if (isErrorLevel) {
+          AppLogger.e(message);
+        } else {
+          AppLogger.w(message);
+        }
+      } else {
+        AppLogger.i(message);
+      }
+    }
+  }
+
+  /// 生成一次执行会话 ID，用于关联实时日志与请求结果。
+  static String _buildRunId() {
+    final now = DateTime.now().microsecondsSinceEpoch;
+    final rand = _random.nextInt(1 << 20).toRadixString(16);
+    return 'py_$now$rand';
+  }
+
+  /// 分片长日志，避免单条日志过长导致展示与性能问题。
+  static List<String> _chunkForLog(String message, int chunkSize) {
+    if (message.length <= chunkSize) return <String>[message];
+    final output = <String>[];
+    for (var start = 0; start < message.length; start += chunkSize) {
+      final end = min(start + chunkSize, message.length);
+      output.add(message.substring(start, end));
+    }
+    return output;
+  }
+}
+
+/// Python 实时日志事件。
+class _PythonLogEvent {
+  final String runId;
+  final String stream;
+  final String line;
+
+  const _PythonLogEvent({
+    required this.runId,
+    required this.stream,
+    required this.line,
+  });
+
+  /// 解析 EventChannel 原生日志事件。
+  static _PythonLogEvent? tryParse(dynamic raw) {
+    if (raw is! Map) return null;
+    final map = Map<String, dynamic>.from(raw);
+    final runId = (map['runId'] ?? '').toString().trim();
+    final stream = (map['stream'] ?? '').toString().trim();
+    final line = (map['line'] ?? '').toString();
+    if (runId.isEmpty || stream.isEmpty) return null;
+    return _PythonLogEvent(
+      runId: runId,
+      stream: stream,
+      line: line,
+    );
   }
 }

@@ -1,5 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:now_chat/ui/pages/about_page.dart';
+import 'package:now_chat/ui/pages/app_data_management_page.dart';
 import 'package:now_chat/ui/pages/agent_detail_page.dart';
 import 'package:now_chat/ui/pages/agent_form_page.dart';
 import 'package:now_chat/ui/pages/chat_settings_page.dart';
@@ -7,6 +8,7 @@ import 'package:now_chat/ui/pages/default_chat_params_page.dart';
 import 'package:now_chat/ui/pages/edit_message_page.dart';
 import 'package:now_chat/ui/pages/plugin_page.dart';
 import 'package:now_chat/ui/pages/provider_form_page.dart';
+import 'package:now_chat/ui/pages/startup_loading_page.dart';
 
 import '../core/models/message.dart';
 import '../ui/pages/chat_detail_page.dart';
@@ -14,10 +16,12 @@ import '../ui/pages/home_page.dart';
 
 /// AppRoutes 类型定义。
 class AppRoutes {
+  static const startup = '/startup';
   static const home = '/';
   static const chatDetail = '/chat/detail';
   static const chatSettings = '/chat/settings';
   static const defaultChatParams = '/settings/default_chat_params';
+  static const appDataManagement = '/settings/app_data_management';
   static const about = '/settings/about';
   static const plugin = '/settings/plugin';
   static const agentForm = '/agent/form';
@@ -27,6 +31,9 @@ class AppRoutes {
 
   static Route<dynamic> generateRoute(RouteSettings settings) {
     switch (settings.name) {
+      case startup:
+        return MaterialPageRoute(builder: (_) => const StartupLoadingPage());
+
       case home:
         return MaterialPageRoute(builder: (_) => const HomePage());
 
@@ -56,6 +63,11 @@ class AppRoutes {
       case defaultChatParams:
         return _buildSlideRoute(
           builder: (_) => const DefaultChatParamsPage(),
+        );
+
+      case appDataManagement:
+        return _buildSlideRoute(
+          builder: (_) => const AppDataManagementPage(),
         );
 
       case about:

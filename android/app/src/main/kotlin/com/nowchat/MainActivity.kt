@@ -1,24 +1,52 @@
 package com.nowchat
 
+import android.content.ContentValues
+import android.os.Build
 import android.util.Log
+import android.provider.MediaStore
 import com.chaquo.python.PyObject
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.embedding.android.FlutterActivity
+import android.os.Handler
+import android.os.Looper
 import java.io.File
 import java.util.Locale
+import java.util.UUID
 
 class MainActivity : FlutterActivity() {
     private val channelName = "nowchat/python_bridge"
+    private val logChannelName = "nowchat/python_bridge/log_stream"
+    private val mediaChannelName = "nowchat/media_bridge"
     private val methodExecute = "executePython"
     private val methodIsReady = "isPythonReady"
+    private val methodSaveImageToGallery = "saveImageToGallery"
     private val loadedNativeLibs = mutableSetOf<String>()
+    private val mainHandler = Handler(Looper.getMainLooper())
+    @Volatile
+    private var logEventSink: EventChannel.EventSink? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        EventChannel(flutterEngine.dartExecutor.binaryMessenger, logChannelName)
+            .setStreamHandler(
+                object : EventChannel.StreamHandler {
+                    override fun onListen(
+                        arguments: Any?,
+                        events: EventChannel.EventSink?,
+                    ) {
+                        logEventSink = events
+                    }
+
+                    override fun onCancel(arguments: Any?) {
+                        logEventSink = null
+                    }
+                },
+            )
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -32,11 +60,22 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, mediaChannelName)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    methodSaveImageToGallery -> saveImageToGallery(call, result)
+                    else -> result.notImplemented()
+                }
+            }
     }
 
     private fun executePython(call: MethodCall, result: MethodChannel.Result) {
         val code = call.argument<String>("code")?.trim().orEmpty()
         val timeoutMs = call.argument<Int>("timeoutMs") ?: 20_000
+        val workingDirectory = call.argument<String>("workingDirectory")?.trim().orEmpty()
+        val runId = call.argument<String>("runId")?.trim().orEmpty().ifEmpty {
+            UUID.randomUUID().toString()
+        }
         val rawPaths = call.argument<List<String>>("extraSysPaths") ?: emptyList()
         val extraSysPaths = rawPaths.map { it.trim() }.filter { it.isNotEmpty() }
 
@@ -51,7 +90,16 @@ class MainActivity : FlutterActivity() {
                 ensurePythonStarted()
                 val py = Python.getInstance()
                 val module = py.getModule("runner")
-                val pyResult = module.callAttr("execute_code", code, timeoutMs, extraSysPaths)
+                val emitter = PythonLogEmitter(runId)
+                val pyResult = module.callAttr(
+                    "execute_code",
+                    code,
+                    timeoutMs,
+                    extraSysPaths,
+                    workingDirectory,
+                    runId,
+                    emitter,
+                )
                 val map = pyResultToMap(pyResult)
                 runOnUiThread { result.success(map) }
             }.onFailure { error ->
@@ -64,6 +112,112 @@ class MainActivity : FlutterActivity() {
                 }
             }
         }.start()
+    }
+
+    private fun saveImageToGallery(call: MethodCall, result: MethodChannel.Result) {
+        val bytes = call.argument<ByteArray>("bytes")
+        val mimeType = call.argument<String>("mimeType")?.trim().orEmpty().ifEmpty { "image/png" }
+        val rawFileName = call.argument<String>("fileName")?.trim().orEmpty()
+        val fallbackExt = when (mimeType.lowercase(Locale.ROOT)) {
+            "image/jpeg" -> "jpg"
+            "image/webp" -> "webp"
+            else -> "png"
+        }
+        val fileName = rawFileName.ifEmpty {
+            "nowchat_${System.currentTimeMillis()}.$fallbackExt"
+        }
+
+        if (bytes == null || bytes.isEmpty()) {
+            result.error("invalid_args", "图片字节为空", null)
+            return
+        }
+
+        Thread {
+            runCatching {
+                val resolver = applicationContext.contentResolver
+                val collection =
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+                    } else {
+                        MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+                    }
+                val values =
+                    ContentValues().apply {
+                        put(MediaStore.Images.Media.DISPLAY_NAME, fileName)
+                        put(MediaStore.Images.Media.MIME_TYPE, mimeType)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/NowChat")
+                            put(MediaStore.Images.Media.IS_PENDING, 1)
+                        }
+                    }
+                val itemUri = resolver.insert(collection, values)
+                    ?: throw IllegalStateException("创建相册媒体记录失败")
+                resolver.openOutputStream(itemUri)?.use { output ->
+                    output.write(bytes)
+                    output.flush()
+                } ?: throw IllegalStateException("打开相册输出流失败")
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    val completed = ContentValues().apply {
+                        put(MediaStore.Images.Media.IS_PENDING, 0)
+                    }
+                    resolver.update(itemUri, completed, null, null)
+                }
+                itemUri.toString()
+            }.onSuccess { uri ->
+                runOnUiThread {
+                    result.success(
+                        mapOf(
+                            "ok" to true,
+                            "uri" to uri,
+                        ),
+                    )
+                }
+            }.onFailure { error ->
+                runOnUiThread {
+                    result.error(
+                        "save_image_failed",
+                        error.message ?: "保存到相册失败",
+                        null,
+                    )
+                }
+            }
+        }.start()
+    }
+
+    private inner class PythonLogEmitter(
+        private val runId: String,
+    ) {
+        fun emit(stream: String, text: String) {
+            emitPythonLog(runId = runId, stream = stream, text = text)
+        }
+    }
+
+    private fun emitPythonLog(
+        runId: String,
+        stream: String,
+        text: String,
+    ) {
+        if (text.isBlank()) return
+        val normalizedStream = stream.trim().lowercase(Locale.ROOT)
+        val trimmed = text.trimEnd()
+        val tag = "NowChatPython"
+        val message = "[PyRT][$runId][$normalizedStream] $trimmed"
+        if (normalizedStream == "stderr") {
+            Log.w(tag, message)
+        } else {
+            Log.i(tag, message)
+        }
+
+        val sink = logEventSink ?: return
+        val payload = mapOf(
+            "runId" to runId,
+            "stream" to normalizedStream,
+            "line" to trimmed,
+            "timestampMs" to System.currentTimeMillis(),
+        )
+        mainHandler.post {
+            runCatching { sink.success(payload) }
+        }
     }
 
     private fun ensurePythonStarted() {
@@ -102,7 +256,7 @@ class MainActivity : FlutterActivity() {
                 }
                 continue
             }
-            base.walkTopDown().forEach { file ->
+            for (file in base.walkTopDown()) {
                 if (file.isFile && file.name.contains(".so")) {
                     result.add(file.absolutePath)
                 }

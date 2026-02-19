@@ -1,97 +1,373 @@
 import 'package:flutter/material.dart';
-import 'package:now_chat/providers/python_plugin_provider.dart';
-import 'package:now_chat/ui/pages/python_plugin_detail_page.dart';
+import 'package:now_chat/core/models/plugin_manifest_v2.dart';
+import 'package:now_chat/providers/plugin_provider.dart';
+import 'package:now_chat/ui/pages/plugin_detail_page.dart';
+import 'package:now_chat/ui/pages/plugin_readme_page.dart';
 import 'package:provider/provider.dart';
 
-/// 插件中心首页：当前仅提供 Python 插件入口。
-class PluginPage extends StatelessWidget {
+/// 插件中心页：支持“已安装 / 插件市场”切换与关键字搜索。
+class PluginPage extends StatefulWidget {
   const PluginPage({super.key});
 
-  Color _stateColor(BuildContext context, PythonPluginInstallState state) {
+  @override
+  State<PluginPage> createState() => _PluginPageState();
+}
+
+class _PluginPageState extends State<PluginPage> {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchKeyword = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  /// 根据插件安装状态返回颜色标识。
+  Color _stateColor(BuildContext context, PluginInstallState state) {
     final color = Theme.of(context).colorScheme;
     switch (state) {
-      case PythonPluginInstallState.notInstalled:
+      case PluginInstallState.notInstalled:
         return color.outline;
-      case PythonPluginInstallState.downloading:
-      case PythonPluginInstallState.installing:
+      case PluginInstallState.installing:
         return color.primary;
-      case PythonPluginInstallState.ready:
+      case PluginInstallState.ready:
         return Colors.green;
-      case PythonPluginInstallState.broken:
+      case PluginInstallState.broken:
         return color.error;
     }
   }
 
-  String _stateText(PythonPluginInstallState state) {
+  /// 根据插件安装状态返回文案。
+  String _stateText(PluginInstallState state) {
     switch (state) {
-      case PythonPluginInstallState.notInstalled:
-        return '未就绪';
-      case PythonPluginInstallState.downloading:
-        return '下载中';
-      case PythonPluginInstallState.installing:
+      case PluginInstallState.notInstalled:
+        return '未安装';
+      case PluginInstallState.installing:
         return '安装中';
-      case PythonPluginInstallState.ready:
+      case PluginInstallState.ready:
         return '已就绪';
-      case PythonPluginInstallState.broken:
+      case PluginInstallState.broken:
         return '异常';
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final provider = context.watch<PythonPluginProvider>();
-    final color = Theme.of(context).colorScheme;
+  /// 按“名称 + 描述”进行不区分大小写的搜索过滤。
+  List<PluginDefinition> _filterPlugins(List<PluginDefinition> source) {
+    final keyword = _searchKeyword.trim().toLowerCase();
+    if (keyword.isEmpty) return source;
+    return source.where((plugin) {
+      final name = plugin.name.toLowerCase();
+      final description = plugin.description.toLowerCase();
+      return name.contains(keyword) || description.contains(keyword);
+    }).toList();
+  }
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('插件中心')),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-        children: [
-          Card(
-            margin: EdgeInsets.zero,
-            child: ListTile(
-              contentPadding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
-              leading: Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: color.primary.withAlpha(30),
-                  borderRadius: BorderRadius.circular(10),
+  /// 安装前置缺失时弹窗提示，并展示当前插件声明的前置插件列表。
+  Future<void> _showRequiredPluginsDialog({
+    required BuildContext context,
+    required PluginProvider provider,
+    required PluginDefinition plugin,
+  }) async {
+    final requiredPluginIds =
+        plugin.requiredPluginIds
+            .where((item) => item.trim().isNotEmpty && item != plugin.id)
+            .toList();
+    if (requiredPluginIds.isEmpty) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        final color = Theme.of(dialogContext).colorScheme;
+        return AlertDialog(
+          title: const Text('请先安装前置插件'),
+          content: SizedBox(
+            width: 360,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('安装“${plugin.name}”前，需要先安装以下插件：'),
+                const SizedBox(height: 10),
+                ...requiredPluginIds.map((requiredId) {
+                  final installed = provider.isInstalled(requiredId);
+                  final label = provider.pluginDisplayLabel(requiredId);
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          installed
+                              ? Icons.check_circle_rounded
+                              : Icons.error_outline_rounded,
+                          size: 16,
+                          color: installed ? Colors.green : color.error,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '$label  ${installed ? "(已安装)" : "(未安装)"}',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              color:
+                                  installed
+                                      ? color.onSurface
+                                      : color.error,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+                const SizedBox(height: 4),
+                Text(
+                  '请先安装未安装项，再安装当前插件。',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: color.onSurfaceVariant,
+                  ),
                 ),
-                child: Icon(
-                  Icons.code_rounded,
-                  color: color.primary,
-                  size: 20,
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('知道了'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// 构建单个插件卡片。
+  Widget _buildPluginCard(
+    BuildContext context,
+    PluginProvider provider,
+    PluginDefinition plugin,
+  ) {
+    final color = Theme.of(context).colorScheme;
+    final state = provider.stateForPlugin(plugin.id);
+    final installed = provider.isInstalled(plugin.id);
+    final enabled = provider.isPluginEnabled(plugin.id);
+    final statusText = installed ? (enabled ? '运行中' : '已暂停') : '未安装';
+    final statusColor =
+        installed
+            ? (enabled ? Colors.green : color.error)
+            : color.onSurfaceVariant;
+
+    return Card(
+      margin: EdgeInsets.zero,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap:
+            installed
+                ? () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => PluginDetailPage(pluginId: plugin.id),
+                    ),
+                  );
+                }
+                : null,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      plugin.name,
+                      style: const TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      plugin.description.isEmpty
+                          ? '作者：${plugin.author} · v${plugin.version}'
+                          : plugin.description,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: color.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Text(
+                          _stateText(state),
+                          style: TextStyle(
+                            color: _stateColor(context, state),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          statusText,
+                          style: TextStyle(
+                            color: statusColor,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
-              title: const Text(
-                'Python 插件',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-              ),
-              subtitle: Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  '管理 Python 包并执行代码',
-                  style: TextStyle(fontSize: 12.5, color: color.onSurfaceVariant),
-                ),
-              ),
-              trailing: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.end,
+              const SizedBox(width: 6),
+              // 两个横向操作按钮：启用/暂停(未安装时为下载)、README。
+              Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    _stateText(provider.installState),
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      color: _stateColor(context, provider.installState),
-                      fontWeight: FontWeight.w700,
+                  IconButton(
+                    tooltip: installed ? (enabled ? '暂停插件' : '启用插件') : '安装插件',
+                    onPressed:
+                        provider.isBusy
+                            ? null
+                            : () async {
+                              if (!installed) {
+                                // 安装前先显式检查前置插件，缺失时给出可读弹窗。
+                                final missingRequiredPluginIds =
+                                    provider.missingRequiredPluginIdsFor(plugin.id);
+                                if (missingRequiredPluginIds.isNotEmpty) {
+                                  await _showRequiredPluginsDialog(
+                                    context: context,
+                                    provider: provider,
+                                    plugin: plugin,
+                                  );
+                                  return;
+                                }
+                                await provider.installPlugin(plugin.id);
+                                return;
+                              }
+                              await provider.togglePluginEnabled(plugin.id, !enabled);
+                            },
+                    icon: Icon(
+                      !installed
+                          ? Icons.download_rounded
+                          : enabled
+                          ? Icons.pause_circle_outline
+                          : Icons.play_circle_outline,
                     ),
                   ),
-                  if (provider.isBusy)
-                    SizedBox(
-                      width: 64,
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 4),
+                  IconButton(
+                    tooltip: '查看 README',
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder:
+                              (_) => PluginReadmePage(
+                                pluginId: plugin.id,
+                              ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.article_outlined),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 构建插件列表区域。
+  Widget _buildPluginList(
+    BuildContext context,
+    PluginProvider provider,
+    List<PluginDefinition> list,
+    String emptyText,
+  ) {
+    final color = Theme.of(context).colorScheme;
+    if (list.isEmpty) {
+      return Center(
+        child: Text(
+          emptyText,
+          style: TextStyle(
+            color: color.onSurfaceVariant,
+            fontSize: 13,
+          ),
+        ),
+      );
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
+      itemCount: list.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      itemBuilder: (context, index) {
+        final plugin = list[index];
+        return _buildPluginCard(context, provider, plugin);
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<PluginProvider>();
+    final color = Theme.of(context).colorScheme;
+    final plugins = provider.plugins;
+    final installedPlugins = _filterPlugins(
+      plugins.where((plugin) => provider.isInstalled(plugin.id)).toList(),
+    );
+    final marketPlugins = _filterPlugins(plugins);
+
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('插件中心'),
+          actions: [
+            // 暂时隐藏本地导入入口，避免与远程清单流程混淆。
+            IconButton(
+              tooltip: '刷新清单',
+              onPressed: provider.isBusy ? null : provider.refreshManifest,
+              icon: const Icon(Icons.refresh_rounded),
+            ),
+          ],
+          bottom: const TabBar(
+            tabs: [
+              Tab(text: '已安装插件'),
+              Tab(text: '插件市场'),
+            ],
+          ),
+        ),
+        body:
+            !provider.isInitialized
+                ? const Center(child: CircularProgressIndicator())
+                : Column(
+                  children: [
+                    if ((provider.lastError ?? '').trim().isNotEmpty)
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+                        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                        decoration: BoxDecoration(
+                          color: color.errorContainer.withAlpha(120),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          provider.lastError!,
+                          style: TextStyle(
+                            color: color.onErrorContainer,
+                            fontSize: 12.5,
+                          ),
+                        ),
+                      ),
+                    if (provider.isInstalling)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
                         child: LinearProgressIndicator(
                           value:
                               provider.downloadProgress > 0 &&
@@ -100,19 +376,60 @@ class PluginPage extends StatelessWidget {
                                   : null,
                         ),
                       ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+                      child: TextField(
+                        controller: _searchController,
+                        onChanged: (value) {
+                          setState(() {
+                            _searchKeyword = value;
+                          });
+                        },
+                        decoration: InputDecoration(
+                          hintText: '搜索插件名称或介绍',
+                          prefixIcon: const Icon(Icons.search_rounded),
+                          suffixIcon:
+                              _searchKeyword.trim().isEmpty
+                                  ? null
+                                  : IconButton(
+                                    tooltip: '清空搜索',
+                                    onPressed: () {
+                                      _searchController.clear();
+                                      setState(() {
+                                        _searchKeyword = '';
+                                      });
+                                    },
+                                    icon: const Icon(Icons.close_rounded),
+                                  ),
+                          border: const OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                      ),
                     ),
-                ],
-              ),
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const PythonPluginDetailPage(),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
+                    Expanded(
+                      child: TabBarView(
+                        children: [
+                          _buildPluginList(
+                            context,
+                            provider,
+                            installedPlugins,
+                            _searchKeyword.trim().isEmpty
+                                ? '暂无已安装插件'
+                                : '没有匹配的已安装插件',
+                          ),
+                          _buildPluginList(
+                            context,
+                            provider,
+                            marketPlugins,
+                            _searchKeyword.trim().isEmpty
+                                ? '暂无插件，请先刷新清单或导入本地 zip'
+                                : '没有匹配的插件',
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
       ),
     );
   }

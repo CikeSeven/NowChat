@@ -64,7 +64,8 @@ android {
 
 chaquopy {
     defaultConfig {
-        version = "3.11"
+        // 为兼容 scipy/statsmodels 等 Android 轮子，统一使用 Python 3.10。
+        version = "3.10"
     }
 }
 

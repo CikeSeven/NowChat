@@ -6,6 +6,7 @@ import 'package:logger/web.dart';
 import 'package:now_chat/core/models/ai_provider_config.dart';
 import 'package:now_chat/core/models/tool_execution_log.dart';
 import 'package:now_chat/core/network/api_service.dart';
+import 'package:now_chat/core/plugin/plugin_hook_bus.dart';
 import 'package:now_chat/util/app_logger.dart';
 
 import '../core/models/chat_session.dart';
@@ -74,6 +75,14 @@ class ChatProvider with ChangeNotifier {
 
   ChatProvider(this.isar) {
     _loadFromLocal();
+  }
+
+  /// 强制从本地存储重载会话与提供方数据。
+  ///
+  /// 用于导入备份后立即刷新 UI。
+  Future<void> reloadFromStorage() async {
+    _initialized = false;
+    await _loadFromLocal();
   }
 
   @override

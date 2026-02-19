@@ -1,4 +1,4 @@
-﻿part of '../chat_provider.dart';
+part of '../chat_provider.dart';
 
 /// ChatProviderGeneration 扩展方法集合。
 extension ChatProviderGeneration on ChatProvider {
@@ -129,9 +129,11 @@ extension ChatProviderGeneration on ChatProvider {
             assistantMessage.isarId,
             rawLogs
                 .whereType<Map>()
-                .map((item) => ToolExecutionLog.fromJson(
-                      Map<String, dynamic>.from(item),
-                    ))
+                .map(
+                  (item) => ToolExecutionLog.fromJson(
+                    Map<String, dynamic>.from(item),
+                  ),
+                )
                 .toList(),
           );
         }
@@ -311,9 +313,11 @@ extension ChatProviderGeneration on ChatProvider {
               aiMsg.isarId,
               rawLogs
                   .whereType<Map>()
-                  .map((item) => ToolExecutionLog.fromJson(
-                        Map<String, dynamic>.from(item),
-                      ))
+                  .map(
+                    (item) => ToolExecutionLog.fromJson(
+                      Map<String, dynamic>.from(item),
+                    ),
+                  )
                   .toList(),
             );
           }
@@ -389,6 +393,8 @@ extension ChatProviderGeneration on ChatProvider {
     await _setChatGenerating(chat, true);
     var interrupted = false;
     var usedStreaming = false;
+    var responseStarted = false;
+    Object? terminalError;
     Message? aiMsg;
     try {
       final userMsg = Message(
@@ -397,6 +403,24 @@ extension ChatProviderGeneration on ChatProvider {
         content: userContent,
         imagePaths: attachmentPaths,
         timestamp: DateTime.now(),
+      );
+
+      final beforeHookResults = await PluginHookBus.emit(
+        'chat_before_send',
+        payload: <String, dynamic>{
+          'chatId': chatId,
+          'providerId': chat.providerId,
+          'model': chat.model,
+          'isStreaming': isStreaming,
+          'message': _toHookMessagePayload(userMsg),
+        },
+      );
+      // 允许 Hook 在发送前改写用户消息（例如统一前后缀、脱敏、模板注入）。
+      await _applyHookMessageOverride(
+        message: userMsg,
+        hookResults: beforeHookResults,
+        expectedRole: 'user',
+        persist: false,
       );
 
       await saveMessage(userMsg);
@@ -420,7 +444,6 @@ extension ChatProviderGeneration on ChatProvider {
 
       final effectiveStreaming =
           isStreaming && provider.requestMode.supportsStreaming;
-      var responseStarted = false;
       if (isStreaming && !provider.requestMode.supportsStreaming) {
         AppLogger.w('当前请求方式不支持流式输出，已自动回退为普通请求');
       }
@@ -485,6 +508,7 @@ extension ChatProviderGeneration on ChatProvider {
           }
           interrupted = true;
         } catch (e) {
+          terminalError = e;
           reasoningTimer?.cancel();
           if (_hasMessageOutput(currentAiMsg)) {
             interrupted = true;
@@ -519,15 +543,18 @@ extension ChatProviderGeneration on ChatProvider {
               currentAiMsg.isarId,
               rawLogs
                   .whereType<Map>()
-                  .map((item) => ToolExecutionLog.fromJson(
-                        Map<String, dynamic>.from(item),
-                      ))
+                  .map(
+                    (item) => ToolExecutionLog.fromJson(
+                      Map<String, dynamic>.from(item),
+                    ),
+                  )
                   .toList(),
             );
           }
         } on GenerationAbortedException {
           interrupted = true;
         } catch (e) {
+          terminalError = e;
           currentAiMsg.content = '请求失败: $e';
           await saveMessage(currentAiMsg);
         }
@@ -545,15 +572,168 @@ extension ChatProviderGeneration on ChatProvider {
         _pendingContinuations.remove(chatId);
       }
     } finally {
-      if (usedStreaming &&
-          aiMsg != null &&
-          _isMessageStreaming(aiMsg.isarId)) {
+      if (usedStreaming && aiMsg != null && _isMessageStreaming(aiMsg.isarId)) {
         await endStreamingMessage(aiMsg);
       }
       _abortControllers.remove(chatId);
       await _setChatGenerating(chat, false);
+      final hookResults = await PluginHookBus.emit(
+        'chat_after_send',
+        payload: <String, dynamic>{
+          'chatId': chatId,
+          'providerId': chat.providerId,
+          'model': chat.model,
+          'interrupted': interrupted,
+          'responseStarted': responseStarted,
+          'error': terminalError?.toString(),
+          'message': aiMsg == null ? null : _toHookMessagePayload(aiMsg),
+        },
+      );
+      await _applyHookMessageOverride(
+        message: aiMsg,
+        hookResults: hookResults,
+        expectedRole: 'assistant',
+      );
     }
     _notifyStateChanged();
+  }
+
+  /// 将 Message 转为 Hook payload，供插件读取与改写。
+  Map<String, dynamic> _toHookMessagePayload(Message message) {
+    return <String, dynamic>{
+      'id': message.isarId,
+      'chatId': message.chatId,
+      'role': message.role,
+      'content': message.content,
+      'reasoning': message.reasoning,
+      'reasoningTimeMs': message.reasoningTimeMs,
+      'imagePaths': message.imagePaths,
+      'timestamp': message.timestamp.toIso8601String(),
+    };
+  }
+
+  /// 应用 Hook 返回的 `message` 覆写对象。
+  ///
+  /// 协议约定：
+  /// - Hook 返回结构：`{"message": { ...可覆写字段... }}`。
+  /// - 多个 Hook 同时返回时采用“最后一个有效结果覆盖前者”。
+  Future<void> _applyHookMessageOverride({
+    required Message? message,
+    required List<PluginHookEmitResult> hookResults,
+    required String expectedRole,
+    bool persist = true,
+  }) async {
+    if (message == null) return;
+    final patch = _extractMessagePatchFromHooks(hookResults);
+    if (patch == null) return;
+    final changed = _mergeMessagePatch(
+      message: message,
+      patch: patch,
+      expectedRole: expectedRole,
+    );
+    if (!changed) return;
+    if (persist) {
+      await saveMessage(message);
+    }
+  }
+
+  /// 提取 Hook 结果中的 message 补丁（最后一个有效补丁生效）。
+  Map<String, dynamic>? _extractMessagePatchFromHooks(
+    List<PluginHookEmitResult> hookResults,
+  ) {
+    Map<String, dynamic>? patch;
+    for (final item in hookResults) {
+      if (!item.ok) continue;
+      final raw = item.data?['message'];
+      if (raw is Map<String, dynamic>) {
+        patch = raw;
+        continue;
+      }
+      if (raw is Map) {
+        patch = raw.map((key, value) => MapEntry(key.toString(), value));
+      }
+    }
+    return patch;
+  }
+
+  /// 按白名单字段将 Hook 补丁写回消息对象。
+  bool _mergeMessagePatch({
+    required Message message,
+    required Map<String, dynamic> patch,
+    required String expectedRole,
+  }) {
+    final incomingRole = patch['role']?.toString().trim();
+    if (incomingRole != null &&
+        incomingRole.isNotEmpty &&
+        incomingRole != expectedRole) {
+      AppLogger.w('忽略 Hook 消息覆写：role=$incomingRole, expected=$expectedRole');
+      return false;
+    }
+
+    var changed = false;
+
+    if (patch.containsKey('content')) {
+      final content = (patch['content'] ?? '').toString();
+      if (content != message.content) {
+        message.content = content;
+        changed = true;
+      }
+    }
+
+    if (patch.containsKey('reasoning')) {
+      final raw = patch['reasoning'];
+      final reasoning = raw == null ? null : raw.toString();
+      if (reasoning != message.reasoning) {
+        message.reasoning = reasoning;
+        changed = true;
+      }
+    }
+
+    if (patch.containsKey('reasoningTimeMs')) {
+      final raw = patch['reasoningTimeMs'];
+      final reasoningTimeMs =
+          raw == null
+              ? null
+              : (raw is num ? raw.toInt() : int.tryParse(raw.toString()));
+      if (reasoningTimeMs != message.reasoningTimeMs) {
+        message.reasoningTimeMs = reasoningTimeMs;
+        changed = true;
+      }
+    }
+
+    if (patch.containsKey('imagePaths')) {
+      final raw = patch['imagePaths'];
+      if (raw == null) {
+        if (message.imagePaths != null) {
+          message.imagePaths = null;
+          changed = true;
+        }
+      } else if (raw is List) {
+        final imagePaths =
+            raw
+                .map((item) => item.toString().trim())
+                .where((item) => item.isNotEmpty)
+                .toList();
+        final normalized = imagePaths.isEmpty ? null : imagePaths;
+        if (!_sameStringList(normalized, message.imagePaths)) {
+          message.imagePaths = normalized;
+          changed = true;
+        }
+      }
+    }
+
+    return changed;
+  }
+
+  /// 比较两个字符串列表内容是否一致（含 null 情况）。
+  bool _sameStringList(List<String>? a, List<String>? b) {
+    if (identical(a, b)) return true;
+    if (a == null || b == null) return a == b;
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i += 1) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 
   /// 设置会话生成中状态并写回数据库。

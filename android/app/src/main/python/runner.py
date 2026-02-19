@@ -11,6 +11,52 @@ import traceback
 _LOADED_NATIVE_LIBS = set()
 
 
+class _RealtimeStream(io.TextIOBase):
+    """同时写入内存缓冲并向宿主实时推送日志行。"""
+
+    def __init__(self, stream_name, buffer, emitter):
+        super().__init__()
+        self._stream_name = stream_name
+        self._buffer = buffer
+        self._emitter = emitter
+        self._pending = ""
+
+    def writable(self):
+        return True
+
+    def write(self, data):
+        text = str(data or "")
+        if not text:
+            return 0
+        self._buffer.write(text)
+        if self._emitter is None:
+            return len(text)
+
+        self._pending += text
+        while True:
+            index = self._pending.find("\n")
+            if index < 0:
+                break
+            line = self._pending[:index]
+            self._pending = self._pending[index + 1 :]
+            try:
+                self._emitter.emit(self._stream_name, line)
+            except Exception:
+                # 实时日志失败不影响主执行流程。
+                pass
+        return len(text)
+
+    def flush(self):
+        if not self._pending:
+            return
+        if self._emitter is not None:
+            try:
+                self._emitter.emit(self._stream_name, self._pending)
+            except Exception:
+                pass
+        self._pending = ""
+
+
 def _normalize_sys_paths(extra_sys_paths):
     """兼容 Chaquopy 传入的 java.util.ArrayList / Python list / None。"""
     if extra_sys_paths is None:
@@ -144,7 +190,14 @@ def _preload_native_libs(extra_sys_paths):
                 continue
 
 
-def execute_code(code: str, timeout_ms: int = 20000, extra_sys_paths=None):
+def execute_code(
+    code: str,
+    timeout_ms: int = 20000,
+    extra_sys_paths=None,
+    working_directory: str = "",
+    run_id: str = "",
+    log_emitter=None,
+):
     """执行一段 Python 代码并返回结构化结果。"""
     started_at = time.time()
     stdout_buffer = io.StringIO()
@@ -163,7 +216,17 @@ def execute_code(code: str, timeout_ms: int = 20000, extra_sys_paths=None):
         globals_scope = {"__name__": "__main__", "__builtins__": __builtins__}
         locals_scope = {}
         inserted_paths = []
+        previous_cwd = None
+        realtime_stdout = _RealtimeStream("stdout", stdout_buffer, log_emitter)
+        realtime_stderr = _RealtimeStream("stderr", stderr_buffer, log_emitter)
         try:
+            # 若宿主传入工作目录，则切换到该目录执行，避免默认 cwd 指向只读根目录 `/`。
+            normalized_working_directory = str(working_directory or "").strip()
+            if normalized_working_directory:
+                previous_cwd = os.getcwd()
+                os.makedirs(normalized_working_directory, exist_ok=True)
+                os.chdir(normalized_working_directory)
+
             for item in extra_sys_paths:
                 path = str(item).strip()
                 if not path:
@@ -175,8 +238,10 @@ def execute_code(code: str, timeout_ms: int = 20000, extra_sys_paths=None):
             _bridge_openblas_for_numpy(extra_sys_paths)
             _preload_native_libs(extra_sys_paths)
 
-            with contextlib.redirect_stdout(stdout_buffer), contextlib.redirect_stderr(
-                stderr_buffer
+            with contextlib.redirect_stdout(
+                realtime_stdout
+            ), contextlib.redirect_stderr(
+                realtime_stderr
             ):
                 compiled = compile(code, "<now_chat_python>", "exec")
                 exec(compiled, globals_scope, locals_scope)
@@ -184,10 +249,17 @@ def execute_code(code: str, timeout_ms: int = 20000, extra_sys_paths=None):
             traceback.print_exc(file=stderr_buffer)
             result["exitCode"] = 1
         finally:
+            realtime_stdout.flush()
+            realtime_stderr.flush()
             for path in inserted_paths:
                 try:
                     sys.path.remove(path)
                 except ValueError:
+                    pass
+            if previous_cwd:
+                try:
+                    os.chdir(previous_cwd)
+                except Exception:
                     pass
 
     worker = threading.Thread(target=_worker, daemon=True)
