@@ -2,10 +2,6 @@
   "manifestVersion": 2,
   "plugins": [
     {
-      "id": "sample_tool_plugin",
-      "repoUrl": "https://github.com/CikeSeven/now_chat_plugin_sample_tool.git"
-    },
-    {
       "id": "python_base_libs",
       "repoUrl": "https://github.com/CikeSeven/now_chat_plugin_python_base_libs.git"
     },
