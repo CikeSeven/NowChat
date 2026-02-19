@@ -571,6 +571,7 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
         code: normalizedCode,
         timeout: timeout,
         extraSysPaths: extraPaths,
+        logContext: 'plugin:$pluginId/debug',
         workingDirectory: _runtimeWorkDir!.path,
       );
       _lastExecutionResult = result;

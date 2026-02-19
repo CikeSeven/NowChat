@@ -6,19 +6,42 @@ import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.embedding.android.FlutterActivity
+import android.os.Handler
+import android.os.Looper
 import java.io.File
 import java.util.Locale
+import java.util.UUID
 
 class MainActivity : FlutterActivity() {
     private val channelName = "nowchat/python_bridge"
+    private val logChannelName = "nowchat/python_bridge/log_stream"
     private val methodExecute = "executePython"
     private val methodIsReady = "isPythonReady"
     private val loadedNativeLibs = mutableSetOf<String>()
+    private val mainHandler = Handler(Looper.getMainLooper())
+    @Volatile
+    private var logEventSink: EventChannel.EventSink? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        EventChannel(flutterEngine.dartExecutor.binaryMessenger, logChannelName)
+            .setStreamHandler(
+                object : EventChannel.StreamHandler {
+                    override fun onListen(
+                        arguments: Any?,
+                        events: EventChannel.EventSink?,
+                    ) {
+                        logEventSink = events
+                    }
+
+                    override fun onCancel(arguments: Any?) {
+                        logEventSink = null
+                    }
+                },
+            )
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -37,6 +60,9 @@ class MainActivity : FlutterActivity() {
     private fun executePython(call: MethodCall, result: MethodChannel.Result) {
         val code = call.argument<String>("code")?.trim().orEmpty()
         val timeoutMs = call.argument<Int>("timeoutMs") ?: 20_000
+        val runId = call.argument<String>("runId")?.trim().orEmpty().ifEmpty {
+            UUID.randomUUID().toString()
+        }
         val rawPaths = call.argument<List<String>>("extraSysPaths") ?: emptyList()
         val extraSysPaths = rawPaths.map { it.trim() }.filter { it.isNotEmpty() }
 
@@ -51,7 +77,15 @@ class MainActivity : FlutterActivity() {
                 ensurePythonStarted()
                 val py = Python.getInstance()
                 val module = py.getModule("runner")
-                val pyResult = module.callAttr("execute_code", code, timeoutMs, extraSysPaths)
+                val emitter = PythonLogEmitter(runId)
+                val pyResult = module.callAttr(
+                    "execute_code",
+                    code,
+                    timeoutMs,
+                    extraSysPaths,
+                    runId,
+                    emitter,
+                )
                 val map = pyResultToMap(pyResult)
                 runOnUiThread { result.success(map) }
             }.onFailure { error ->
@@ -64,6 +98,42 @@ class MainActivity : FlutterActivity() {
                 }
             }
         }.start()
+    }
+
+    private inner class PythonLogEmitter(
+        private val runId: String,
+    ) {
+        fun emit(stream: String, text: String) {
+            emitPythonLog(runId = runId, stream = stream, text = text)
+        }
+    }
+
+    private fun emitPythonLog(
+        runId: String,
+        stream: String,
+        text: String,
+    ) {
+        if (text.isBlank()) return
+        val normalizedStream = stream.trim().lowercase(Locale.ROOT)
+        val trimmed = text.trimEnd()
+        val tag = "NowChatPython"
+        val message = "[PyRT][$runId][$normalizedStream] $trimmed"
+        if (normalizedStream == "stderr") {
+            Log.w(tag, message)
+        } else {
+            Log.i(tag, message)
+        }
+
+        val sink = logEventSink ?: return
+        val payload = mapOf(
+            "runId" to runId,
+            "stream" to normalizedStream,
+            "line" to trimmed,
+            "timestampMs" to System.currentTimeMillis(),
+        )
+        mainHandler.post {
+            runCatching { sink.success(payload) }
+        }
     }
 
     private fun ensurePythonStarted() {
@@ -102,7 +172,7 @@ class MainActivity : FlutterActivity() {
                 }
                 continue
             }
-            base.walkTopDown().forEach { file ->
+            for (file in base.walkTopDown()) {
                 if (file.isFile && file.name.contains(".so")) {
                     result.add(file.absolutePath)
                 }

@@ -42,6 +42,7 @@ class PluginRuntimeExecutor {
       code: wrappedCode,
       timeout: timeout,
       extraSysPaths: extraPaths,
+      logContext: 'plugin:$pluginId/runtime',
     );
   }
 
@@ -210,6 +211,7 @@ if _result is not None:
       code: code,
       timeout: timeout,
       extraSysPaths: extraPaths,
+      logContext: 'plugin:$pluginId/ui',
     );
     if (!result.isSuccess) {
       throw Exception(
