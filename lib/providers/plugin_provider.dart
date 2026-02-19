@@ -148,6 +148,7 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
   /// 刷新远端插件清单。
   Future<void> refreshManifest() async {
     if (_pluginRootDir == null) return;
+    AppLogger.i('开始刷新插件清单: url=$_manifestUrl');
     _isRefreshingManifest = true;
     _lastError = null;
     notifyListeners();
@@ -157,6 +158,9 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
       await _reloadLocalPluginsFromDisk();
       await _saveBasicState();
       _syncRegistry();
+      AppLogger.i(
+        '插件清单刷新完成: remote=${_manifest?.plugins.length ?? 0}, local=${_localPluginsById.length}',
+      );
     } catch (e, st) {
       _lastError = '清单加载失败: $e';
       AppLogger.e('刷新插件清单失败', e, st);
@@ -182,6 +186,7 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
     _lastError = null;
     _pluginStates[pluginId] = PluginInstallState.installing;
     notifyListeners();
+    AppLogger.i('开始安装插件: $pluginId');
 
     try {
       // 新模式：只要声明 repoUrl，就优先按 Git 仓库安装插件。
@@ -228,6 +233,7 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
           installedAt: DateTime.now(),
           isLocalImport: false,
         );
+        AppLogger.i('插件安装来源: repo(${plugin.repoUrl})');
       } else {
         // 兼容旧模式：清单内直接带 packages 时，按包依赖安装。
         final installedPackages = <InstalledPluginPackageRecord>[];
@@ -285,11 +291,16 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
           installedAt: DateTime.now(),
           isLocalImport: _localPluginsById.containsKey(pluginId),
         );
+        AppLogger.i('插件安装来源: manifest-packages($pluginId)');
       }
       _pluginStates[pluginId] = PluginInstallState.ready;
       _downloadProgress = 1;
       await _saveInstalledRecords();
       _syncRegistry();
+      final enabledTools = _installedRecords[pluginId]?.enabledTools ?? const [];
+      AppLogger.i(
+        '插件安装完成: id=$pluginId, enabledTools=${enabledTools.length}, tools=${enabledTools.join(', ')}',
+      );
     } on PluginPackageChecksumException catch (e, st) {
       _pluginStates[pluginId] = PluginInstallState.broken;
       _lastError =
@@ -316,9 +327,11 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
     _downloadProgress = 0;
     _lastError = null;
     notifyListeners();
+    AppLogger.i('开始导入本地插件');
     try {
       final payload = await _pluginService.pickAndParseLocalPluginZip();
       if (payload == null) {
+        AppLogger.i('用户取消本地插件导入');
         return;
       }
       final plugin = payload.plugin;
@@ -362,6 +375,7 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
       _downloadProgress = 1;
       await _saveInstalledRecords();
       _syncRegistry();
+      AppLogger.i('本地插件导入完成: id=${plugin.id}, version=${plugin.version}');
     } catch (e, st) {
       _lastError = '导入本地插件失败: $e';
       AppLogger.e('导入本地插件失败', e, st);
@@ -383,6 +397,7 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
     _downloadProgress = 0;
     _lastError = null;
     notifyListeners();
+    AppLogger.i('开始卸载插件: $pluginId');
     try {
       final packages = record.packages.reversed.toList();
       for (final package in packages) {
@@ -409,6 +424,7 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
       }
       await _saveInstalledRecords();
       _syncRegistry();
+      AppLogger.i('插件卸载完成: $pluginId');
     } catch (e, st) {
       _lastError = '卸载插件失败: $e';
       _pluginStates[pluginId] = PluginInstallState.broken;
@@ -427,6 +443,7 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
     _installedRecords[pluginId] = record.copyWith(enabled: enabled);
     await _saveInstalledRecords();
     _syncRegistry();
+    AppLogger.i('插件状态已更新: $pluginId -> ${enabled ? "运行中" : "已暂停"}');
     notifyListeners();
   }
 
@@ -449,6 +466,9 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
     );
     await _saveInstalledRecords();
     _syncRegistry();
+    AppLogger.i(
+      '工具状态已更新: plugin=$pluginId, tool=$toolName -> ${enabled ? "启用" : "禁用"}',
+    );
     notifyListeners();
   }
 
@@ -465,6 +485,7 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
       return;
     }
     if (_pluginUiLoadingPluginIds.contains(pluginId)) return;
+    AppLogger.i('开始加载插件配置页面: $pluginId');
     _pluginUiLoadingPluginIds.add(pluginId);
     _pluginUiErrors.remove(pluginId);
     notifyListeners();
@@ -474,6 +495,7 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
         payload: payload ?? const <String, dynamic>{},
       );
       _pluginUiPages[pluginId] = PluginUiPageState.fromJson(raw);
+      AppLogger.i('插件配置页面加载完成: $pluginId');
     } catch (e, st) {
       _pluginUiErrors[pluginId] = '加载插件 UI 失败: $e';
       AppLogger.e('加载插件 UI 失败($pluginId)', e, st);
@@ -518,6 +540,7 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
       );
       final next = PluginUiPageState.fromJson(raw);
       _pluginUiPages[pluginId] = next;
+      AppLogger.i('插件 UI 事件已处理: plugin=$pluginId, component=$componentId, event=$eventType');
       return next.message;
     } catch (e, st) {
       _pluginUiErrors[pluginId] = '插件 UI 交互失败: $e';
@@ -551,6 +574,9 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
         workingDirectory: _runtimeWorkDir!.path,
       );
       _lastExecutionResult = result;
+      AppLogger.i(
+        '插件 Python 执行完成: plugin=$pluginId, exit=${result.exitCode}, timeout=${result.timedOut}',
+      );
       if (result.timedOut) {
         _lastError = '执行超时（${timeout.inSeconds} 秒）';
       } else if (!result.isSuccess) {
@@ -629,6 +655,9 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
       if (!_runtimeWorkDir!.existsSync()) {
         await _runtimeWorkDir!.create(recursive: true);
       }
+      AppLogger.i(
+        '插件目录初始化完成: root=${_pluginRootDir!.path}, runtime=${_runtimeWorkDir!.path}',
+      );
 
       await _loadBasicState();
       await _loadInstalledRecords();
@@ -636,6 +665,7 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
       await refreshManifest();
       _syncRegistry();
       await PluginHookBus.emit('app_start');
+      AppLogger.i('插件系统初始化完成');
     } catch (e, st) {
       _lastError = '插件初始化失败: $e';
       AppLogger.e('初始化插件系统失败', e, st);
@@ -680,6 +710,7 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
         _installedRecords[record.pluginId] = record;
         _pluginStates[record.pluginId] = PluginInstallState.ready;
       }
+      AppLogger.i('已加载插件安装记录: ${_installedRecords.length}');
     } catch (e, st) {
       AppLogger.e('读取插件安装记录失败', e, st);
     }
@@ -744,6 +775,7 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
         AppLogger.e('解析本地插件失败', e, st);
       }
     }
+    AppLogger.i('本地插件扫描完成: ${_localPluginsById.length}');
   }
 
   /// 根据 plugin.json 所在路径反查其对应的安装记录 pluginId。
@@ -776,6 +808,9 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
       pluginRootPath: root.path,
       plugins: plugins,
       installedRecords: _installedRecords,
+    );
+    AppLogger.i(
+      '插件注册表已同步: plugins=${plugins.length}, installed=${_installedRecords.length}',
     );
   }
 

@@ -7,6 +7,7 @@ import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/services.dart';
 import 'package:now_chat/core/models/plugin_manifest_v2.dart';
+import 'package:now_chat/util/app_logger.dart';
 import 'package:path/path.dart' as p;
 
 /// 插件包校验失败异常，包含期望与实际 SHA256。
@@ -50,6 +51,7 @@ class PluginService {
     if (normalizedUrl.isEmpty) {
       throw const FormatException('清单地址不能为空');
     }
+    AppLogger.i('开始加载插件清单: $normalizedUrl');
 
     dynamic data;
     if (normalizedUrl.startsWith('asset://')) {
@@ -97,14 +99,19 @@ class PluginService {
         enrichedPlugins.add(merged);
       } catch (_) {
         // 仓库解析失败时，保留清单基础信息，至少能显示列表项。
+        AppLogger.w('插件仓库信息加载失败，回退清单基础信息: ${plugin.id}');
         enrichedPlugins.add(plugin);
       }
     }
 
-    return PluginManifestV2(
+    final manifest = PluginManifestV2(
       manifestVersion: baseManifest.manifestVersion,
       plugins: enrichedPlugins,
     );
+    AppLogger.i(
+      '插件清单加载完成: manifestVersion=${manifest.manifestVersion}, plugins=${manifest.plugins.length}',
+    );
+    return manifest;
   }
 
   /// 下载并安装远程插件包。
@@ -113,6 +120,9 @@ class PluginService {
     required Directory pluginRootDir,
     void Function(double progress)? onProgress,
   }) async {
+    AppLogger.i(
+      '开始安装插件包: id=${package.id}, version=${package.version}, url=${package.url}',
+    );
     final tempDir = await Directory.systemTemp.createTemp('now_chat_plugin_');
     final tempZipFile = File(
       '${tempDir.path}${Platform.pathSeparator}${package.id}_${package.version}.zip',
@@ -147,6 +157,7 @@ class PluginService {
       }
       await targetDir.create(recursive: true);
       await _extractZip(tempZipFile, targetDir);
+      AppLogger.i('插件包安装完成: id=${package.id}, target=${targetDir.path}');
     } finally {
       if (tempDir.existsSync()) {
         await tempDir.delete(recursive: true);
@@ -163,6 +174,7 @@ class PluginService {
     required String targetDir,
     void Function(double progress)? onProgress,
   }) async {
+    AppLogger.i('开始从仓库安装插件: repo=$repoUrl, targetDir=$targetDir');
     final tempDir = await Directory.systemTemp.createTemp('now_chat_plugin_git_');
     final tempZipFile = File(
       '${tempDir.path}${Platform.pathSeparator}plugin_repo.zip',
@@ -184,7 +196,9 @@ class PluginService {
       await installDir.create(recursive: true);
 
       await _extractZipFlattenRoot(tempZipFile, installDir);
-      return parsePluginDefinitionFromDirectory(installDir);
+      final plugin = await parsePluginDefinitionFromDirectory(installDir);
+      AppLogger.i('仓库插件安装完成: id=${plugin.id}, version=${plugin.version}');
+      return plugin;
     } finally {
       if (tempDir.existsSync()) {
         await tempDir.delete(recursive: true);
@@ -205,7 +219,9 @@ class PluginService {
     if (zipPath.isEmpty) {
       throw const FormatException('无法读取本地 zip 路径');
     }
+    AppLogger.i('选择本地插件包: $zipPath');
     final plugin = await parsePluginDefinitionFromZip(File(zipPath));
+    AppLogger.i('本地插件解析完成: id=${plugin.id}, version=${plugin.version}');
     return LocalPluginImportPayload(plugin: plugin, sourceZipPath: zipPath);
   }
 
@@ -290,6 +306,7 @@ class PluginService {
       p.join(pluginRootDir.path, _normalizeRelativePath(relativeTargetDir)),
     );
     if (targetDir.existsSync()) {
+      AppLogger.i('删除插件目录: ${targetDir.path}');
       await targetDir.delete(recursive: true);
     }
   }
@@ -339,6 +356,7 @@ class PluginService {
 
   /// 从 GitHub 仓库拉取并解析 `plugin.json`。
   Future<PluginDefinition> fetchPluginDefinitionFromRepo(String repoUrl) async {
+    AppLogger.i('开始读取仓库插件定义: $repoUrl');
     final (owner, repo) = _parseGithubOwnerRepo(repoUrl);
     final candidates = <String>[
       'https://raw.githubusercontent.com/$owner/$repo/main/plugin.json',
@@ -358,7 +376,11 @@ class PluginService {
           if (decoded is! Map<String, dynamic>) {
             throw const FormatException('plugin.json 格式错误');
           }
-          return PluginDefinition.fromJson(decoded).copyWith(repoUrl: repoUrl);
+          final plugin = PluginDefinition.fromJson(decoded).copyWith(
+            repoUrl: repoUrl,
+          );
+          AppLogger.i('仓库插件定义读取完成: id=${plugin.id}, version=${plugin.version}');
+          return plugin;
         }
       } on DioException catch (e) {
         if (e.response?.statusCode == 404) continue;

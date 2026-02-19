@@ -1,12 +1,10 @@
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
 import 'package:now_chat/core/plugin/plugin_hook_bus.dart';
 import 'package:now_chat/core/plugin/plugin_registry.dart';
 import 'package:now_chat/core/plugin/plugin_runtime_executor.dart';
-import 'package:now_chat/core/plugin/python_plugin_service.dart';
+import 'package:now_chat/util/app_logger.dart';
 
-const int _defaultWebFetchMaxChars = 8000;
 const int _defaultPythonTimeoutSeconds = 20;
 const int _maxPythonTimeoutSeconds = 90;
 const int _maxToolOutputChars = 12000;
@@ -63,16 +61,18 @@ class AIToolRuntime {
   static List<Map<String, dynamic>> buildOpenAIToolsSchema() {
     final tools = PluginRegistry.instance.resolveEnabledTools();
     if (tools.isEmpty) return const <Map<String, dynamic>>[];
-    return tools.map((binding) {
-      return <String, dynamic>{
-        'type': 'function',
-        'function': <String, dynamic>{
-          'name': binding.tool.name,
-          'description': binding.tool.description,
-          'parameters': binding.tool.parametersSchema,
-        },
-      };
-    }).toList(growable: false);
+    return tools
+        .map((binding) {
+          return <String, dynamic>{
+            'type': 'function',
+            'function': <String, dynamic>{
+              'name': binding.tool.name,
+              'description': binding.tool.description,
+              'parameters': binding.tool.parametersSchema,
+            },
+          };
+        })
+        .toList(growable: false);
   }
 
   /// 执行单个工具调用。
@@ -80,6 +80,7 @@ class AIToolRuntime {
     final started = DateTime.now();
     final binding = PluginRegistry.instance.resolveToolByName(call.name);
     if (binding == null) {
+      AppLogger.w('ToolUsage SKIP unsupported tool=${call.name}');
       return AIToolExecutionResult(
         status: 'error',
         summary: '不支持的工具：${call.name}',
@@ -90,6 +91,13 @@ class AIToolRuntime {
         error: 'unsupported tool',
       );
     }
+    final argsForLog = _safeParseJsonObject(call.rawArguments);
+    _logToolExecutionStart(
+      call: call,
+      pluginId: binding.plugin.id,
+      runtime: binding.tool.runtime,
+      args: argsForLog,
+    );
 
     await PluginHookBus.emit(
       'tool_before_execute',
@@ -102,21 +110,6 @@ class AIToolRuntime {
     try {
       late AIToolExecutionResult result;
       switch (binding.tool.runtime.trim().toLowerCase()) {
-        case 'builtin_web_fetch':
-          result = await _execWebFetch(
-            pluginId: binding.plugin.id,
-            rawArgs: call.rawArguments,
-            outputLimit: binding.tool.outputLimit,
-          );
-          break;
-        case 'builtin_python_exec':
-          result = await _execBuiltinPython(
-            pluginId: binding.plugin.id,
-            rawArgs: call.rawArguments,
-            timeoutFallbackSec: binding.tool.timeoutSec,
-            outputLimit: binding.tool.outputLimit,
-          );
-          break;
         case 'python_inline':
         case 'python_script':
           result = await _execPluginRuntimePython(
@@ -152,8 +145,14 @@ class AIToolRuntime {
           'error': withDuration.error,
         },
       );
+      _logToolExecutionEnd(
+        call: call,
+        pluginId: binding.plugin.id,
+        runtime: binding.tool.runtime,
+        result: withDuration,
+      );
       return withDuration;
-    } catch (e) {
+    } catch (e, st) {
       final result = _withDuration(
         AIToolExecutionResult(
           status: 'error',
@@ -176,6 +175,13 @@ class AIToolRuntime {
           'error': result.error,
         },
       );
+      _logToolExecutionFailure(
+        call: call,
+        pluginId: binding.plugin.id,
+        runtime: binding.tool.runtime,
+        error: e,
+        stackTrace: st,
+      );
       return result;
     }
   }
@@ -191,130 +197,6 @@ class AIToolRuntime {
       toolMessageContent: result.toolMessageContent,
       error: result.error,
       durationMs: durationMs,
-    );
-  }
-
-  /// 内置工具：网页抓取。
-  static Future<AIToolExecutionResult> _execWebFetch({
-    required String pluginId,
-    required String rawArgs,
-    required int outputLimit,
-  }) async {
-    final args = _safeParseJsonObject(rawArgs);
-    final url = (args['url'] ?? '').toString().trim();
-    if (url.isEmpty) {
-      return AIToolExecutionResult(
-        status: 'error',
-        summary: '缺少 url 参数',
-        toolMessageContent: jsonEncode(<String, dynamic>{
-          'ok': false,
-          'error': 'missing url',
-        }),
-        error: 'missing url',
-      );
-    }
-
-    final uri = Uri.tryParse(url);
-    if (uri == null || !(uri.scheme == 'http' || uri.scheme == 'https')) {
-      return AIToolExecutionResult(
-        status: 'error',
-        summary: 'URL 非法，仅支持 http/https',
-        toolMessageContent: jsonEncode(<String, dynamic>{
-          'ok': false,
-          'error': 'invalid url',
-        }),
-        error: 'invalid url',
-      );
-    }
-
-    final maxChars = _toBoundedInt(
-      args['max_chars'],
-      fallback: _defaultWebFetchMaxChars,
-      min: 200,
-      max: 30000,
-    );
-    final response = await http
-        .get(uri, headers: <String, String>{'User-Agent': 'NowChat/1.0'})
-        .timeout(const Duration(seconds: 20));
-    final body = response.body;
-    final clipped = _truncateText(
-      body.length <= maxChars ? body : body.substring(0, maxChars),
-      outputLimit <= 0 ? _maxToolOutputChars : outputLimit,
-    );
-    final summary =
-        'HTTP ${response.statusCode} · ${uri.host} · ${clipped.length} chars';
-    final ok = response.statusCode >= 200 && response.statusCode < 300;
-    return AIToolExecutionResult(
-      status: ok ? 'success' : 'error',
-      summary: summary,
-      toolMessageContent: jsonEncode(<String, dynamic>{
-        'ok': ok,
-        'status': response.statusCode,
-        'url': uri.toString(),
-        'content': clipped,
-        'pluginId': pluginId,
-      }),
-      error: ok ? null : 'HTTP ${response.statusCode}',
-    );
-  }
-
-  /// 内置工具：执行 Python 代码（参数 `code` / `timeout_sec`）。
-  static Future<AIToolExecutionResult> _execBuiltinPython({
-    required String pluginId,
-    required String rawArgs,
-    required int timeoutFallbackSec,
-    required int outputLimit,
-  }) async {
-    final args = _safeParseJsonObject(rawArgs);
-    final code = (args['code'] ?? '').toString();
-    if (code.trim().isEmpty) {
-      return AIToolExecutionResult(
-        status: 'error',
-        summary: '缺少 code 参数',
-        toolMessageContent: jsonEncode(<String, dynamic>{
-          'ok': false,
-          'error': 'missing code',
-        }),
-        error: 'missing code',
-      );
-    }
-    final timeoutSec = _toBoundedInt(
-      args['timeout_sec'],
-      fallback: timeoutFallbackSec <= 0
-          ? _defaultPythonTimeoutSeconds
-          : timeoutFallbackSec,
-      min: 1,
-      max: _maxPythonTimeoutSeconds,
-    );
-    final extraPaths = PluginRegistry.instance.resolvePythonPathsForPlugin(pluginId);
-    final service = PythonPluginService();
-    final result = await service.executeCode(
-      code: code,
-      timeout: Duration(seconds: timeoutSec),
-      extraSysPaths: extraPaths,
-    );
-    final stdout = _truncateText(
-      result.stdout,
-      outputLimit <= 0 ? _maxToolOutputChars : outputLimit,
-    );
-    final stderr = _truncateText(
-      result.stderr,
-      outputLimit <= 0 ? _maxToolOutputChars : outputLimit,
-    );
-    final ok = !result.timedOut && result.exitCode == 0;
-    return AIToolExecutionResult(
-      status: ok ? 'success' : 'error',
-      summary:
-          'exit=${result.exitCode} · ${result.duration.inMilliseconds}ms${result.timedOut ? " · timeout" : ""}',
-      toolMessageContent: jsonEncode(<String, dynamic>{
-        'ok': ok,
-        'exitCode': result.exitCode,
-        'timedOut': result.timedOut,
-        'durationMs': result.duration.inMilliseconds,
-        'stdout': stdout,
-        'stderr': stderr,
-      }),
-      error: ok ? null : (stderr.trim().isEmpty ? 'python_exec_failed' : stderr),
     );
   }
 
@@ -353,21 +235,36 @@ class AIToolRuntime {
       result.stderr,
       outputLimit <= 0 ? _maxToolOutputChars : outputLimit,
     );
-    final ok = result.isSuccess;
+    final pluginResult = _decodeJsonObjectFromStdout(result.stdout);
+    final ok =
+        pluginResult == null
+            ? result.isSuccess
+            : (pluginResult['ok'] == true && result.isSuccess);
+    final summaryFromPlugin = pluginResult?['summary']?.toString();
+    final errorFromPlugin = pluginResult?['error']?.toString();
+
+    // 插件可直接返回完整 JSON 对象作为工具结果；宿主会补齐缺省字段。
+    final toolPayload = <String, dynamic>{
+      if (pluginResult != null) ...pluginResult,
+      'ok': ok,
+      'stdout': stdout,
+      'stderr': stderr,
+      'exitCode': result.exitCode,
+      'timedOut': result.timedOut,
+      'durationMs': result.duration.inMilliseconds,
+    };
 
     return AIToolExecutionResult(
       status: ok ? 'success' : 'error',
       summary:
+          summaryFromPlugin ??
           'exit=${result.exitCode} · ${result.duration.inMilliseconds}ms${result.timedOut ? " · timeout" : ""}',
-      toolMessageContent: jsonEncode(<String, dynamic>{
-        'ok': ok,
-        'stdout': stdout,
-        'stderr': stderr,
-        'exitCode': result.exitCode,
-        'timedOut': result.timedOut,
-        'durationMs': result.duration.inMilliseconds,
-      }),
-      error: ok ? null : (stderr.trim().isEmpty ? 'plugin_runtime_failed' : stderr),
+      toolMessageContent: jsonEncode(toolPayload),
+      error:
+          ok
+              ? null
+              : (errorFromPlugin ??
+                  (stderr.trim().isEmpty ? 'plugin_runtime_failed' : stderr)),
     );
   }
 
@@ -394,7 +291,8 @@ class AIToolRuntime {
     required int min,
     required int max,
   }) {
-    final value = raw is num ? raw.toInt() : int.tryParse(raw?.toString() ?? '');
+    final value =
+        raw is num ? raw.toInt() : int.tryParse(raw?.toString() ?? '');
     if (value == null) return fallback;
     if (value < min) return min;
     if (value > max) return max;
@@ -405,5 +303,112 @@ class AIToolRuntime {
   static String _truncateText(String text, int maxChars) {
     if (text.length <= maxChars) return text;
     return '${text.substring(0, maxChars)}\n...(已截断)';
+  }
+
+  /// 从 stdout 末尾提取 JSON 对象，允许脚本前面输出调试日志。
+  static Map<String, dynamic>? _decodeJsonObjectFromStdout(String stdout) {
+    final lines =
+        stdout
+            .split('\n')
+            .map((item) => item.trim())
+            .where((item) => item.isNotEmpty)
+            .toList()
+            .reversed;
+    for (final line in lines) {
+      try {
+        final decoded = jsonDecode(line);
+        if (decoded is Map<String, dynamic>) {
+          return decoded;
+        }
+        if (decoded is Map) {
+          return decoded.map((key, value) => MapEntry(key.toString(), value));
+        }
+      } catch (_) {
+        // 当前行不是 JSON，继续尝试上一行。
+      }
+    }
+    return null;
+  }
+
+  /// 打印工具开始执行日志（含参数摘要）。
+  static void _logToolExecutionStart({
+    required AIToolCall call,
+    required String pluginId,
+    required String runtime,
+    required Map<String, dynamic> args,
+  }) {
+    AppLogger.i(
+      'ToolUsage START tool=${call.name} plugin=$pluginId runtime=$runtime args=${_summarizeArgsForLog(args)}',
+    );
+  }
+
+  /// 打印工具完成日志（含状态、耗时与摘要）。
+  static void _logToolExecutionEnd({
+    required AIToolCall call,
+    required String pluginId,
+    required String runtime,
+    required AIToolExecutionResult result,
+  }) {
+    final message =
+        'ToolUsage END tool=${call.name} plugin=$pluginId runtime=$runtime status=${result.status} duration=${result.durationMs ?? 0}ms summary=${_truncateForLog(result.summary, 220)}';
+    if (result.status == 'success') {
+      AppLogger.i(message);
+    } else {
+      AppLogger.w(
+        '$message error=${_truncateForLog(result.error ?? 'unknown', 220)}',
+      );
+    }
+  }
+
+  /// 打印工具异常日志（捕获未处理异常）。
+  static void _logToolExecutionFailure({
+    required AIToolCall call,
+    required String pluginId,
+    required String runtime,
+    required Object error,
+    StackTrace? stackTrace,
+  }) {
+    AppLogger.e(
+      'ToolUsage EXCEPTION tool=${call.name} plugin=$pluginId runtime=$runtime',
+      error,
+      stackTrace,
+    );
+  }
+
+  /// 生成参数摘要，避免日志被超长代码撑满。
+  static String _summarizeArgsForLog(Map<String, dynamic> args) {
+    if (args.isEmpty) return '{}';
+    final summarized = <String, dynamic>{};
+    for (final entry in args.entries) {
+      final key = entry.key;
+      final value = entry.value;
+      if (key == 'code') {
+        final code = value?.toString() ?? '';
+        summarized[key] =
+            'chars=${code.length}, preview="${_truncateForLog(_singleLine(code), 120)}"';
+        continue;
+      }
+      if (value is String) {
+        summarized[key] = _truncateForLog(_singleLine(value), 120);
+        continue;
+      }
+      summarized[key] = value;
+    }
+    try {
+      return jsonEncode(summarized);
+    } catch (_) {
+      return summarized.toString();
+    }
+  }
+
+  /// 压缩多行文本为单行，方便日志阅读。
+  static String _singleLine(String text) {
+    return text.replaceAll('\r', ' ').replaceAll('\n', ' ').trim();
+  }
+
+  /// 日志文本截断，避免过长输出影响排查效率。
+  static String _truncateForLog(String text, int maxLength) {
+    if (text.length <= maxLength) return text;
+    return '${text.substring(0, maxLength)}...';
   }
 }

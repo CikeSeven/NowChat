@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:now_chat/core/models/plugin_install_record.dart';
 import 'package:now_chat/core/models/plugin_manifest_v2.dart';
+import 'package:now_chat/util/app_logger.dart';
 import 'package:path/path.dart' as p;
 
 /// 已启用工具绑定信息，用于工具 schema 生成与执行路由。
@@ -40,6 +41,22 @@ class PluginRegistry {
     _recordsByPluginId
       ..clear()
       ..addAll(installedRecords);
+
+    final enabledPluginCount =
+        _recordsByPluginId.values.where((item) => item.enabled).length;
+    final enabledTools = resolveEnabledTools();
+    AppLogger.i(
+      'PluginRegistry 同步完成: plugins=${_pluginsById.length}, installed=${_recordsByPluginId.length}, enabledPlugins=$enabledPluginCount, enabledTools=${enabledTools.length}',
+    );
+    if (enabledTools.isNotEmpty) {
+      final preview =
+          enabledTools
+              .take(20)
+              .map((item) => '${item.plugin.id}/${item.tool.name}')
+              .join(', ');
+      final suffix = enabledTools.length > 20 ? ' ...' : '';
+      AppLogger.i('已加载工具: $preview$suffix');
+    }
   }
 
   /// 当前注册表是否已完成初始化同步。
