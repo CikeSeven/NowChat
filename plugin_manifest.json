@@ -3,20 +3,10 @@
   "plugins": [
     {
       "id": "sample_tool_plugin",
-      "name": "示例工具插件",
-      "author": "NowChat",
-      "description": "示例插件，包含工具、Hook 与插件配置页面。",
-      "version": "1.0.0",
-      "type": "python",
       "repoUrl": "https://github.com/CikeSeven/sample_tool_plugin.git"
     },
     {
       "id": "python_base_libs",
-      "name": "Python 基础库插件",
-      "author": "NowChat",
-      "description": "提供 Python 代码执行能力与基础库支持。",
-      "version": "0.1.0",
-      "type": "python",
       "repoUrl": "https://github.com/CikeSeven/python_base_libs_plugin"
     }
   ]
