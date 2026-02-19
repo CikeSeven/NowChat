@@ -111,9 +111,14 @@ Future<void> _sendOpenAIChatStreaming({
         'top_p': session.topP,
         if (session.maxTokens > 0) 'max_tokens': session.maxTokens,
         'stream': true,
-        if (shouldUseTools && remainingToolCalls > 0)
-          'tools': AIToolRuntime.buildOpenAIToolsSchema(),
-        if (shouldUseTools && remainingToolCalls > 0) 'tool_choice': 'auto',
+        if (shouldUseTools && remainingToolCalls > 0) ...() {
+          final runtimeTools = AIToolRuntime.buildOpenAIToolsSchema();
+          if (runtimeTools.isEmpty) return const <String, dynamic>{};
+          return <String, dynamic>{
+            'tools': runtimeTools,
+            'tool_choice': 'auto',
+          };
+        }(),
       };
 
       AppLogger.i("(OpenAI) 发起流式请求 -> $uri");

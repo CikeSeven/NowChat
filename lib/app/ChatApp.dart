@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:now_chat/core/plugin/plugin_hook_bus.dart';
 import 'package:now_chat/app/router.dart';
 import 'package:now_chat/app/theme.dart';
 import 'package:now_chat/providers/settings_provider.dart';
@@ -33,6 +34,9 @@ class ChatApp extends StatelessWidget {
           ],
           onGenerateRoute: AppRoutes.generateRoute,
           initialRoute: AppRoutes.home,
+          navigatorObservers: <NavigatorObserver>[
+            PluginHookNavigatorObserver(),
+          ],
         );
       },
     );

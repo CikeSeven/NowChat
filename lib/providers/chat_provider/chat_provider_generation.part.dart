@@ -389,8 +389,20 @@ extension ChatProviderGeneration on ChatProvider {
     await _setChatGenerating(chat, true);
     var interrupted = false;
     var usedStreaming = false;
+    var responseStarted = false;
+    Object? terminalError;
     Message? aiMsg;
     try {
+      await PluginHookBus.emit(
+        'chat_before_send',
+        payload: <String, dynamic>{
+          'chatId': chatId,
+          'providerId': chat.providerId,
+          'model': chat.model,
+          'isStreaming': isStreaming,
+        },
+      );
+
       final userMsg = Message(
         chatId: chatId,
         role: 'user',
@@ -420,7 +432,6 @@ extension ChatProviderGeneration on ChatProvider {
 
       final effectiveStreaming =
           isStreaming && provider.requestMode.supportsStreaming;
-      var responseStarted = false;
       if (isStreaming && !provider.requestMode.supportsStreaming) {
         AppLogger.w('当前请求方式不支持流式输出，已自动回退为普通请求');
       }
@@ -485,6 +496,7 @@ extension ChatProviderGeneration on ChatProvider {
           }
           interrupted = true;
         } catch (e) {
+          terminalError = e;
           reasoningTimer?.cancel();
           if (_hasMessageOutput(currentAiMsg)) {
             interrupted = true;
@@ -528,6 +540,7 @@ extension ChatProviderGeneration on ChatProvider {
         } on GenerationAbortedException {
           interrupted = true;
         } catch (e) {
+          terminalError = e;
           currentAiMsg.content = '请求失败: $e';
           await saveMessage(currentAiMsg);
         }
@@ -552,6 +565,17 @@ extension ChatProviderGeneration on ChatProvider {
       }
       _abortControllers.remove(chatId);
       await _setChatGenerating(chat, false);
+      await PluginHookBus.emit(
+        'chat_after_send',
+        payload: <String, dynamic>{
+          'chatId': chatId,
+          'providerId': chat.providerId,
+          'model': chat.model,
+          'interrupted': interrupted,
+          'responseStarted': responseStarted,
+          'error': terminalError?.toString(),
+        },
+      );
     }
     _notifyStateChanged();
   }

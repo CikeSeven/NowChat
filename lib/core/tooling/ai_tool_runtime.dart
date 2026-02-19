@@ -1,18 +1,10 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:http/http.dart' as http;
-import 'package:now_chat/core/models/python_plugin_manifest.dart';
+import 'package:now_chat/core/plugin/plugin_hook_bus.dart';
+import 'package:now_chat/core/plugin/plugin_registry.dart';
+import 'package:now_chat/core/plugin/plugin_runtime_executor.dart';
 import 'package:now_chat/core/plugin/python_plugin_service.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
-/// OpenAI 工具调用名称：网页抓取。
-const String kWebFetchToolName = 'web_fetch';
-
-/// OpenAI 工具调用名称：执行 Python 代码。
-const String kPythonExecToolName = 'python_exec';
 
 const int _defaultWebFetchMaxChars = 8000;
 const int _defaultPythonTimeoutSeconds = 20;
@@ -63,87 +55,106 @@ class AIToolExecutionResult {
   });
 }
 
-/// 工具运行时：负责执行内置工具并返回结构化结果。
+/// 工具运行时：从插件注册表动态构建与执行工具。
 class AIToolRuntime {
   const AIToolRuntime._();
 
-  /// 构建 OpenAI `tools` 参数。
+  /// 构建 OpenAI `tools` 参数（基于插件开关与工具开关）。
   static List<Map<String, dynamic>> buildOpenAIToolsSchema() {
-    return <Map<String, dynamic>>[
-      <String, dynamic>{
+    final tools = PluginRegistry.instance.resolveEnabledTools();
+    if (tools.isEmpty) return const <Map<String, dynamic>>[];
+    return tools.map((binding) {
+      return <String, dynamic>{
         'type': 'function',
         'function': <String, dynamic>{
-          'name': kWebFetchToolName,
-          'description': '通过 HTTP GET 抓取网页文本内容，适合提取公开页面信息。',
-          'parameters': <String, dynamic>{
-            'type': 'object',
-            'properties': <String, dynamic>{
-              'url': <String, dynamic>{
-                'type': 'string',
-                'description': '要抓取的完整 URL（仅支持 http/https）',
-              },
-              'max_chars': <String, dynamic>{
-                'type': 'integer',
-                'description': '返回内容最大字符数，默认 8000',
-                'minimum': 200,
-                'maximum': 30000,
-              },
-            },
-            'required': <String>['url'],
-          },
+          'name': binding.tool.name,
+          'description': binding.tool.description,
+          'parameters': binding.tool.parametersSchema,
         },
-      },
-      <String, dynamic>{
-        'type': 'function',
-        'function': <String, dynamic>{
-          'name': kPythonExecToolName,
-          'description': '执行一段 Python 代码并返回 stdout/stderr。',
-          'parameters': <String, dynamic>{
-            'type': 'object',
-            'properties': <String, dynamic>{
-              'code': <String, dynamic>{
-                'type': 'string',
-                'description': '要执行的 Python 代码',
-              },
-              'timeout_sec': <String, dynamic>{
-                'type': 'integer',
-                'description': '超时时间（秒），默认 20，最大 90',
-                'minimum': 1,
-                'maximum': 90,
-              },
-            },
-            'required': <String>['code'],
-          },
-        },
-      },
-    ];
+      };
+    }).toList(growable: false);
   }
 
   /// 执行单个工具调用。
   static Future<AIToolExecutionResult> execute(AIToolCall call) async {
     final started = DateTime.now();
+    final binding = PluginRegistry.instance.resolveToolByName(call.name);
+    if (binding == null) {
+      return AIToolExecutionResult(
+        status: 'error',
+        summary: '不支持的工具：${call.name}',
+        toolMessageContent: jsonEncode(<String, dynamic>{
+          'ok': false,
+          'error': 'unsupported tool: ${call.name}',
+        }),
+        error: 'unsupported tool',
+      );
+    }
+
+    await PluginHookBus.emit(
+      'tool_before_execute',
+      payload: <String, dynamic>{
+        'toolName': call.name,
+        'pluginId': binding.plugin.id,
+      },
+    );
+
     try {
-      switch (call.name) {
-        case kWebFetchToolName:
-          return _withDuration(await _execWebFetch(call.rawArguments), started);
-        case kPythonExecToolName:
-          return _withDuration(await _execPython(call.rawArguments), started);
+      late AIToolExecutionResult result;
+      switch (binding.tool.runtime.trim().toLowerCase()) {
+        case 'builtin_web_fetch':
+          result = await _execWebFetch(
+            pluginId: binding.plugin.id,
+            rawArgs: call.rawArguments,
+            outputLimit: binding.tool.outputLimit,
+          );
+          break;
+        case 'builtin_python_exec':
+          result = await _execBuiltinPython(
+            pluginId: binding.plugin.id,
+            rawArgs: call.rawArguments,
+            timeoutFallbackSec: binding.tool.timeoutSec,
+            outputLimit: binding.tool.outputLimit,
+          );
+          break;
+        case 'python_inline':
+        case 'python_script':
+          result = await _execPluginRuntimePython(
+            pluginId: binding.plugin.id,
+            runtime: binding.tool.runtime,
+            rawArgs: call.rawArguments,
+            scriptPath: binding.tool.scriptPath,
+            inlineCode: binding.tool.inlineCode,
+            timeoutSec: binding.tool.timeoutSec,
+            outputLimit: binding.tool.outputLimit,
+          );
+          break;
         default:
-          return _withDuration(
-            AIToolExecutionResult(
-              status: 'error',
-              summary: '不支持的工具：${call.name}',
-              toolMessageContent: jsonEncode(<String, dynamic>{
-                'ok': false,
-                'error': 'unsupported tool: ${call.name}',
-              }),
-              error: 'unsupported tool',
-            ),
-            started,
+          result = AIToolExecutionResult(
+            status: 'error',
+            summary: '未支持的工具 runtime: ${binding.tool.runtime}',
+            toolMessageContent: jsonEncode(<String, dynamic>{
+              'ok': false,
+              'error': 'unsupported runtime: ${binding.tool.runtime}',
+            }),
+            error: 'unsupported runtime',
           );
       }
+
+      final withDuration = _withDuration(result, started);
+      await PluginHookBus.emit(
+        'tool_after_execute',
+        payload: <String, dynamic>{
+          'toolName': call.name,
+          'pluginId': binding.plugin.id,
+          'status': withDuration.status,
+          'durationMs': withDuration.durationMs,
+          'error': withDuration.error,
+        },
+      );
+      return withDuration;
     } catch (e) {
-      return _withDuration(
+      final result = _withDuration(
         AIToolExecutionResult(
           status: 'error',
           summary: '执行异常: $e',
@@ -155,6 +166,17 @@ class AIToolRuntime {
         ),
         started,
       );
+      await PluginHookBus.emit(
+        'tool_after_execute',
+        payload: <String, dynamic>{
+          'toolName': call.name,
+          'pluginId': binding.plugin.id,
+          'status': result.status,
+          'durationMs': result.durationMs,
+          'error': result.error,
+        },
+      );
+      return result;
     }
   }
 
@@ -172,8 +194,12 @@ class AIToolRuntime {
     );
   }
 
-  /// 执行网页抓取工具。
-  static Future<AIToolExecutionResult> _execWebFetch(String rawArgs) async {
+  /// 内置工具：网页抓取。
+  static Future<AIToolExecutionResult> _execWebFetch({
+    required String pluginId,
+    required String rawArgs,
+    required int outputLimit,
+  }) async {
     final args = _safeParseJsonObject(rawArgs);
     final url = (args['url'] ?? '').toString().trim();
     if (url.isEmpty) {
@@ -187,6 +213,7 @@ class AIToolRuntime {
         error: 'missing url',
       );
     }
+
     final uri = Uri.tryParse(url);
     if (uri == null || !(uri.scheme == 'http' || uri.scheme == 'https')) {
       return AIToolExecutionResult(
@@ -209,32 +236,35 @@ class AIToolRuntime {
     final response = await http
         .get(uri, headers: <String, String>{'User-Agent': 'NowChat/1.0'})
         .timeout(const Duration(seconds: 20));
-
     final body = response.body;
-    final clipped =
-        body.length <= maxChars ? body : '${body.substring(0, maxChars)}\n...(已截断)';
+    final clipped = _truncateText(
+      body.length <= maxChars ? body : body.substring(0, maxChars),
+      outputLimit <= 0 ? _maxToolOutputChars : outputLimit,
+    );
     final summary =
         'HTTP ${response.statusCode} · ${uri.host} · ${clipped.length} chars';
-
+    final ok = response.statusCode >= 200 && response.statusCode < 300;
     return AIToolExecutionResult(
-      status: response.statusCode >= 200 && response.statusCode < 300
-          ? 'success'
-          : 'error',
+      status: ok ? 'success' : 'error',
       summary: summary,
       toolMessageContent: jsonEncode(<String, dynamic>{
-        'ok': response.statusCode >= 200 && response.statusCode < 300,
+        'ok': ok,
         'status': response.statusCode,
         'url': uri.toString(),
         'content': clipped,
+        'pluginId': pluginId,
       }),
-      error: response.statusCode >= 200 && response.statusCode < 300
-          ? null
-          : 'HTTP ${response.statusCode}',
+      error: ok ? null : 'HTTP ${response.statusCode}',
     );
   }
 
-  /// 执行 Python 代码工具。
-  static Future<AIToolExecutionResult> _execPython(String rawArgs) async {
+  /// 内置工具：执行 Python 代码（参数 `code` / `timeout_sec`）。
+  static Future<AIToolExecutionResult> _execBuiltinPython({
+    required String pluginId,
+    required String rawArgs,
+    required int timeoutFallbackSec,
+    required int outputLimit,
+  }) async {
     final args = _safeParseJsonObject(rawArgs);
     final code = (args['code'] ?? '').toString();
     if (code.trim().isEmpty) {
@@ -248,31 +278,34 @@ class AIToolRuntime {
         error: 'missing code',
       );
     }
-
     final timeoutSec = _toBoundedInt(
       args['timeout_sec'],
-      fallback: _defaultPythonTimeoutSeconds,
+      fallback: timeoutFallbackSec <= 0
+          ? _defaultPythonTimeoutSeconds
+          : timeoutFallbackSec,
       min: 1,
       max: _maxPythonTimeoutSeconds,
     );
-
-    final extraSysPaths = await _resolveInstalledPythonPaths();
+    final extraPaths = PluginRegistry.instance.resolvePythonPathsForPlugin(pluginId);
     final service = PythonPluginService();
     final result = await service.executeCode(
       code: code,
       timeout: Duration(seconds: timeoutSec),
-      extraSysPaths: extraSysPaths,
+      extraSysPaths: extraPaths,
     );
-
-    final stdout = _truncateText(result.stdout, _maxToolOutputChars);
-    final stderr = _truncateText(result.stderr, _maxToolOutputChars);
+    final stdout = _truncateText(
+      result.stdout,
+      outputLimit <= 0 ? _maxToolOutputChars : outputLimit,
+    );
+    final stderr = _truncateText(
+      result.stderr,
+      outputLimit <= 0 ? _maxToolOutputChars : outputLimit,
+    );
     final ok = !result.timedOut && result.exitCode == 0;
-    final summary =
-        'exit=${result.exitCode} · ${result.duration.inMilliseconds}ms${result.timedOut ? " · timeout" : ""}';
-
     return AIToolExecutionResult(
       status: ok ? 'success' : 'error',
-      summary: summary,
+      summary:
+          'exit=${result.exitCode} · ${result.duration.inMilliseconds}ms${result.timedOut ? " · timeout" : ""}',
       toolMessageContent: jsonEncode(<String, dynamic>{
         'ok': ok,
         'exitCode': result.exitCode,
@@ -281,7 +314,60 @@ class AIToolRuntime {
         'stdout': stdout,
         'stderr': stderr,
       }),
-      error: ok ? null : stderr.trim().isEmpty ? 'python_exec_failed' : stderr,
+      error: ok ? null : (stderr.trim().isEmpty ? 'python_exec_failed' : stderr),
+    );
+  }
+
+  /// 插件声明 runtime 的 Python 执行器。
+  static Future<AIToolExecutionResult> _execPluginRuntimePython({
+    required String pluginId,
+    required String runtime,
+    required String rawArgs,
+    required String? scriptPath,
+    required String? inlineCode,
+    required int timeoutSec,
+    required int outputLimit,
+  }) async {
+    final args = _safeParseJsonObject(rawArgs);
+    final result = await PluginRuntimeExecutor.execute(
+      pluginId: pluginId,
+      runtime: runtime,
+      scriptPath: scriptPath,
+      inlineCode: inlineCode,
+      payload: args,
+      timeout: Duration(
+        seconds: _toBoundedInt(
+          timeoutSec,
+          fallback: _defaultPythonTimeoutSeconds,
+          min: 1,
+          max: _maxPythonTimeoutSeconds,
+        ),
+      ),
+    );
+
+    final stdout = _truncateText(
+      result.stdout,
+      outputLimit <= 0 ? _maxToolOutputChars : outputLimit,
+    );
+    final stderr = _truncateText(
+      result.stderr,
+      outputLimit <= 0 ? _maxToolOutputChars : outputLimit,
+    );
+    final ok = result.isSuccess;
+
+    return AIToolExecutionResult(
+      status: ok ? 'success' : 'error',
+      summary:
+          'exit=${result.exitCode} · ${result.duration.inMilliseconds}ms${result.timedOut ? " · timeout" : ""}',
+      toolMessageContent: jsonEncode(<String, dynamic>{
+        'ok': ok,
+        'stdout': stdout,
+        'stderr': stderr,
+        'exitCode': result.exitCode,
+        'timedOut': result.timedOut,
+        'durationMs': result.duration.inMilliseconds,
+      }),
+      error: ok ? null : (stderr.trim().isEmpty ? 'plugin_runtime_failed' : stderr),
     );
   }
 
@@ -293,9 +379,7 @@ class AIToolRuntime {
       final decoded = jsonDecode(text);
       if (decoded is Map<String, dynamic>) return decoded;
       if (decoded is Map) {
-        return decoded.map(
-          (key, value) => MapEntry(key.toString(), value),
-        );
+        return decoded.map((key, value) => MapEntry(key.toString(), value));
       }
     } catch (_) {
       // 忽略并走空参数兜底。
@@ -310,9 +394,7 @@ class AIToolRuntime {
     required int min,
     required int max,
   }) {
-    final value = raw is num
-        ? raw.toInt()
-        : int.tryParse(raw?.toString() ?? '');
+    final value = raw is num ? raw.toInt() : int.tryParse(raw?.toString() ?? '');
     if (value == null) return fallback;
     if (value < min) return min;
     if (value > max) return max;
@@ -323,52 +405,5 @@ class AIToolRuntime {
   static String _truncateText(String text, int maxChars) {
     if (text.length <= maxChars) return text;
     return '${text.substring(0, maxChars)}\n...(已截断)';
-  }
-
-  /// 从已安装插件记录中解析 Python 额外搜索路径（含原生库目录）。
-  static Future<List<String>> _resolveInstalledPythonPaths() async {
-    if (!Platform.isAndroid) return const <String>[];
-
-    final supportDir = await getApplicationSupportDirectory();
-    final pluginRoot = Directory(p.join(supportDir.path, 'python_plugin'));
-    if (!pluginRoot.existsSync()) return const <String>[];
-
-    const installedLibrariesKey = 'python_plugin_installed_libraries';
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(installedLibrariesKey) ?? '';
-    if (raw.trim().isEmpty) return const <String>[];
-
-    final decoded = jsonDecode(raw);
-    if (decoded is! List) return const <String>[];
-
-    final paths = <String>[];
-    final seen = <String>{};
-    for (final item in decoded) {
-      if (item is! Map) continue;
-      final library = InstalledPythonLibrary.fromJson(
-        Map<String, dynamic>.from(item),
-      );
-      final baseDir = p.normalize(p.join(pluginRoot.path, library.targetDir));
-
-      for (final relativeEntry in library.pythonPathEntries) {
-        final path = p.normalize(p.join(baseDir, relativeEntry));
-        if (seen.add(path)) {
-          paths.add(path);
-        }
-      }
-
-      final nativeCandidates = <String>[
-        p.normalize(p.join(baseDir, 'chaquopy', 'lib')),
-        p.normalize(p.join(baseDir, 'lib')),
-        p.normalize(p.join(baseDir, 'libs')),
-      ];
-      for (final candidate in nativeCandidates) {
-        if (!Directory(candidate).existsSync()) continue;
-        if (seen.add(candidate)) {
-          paths.add(candidate);
-        }
-      }
-    }
-    return paths;
   }
 }

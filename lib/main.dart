@@ -3,7 +3,7 @@ import 'package:isar/isar.dart';
 import 'package:now_chat/app/ChatApp.dart';
 import 'package:now_chat/providers/agent_provider.dart';
 import 'package:now_chat/providers/chat_provider.dart';
-import 'package:now_chat/providers/python_plugin_provider.dart';
+import 'package:now_chat/providers/plugin_provider.dart';
 import 'package:now_chat/providers/settings_provider.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
@@ -12,7 +12,7 @@ import 'core/models/chat_session.dart';
 import 'core/models/message.dart';
 
 
-/// 执行 _openIsar 逻辑。
+/// 打开本地 Isar 数据库。
 Future<Isar> _openIsar() async {
   final dir = await getApplicationDocumentsDirectory();
   return await Isar.open(
@@ -20,7 +20,7 @@ Future<Isar> _openIsar() async {
     directory: dir.path,
   );
 }
-/// 执行 main 逻辑。
+/// 应用启动入口。
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -32,7 +32,7 @@ void main() async {
         ChangeNotifierProvider(create: (_) => ChatProvider(isar)),
         ChangeNotifierProvider(create: (_) => AgentProvider(isar)),
         ChangeNotifierProvider(create: (_) => SettingsProvider()),
-        ChangeNotifierProvider(create: (_) => PythonPluginProvider()),
+        ChangeNotifierProvider(create: (_) => PluginProvider()),
       ],
       child: const ChatApp(),
     ),

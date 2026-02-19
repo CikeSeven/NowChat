@@ -123,7 +123,7 @@ class SettingsPage extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.extension_rounded),
             title: const Text('插件中心'),
-            subtitle: const Text('按需下载安装 Python 执行插件'),
+            subtitle: const Text('安装、启用与管理插件及工具'),
             trailing: const Icon(Icons.chevron_right_rounded),
             onTap: () {
               Navigator.pushNamed(context, AppRoutes.plugin);

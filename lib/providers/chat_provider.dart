@@ -6,6 +6,7 @@ import 'package:logger/web.dart';
 import 'package:now_chat/core/models/ai_provider_config.dart';
 import 'package:now_chat/core/models/tool_execution_log.dart';
 import 'package:now_chat/core/network/api_service.dart';
+import 'package:now_chat/core/plugin/plugin_hook_bus.dart';
 import 'package:now_chat/util/app_logger.dart';
 
 import '../core/models/chat_session.dart';
