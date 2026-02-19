@@ -245,17 +245,35 @@ class _ImagePreviewPageState extends State<ImagePreviewPage> {
             );
           }
           final bytes = _imageBytes!;
+          final previewBackground = Color.lerp(
+            color.surface,
+            color.inverseSurface,
+            0.86,
+          )!;
           return Column(
             children: [
               Expanded(
-                child: Container(
-                  color: Colors.black,
-                  alignment: Alignment.center,
-                  child: InteractiveViewer(
-                    minScale: 0.8,
-                    maxScale: 6.0,
-                    child: Image.memory(bytes, fit: BoxFit.contain),
-                  ),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return Container(
+                      color: previewBackground,
+                      child: InteractiveViewer(
+                        minScale: 1.0,
+                        maxScale: 6.0,
+                        boundaryMargin: const EdgeInsets.all(300),
+                        clipBehavior: Clip.none,
+                        child: SizedBox(
+                          width: constraints.maxWidth,
+                          height: constraints.maxHeight,
+                          child: Container(
+                            color: previewBackground,
+                            alignment: Alignment.center,
+                            child: Image.memory(bytes, fit: BoxFit.contain),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ),
               Container(

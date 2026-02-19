@@ -185,36 +185,12 @@ class _MarkdownImageTile extends StatelessWidget {
             border: Border.all(color: color.outline.withAlpha(90)),
             color: color.surfaceContainerHighest.withAlpha(70),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 220),
-                  child: image,
-                ),
-              ),
-              Container(
-                height: 34,
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                alignment: Alignment.centerLeft,
-                child: Row(
-                  children: [
-                    Icon(Icons.zoom_in_outlined, size: 16, color: color.onSurfaceVariant),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        '点击查看详情',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 12, color: color.onSurfaceVariant),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 220),
+              child: image,
+            ),
           ),
         ),
       ),
