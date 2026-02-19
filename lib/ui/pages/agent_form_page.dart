@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:now_chat/core/models/agent_profile.dart';
 import 'package:now_chat/providers/agent_provider.dart';
 import 'package:now_chat/providers/chat_provider.dart';
@@ -16,6 +16,7 @@ class AgentFormPage extends StatefulWidget {
   State<AgentFormPage> createState() => _AgentFormPageState();
 }
 
+/// _AgentFormPageState 视图状态。
 class _AgentFormPageState extends State<AgentFormPage> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _summaryController = TextEditingController();

@@ -1,8 +1,9 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import '../../core/models/message.dart';
 
 
+/// 执行 showModalBottomSheetMenu 逻辑。
 Future<void> showModalBottomSheetMenu({
   required BuildContext context,
   required List<SheetMenuItem> items,
@@ -70,6 +71,7 @@ Widget _buildUserMenu ({
 
 
 // AI消息菜单
+/// _AssistantMenuSheet 类型定义。
 class _AssistantMenuSheet extends StatefulWidget {
   final List<SheetMenuItem> items;
   final Message message;
@@ -79,6 +81,7 @@ class _AssistantMenuSheet extends StatefulWidget {
   State<_AssistantMenuSheet> createState() => _AssistantMenuSheetState();
 }
 
+/// _AssistantMenuSheetState 视图状态。
 class _AssistantMenuSheetState extends State<_AssistantMenuSheet> {
   final controller = DraggableScrollableController();
   double sheetSize = 0.5;

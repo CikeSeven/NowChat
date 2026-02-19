@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
+/// SystemPromptMessageItem 类型定义。
 class SystemPromptMessageItem extends StatelessWidget {
   final String text;
   final bool isPlaceholder;

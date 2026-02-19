@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:now_chat/core/models/chat_session.dart';
 import 'package:now_chat/providers/chat_provider.dart';
 import 'package:now_chat/providers/settings_provider.dart';
@@ -14,6 +14,7 @@ class ChatSettingsPage extends StatefulWidget {
   State<ChatSettingsPage> createState() => _ChatSettingsPageState();
 }
 
+/// _ChatSettingsPageState 视图状态。
 class _ChatSettingsPageState extends State<ChatSettingsPage> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _maxTokensController = TextEditingController();

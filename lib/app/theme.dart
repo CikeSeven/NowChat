@@ -1,5 +1,6 @@
-import "package:flutter/material.dart";
+﻿import "package:flutter/material.dart";
 
+/// MaterialTheme 类型定义。
 class MaterialTheme {
   final TextTheme textTheme;
 
@@ -353,6 +354,7 @@ class MaterialTheme {
   ];
 }
 
+/// ExtendedColor 类型定义。
 class ExtendedColor {
   final Color seed, value;
   final ColorFamily light;
@@ -374,6 +376,7 @@ class ExtendedColor {
   });
 }
 
+/// ColorFamily 类型定义。
 class ColorFamily {
   const ColorFamily({
     required this.color,

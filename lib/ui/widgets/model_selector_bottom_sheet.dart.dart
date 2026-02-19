@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:now_chat/core/models/ai_provider_config.dart';
 import 'package:now_chat/providers/chat_provider.dart';
 import 'package:provider/provider.dart';
@@ -20,6 +20,7 @@ class ModelSelectorBottomSheet extends StatefulWidget {
   State<ModelSelectorBottomSheet> createState() => _ModelSelectorBottomSheetState();
 }
 
+/// _ModelSelectorBottomSheetState 视图状态。
 class _ModelSelectorBottomSheetState extends State<ModelSelectorBottomSheet> {
   final TextEditingController _searchController = TextEditingController();
   String _query = '';

@@ -1,9 +1,10 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../app/router.dart';
 import '../../providers/settings_provider.dart';
 
+/// SettingsPage 页面。
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
 

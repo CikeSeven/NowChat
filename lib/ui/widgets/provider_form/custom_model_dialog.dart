@@ -1,6 +1,7 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:now_chat/core/models/ai_provider_config.dart';
 
+/// CustomModelDialogResult 类型定义。
 class CustomModelDialogResult {
   final String model;
   final String remark;
@@ -15,6 +16,7 @@ class CustomModelDialogResult {
   });
 }
 
+/// 执行 showCustomModelDialog 逻辑。
 Future<CustomModelDialogResult?> showCustomModelDialog({
   required BuildContext context,
   required Set<String> existingModels,

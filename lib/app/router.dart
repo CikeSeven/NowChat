@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:now_chat/ui/pages/about_page.dart';
 import 'package:now_chat/ui/pages/agent_detail_page.dart';
 import 'package:now_chat/ui/pages/agent_form_page.dart';
@@ -12,6 +12,7 @@ import '../core/models/message.dart';
 import '../ui/pages/chat_detail_page.dart';
 import '../ui/pages/home_page.dart';
 
+/// AppRoutes 类型定义。
 class AppRoutes {
   static const home = '/';
   static const chatDetail = '/chat/detail';

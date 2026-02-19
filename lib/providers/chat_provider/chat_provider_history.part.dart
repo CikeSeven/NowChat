@@ -1,5 +1,6 @@
-part of '../chat_provider.dart';
+﻿part of '../chat_provider.dart';
 
+/// ChatProviderHistory 扩展方法集合。
 extension ChatProviderHistory on ChatProvider {
   /// 加载某个会话的消息列表（兼容旧调用入口）。
   Future<void> loadMessages(int? chatId) async {

@@ -1,8 +1,9 @@
-import 'package:isar/isar.dart';
+﻿import 'package:isar/isar.dart';
 
 part 'chat_session.g.dart';
 
 @collection
+/// ChatSession 类型定义。
 class ChatSession {
   Id id = Isar.autoIncrement;
   late String title;

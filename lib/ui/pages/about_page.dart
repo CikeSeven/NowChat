@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -10,6 +10,7 @@ class AboutPage extends StatefulWidget {
   State<AboutPage> createState() => _AboutPageState();
 }
 
+/// _AboutPageState 视图状态。
 class _AboutPageState extends State<AboutPage> {
   static const String _fallbackAppName = 'Now Chat';
   static const String _fallbackVersion = '0.3.1+4';
@@ -148,6 +149,7 @@ class _AboutPageState extends State<AboutPage> {
   }
 }
 
+/// _InfoLine 类型定义。
 class _InfoLine extends StatelessWidget {
   final String label;
   final String value;

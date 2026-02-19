@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:isar/isar.dart';
 import 'package:now_chat/app/ChatApp.dart';
 import 'package:now_chat/providers/agent_provider.dart';
@@ -12,6 +12,7 @@ import 'core/models/chat_session.dart';
 import 'core/models/message.dart';
 
 
+/// 执行 _openIsar 逻辑。
 Future<Isar> _openIsar() async {
   final dir = await getApplicationDocumentsDirectory();
   return await Isar.open(
@@ -19,6 +20,7 @@ Future<Isar> _openIsar() async {
     directory: dir.path,
   );
 }
+/// 执行 main 逻辑。
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 

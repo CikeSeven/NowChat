@@ -1,8 +1,9 @@
-import 'package:isar/isar.dart';
+﻿import 'package:isar/isar.dart';
 
 part 'message.g.dart';
 
 @collection
+/// Message 类型定义。
 class Message {
   Id isarId = Isar.autoIncrement;
   late int chatId;

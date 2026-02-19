@@ -1,9 +1,10 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:now_chat/ui/pages/agent_page.dart';
 import 'package:now_chat/ui/pages/api_page.dart';
 import 'package:now_chat/ui/pages/chat_list_page.dart';
 import 'package:now_chat/ui/pages/settings_page.dart';
 
+/// HomePage 页面。
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -11,6 +12,7 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
+/// _HomePageState 视图状态。
 class _HomePageState extends State<HomePage> {
   int _index = 0;
 

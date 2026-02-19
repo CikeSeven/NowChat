@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:now_chat/app/router.dart';
@@ -11,6 +11,7 @@ import 'package:now_chat/ui/widgets/message_input.dart';
 import 'package:provider/provider.dart';
 import '../widgets/model_selector_bottom_sheet.dart.dart';
 
+/// ChatDetailPage 页面。
 class ChatDetailPage extends StatefulWidget {
   final int? chatId;
 
@@ -20,6 +21,7 @@ class ChatDetailPage extends StatefulWidget {
   State<ChatDetailPage> createState() => _ChatDetailPageState();
 }
 
+/// _ChatDetailPageState 视图状态。
 class _ChatDetailPageState extends State<ChatDetailPage> {
   final ScrollController _scrollController = ScrollController();
   static const double _scrollBottomButtonThreshold = 420;

@@ -1,8 +1,9 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:now_chat/core/models/ai_provider_config.dart';
 import 'package:now_chat/core/provider/provider_catalog.dart';
 import 'package:now_chat/ui/widgets/provider_form/model_list_items.dart';
 
+/// ProviderCatalogSection 类型定义。
 class ProviderCatalogSection extends StatelessWidget {
   final TextEditingController searchController;
   final List<ProviderPreset> filteredPresets;
@@ -117,6 +118,7 @@ class ProviderCatalogSection extends StatelessWidget {
   }
 }
 
+/// ProviderConnectionSection 类型定义。
 class ProviderConnectionSection extends StatelessWidget {
   final TextEditingController nameController;
   final TextEditingController baseUrlController;
@@ -252,6 +254,7 @@ class ProviderConnectionSection extends StatelessWidget {
   }
 }
 
+/// ProviderModelsSection 类型定义。
 class ProviderModelsSection extends StatelessWidget {
   final List<String> models;
   final Map<String, String> modelRemarks;
@@ -348,6 +351,7 @@ class ProviderModelsSection extends StatelessWidget {
   }
 }
 
+/// FetchedModelsSection 类型定义。
 class FetchedModelsSection extends StatefulWidget {
   final bool loadingModels;
   final String? loadError;
@@ -366,6 +370,7 @@ class FetchedModelsSection extends StatefulWidget {
   State<FetchedModelsSection> createState() => _FetchedModelsSectionState();
 }
 
+/// _FetchedModelsSectionState 视图状态。
 class _FetchedModelsSectionState extends State<FetchedModelsSection> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';

@@ -1,4 +1,4 @@
-// ignore_for_file: file_names
+﻿// ignore_for_file: file_names
 
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -7,6 +7,7 @@ import 'package:now_chat/app/theme.dart';
 import 'package:now_chat/providers/settings_provider.dart';
 import 'package:provider/provider.dart';
 
+/// ChatApp 类型定义。
 class ChatApp extends StatelessWidget {
   const ChatApp({super.key});
 

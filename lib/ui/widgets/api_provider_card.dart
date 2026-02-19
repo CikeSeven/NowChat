@@ -1,6 +1,7 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:now_chat/core/models/ai_provider_config.dart';
 
+/// ApiProviderCard 类型定义。
 class ApiProviderCard extends StatelessWidget {
   final AIProviderConfig provider;
   final bool isExpanded;

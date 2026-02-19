@@ -1,6 +1,7 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:now_chat/core/models/ai_provider_config.dart';
 
+/// CurrentModelListItem 类型定义。
 class CurrentModelListItem extends StatelessWidget {
   final String model;
   final String? remark;
@@ -123,6 +124,7 @@ class CurrentModelListItem extends StatelessWidget {
   }
 }
 
+/// FetchedModelListItem 类型定义。
 class FetchedModelListItem extends StatelessWidget {
   final String model;
   final Color backgroundColor;
@@ -180,6 +182,7 @@ class FetchedModelListItem extends StatelessWidget {
   }
 }
 
+/// _CapabilityToggleIcon 类型定义。
 class _CapabilityToggleIcon extends StatelessWidget {
   final bool selected;
   final String tooltip;

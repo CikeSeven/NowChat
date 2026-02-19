@@ -1,8 +1,9 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:now_chat/core/models/message.dart';
 import 'package:now_chat/providers/chat_provider.dart';
 import 'package:provider/provider.dart';
 
+/// EditMessagePage 页面。
 class EditMessagePage extends StatefulWidget {
   final Message message;
   const EditMessagePage({super.key, required this.message});
@@ -11,6 +12,7 @@ class EditMessagePage extends StatefulWidget {
   State<EditMessagePage> createState() => _EditMessagePageState();
 }
 
+/// _EditMessagePageState 视图状态。
 class _EditMessagePageState extends State<EditMessagePage> {
   late TextEditingController _controller;
 

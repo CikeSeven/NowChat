@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,6 +7,7 @@ import 'package:now_chat/ui/widgets/message_bottom_sheet_menu.dart';
 
 import '../../app/router.dart';
 
+/// UserMessageWidget 组件。
 class UserMessageWidget extends StatelessWidget {
   final Message message;
   final VoidCallback onDelete;
@@ -114,6 +115,7 @@ class UserMessageWidget extends StatelessWidget {
   }
 }
 
+/// _AttachmentPreview 类型定义。
 class _AttachmentPreview extends StatelessWidget {
   final String path;
   const _AttachmentPreview({required this.path});

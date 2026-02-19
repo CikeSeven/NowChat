@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:now_chat/app/router.dart';
 import 'package:now_chat/core/models/agent_profile.dart';
@@ -20,6 +20,7 @@ class AgentDetailPage extends StatefulWidget {
   State<AgentDetailPage> createState() => _AgentDetailPageState();
 }
 
+/// _AgentDetailPageState 视图状态。
 class _AgentDetailPageState extends State<AgentDetailPage> {
   final TextEditingController _inputController = TextEditingController();
   bool _renderMarkdown = true;
@@ -483,6 +484,7 @@ class _AgentDetailPageState extends State<AgentDetailPage> {
   }
 }
 
+/// _ResolvedAgentRuntime 类型定义。
 class _ResolvedAgentRuntime {
   final AIProviderConfig provider;
   final String model;

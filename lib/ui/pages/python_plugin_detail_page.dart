@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:now_chat/core/models/python_plugin_manifest.dart';
 import 'package:now_chat/providers/python_plugin_provider.dart';
 import 'package:provider/provider.dart';
@@ -11,6 +11,7 @@ class PythonPluginDetailPage extends StatefulWidget {
   State<PythonPluginDetailPage> createState() => _PythonPluginDetailPageState();
 }
 
+/// _PythonPluginDetailPageState 视图状态。
 class _PythonPluginDetailPageState extends State<PythonPluginDetailPage> {
   static const List<String> _baseRuntimeLibraryIds = <String>[
     'libcxx',

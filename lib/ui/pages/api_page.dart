@@ -1,9 +1,10 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:now_chat/app/router.dart';
 import 'package:now_chat/providers/chat_provider.dart';
 import 'package:now_chat/ui/widgets/api_provider_card.dart';
 import 'package:provider/provider.dart';
 
+/// ApiPage 页面。
 class ApiPage extends StatefulWidget {
   const ApiPage({super.key});
 
@@ -11,6 +12,7 @@ class ApiPage extends StatefulWidget {
   State<ApiPage> createState() => _ApiPageState();
 }
 
+/// _ApiPageState 视图状态。
 class _ApiPageState extends State<ApiPage> {
   final TextEditingController _searchController = TextEditingController();
   final Set<String> _expandedProviderIds = <String>{};

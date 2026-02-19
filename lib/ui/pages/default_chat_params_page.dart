@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:now_chat/providers/chat_provider.dart';
 import 'package:provider/provider.dart';
 
@@ -13,6 +13,7 @@ class DefaultChatParamsPage extends StatefulWidget {
   State<DefaultChatParamsPage> createState() => _DefaultChatParamsPageState();
 }
 
+/// _DefaultChatParamsPageState 视图状态。
 class _DefaultChatParamsPageState extends State<DefaultChatParamsPage> {
   final TextEditingController _maxTokensController = TextEditingController();
   final TextEditingController _maxTurnsController = TextEditingController();

@@ -1,5 +1,6 @@
-part of '../chat_provider.dart';
+﻿part of '../chat_provider.dart';
 
+/// ChatProviderMessageStore 扩展方法集合。
 extension ChatProviderMessageStore on ChatProvider {
   /// 将消息写入当前会话内存列表（存在则更新，不存在则追加）。
   bool _upsertMessageInMemory(Message message) {

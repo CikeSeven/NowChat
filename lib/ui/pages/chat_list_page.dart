@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:now_chat/app/router.dart';
 import 'package:now_chat/ui/widgets/chat_list_item.dart';
@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../../providers/chat_provider.dart';
 
 
+/// ChatListPage 页面。
 class ChatListPage extends StatefulWidget {
   const ChatListPage({super.key});
 
@@ -14,6 +15,7 @@ class ChatListPage extends StatefulWidget {
   State<ChatListPage> createState() => _ChatListPageState();
 }
 
+/// _ChatListPageState 视图状态。
 class _ChatListPageState extends State<ChatListPage> {
   bool _isSelecting = false;
   final Set<int> _selectedIds = {}; // 记录选中的 chat id

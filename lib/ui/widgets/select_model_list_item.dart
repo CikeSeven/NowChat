@@ -1,6 +1,7 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../../core/models/ai_provider_config.dart';
 
+/// SelectModelListItem 类型定义。
 class SelectModelListItem extends StatefulWidget {
   final AIProviderConfig provider;
   final ValueChanged<String> onSelect;
@@ -17,6 +18,7 @@ class SelectModelListItem extends StatefulWidget {
   State<SelectModelListItem> createState() => _SelectModelListItemState();
 }
 
+/// _SelectModelListItemState 视图状态。
 class _SelectModelListItemState extends State<SelectModelListItem> {
   bool _expanded = false;
 

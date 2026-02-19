@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:now_chat/core/models/ai_provider_config.dart';
@@ -9,6 +9,7 @@ import 'package:now_chat/ui/widgets/provider_form/provider_form_sections.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
+/// ProviderFormPage 页面。
 class ProviderFormPage extends StatefulWidget {
   final String? providerId;
 
@@ -18,6 +19,7 @@ class ProviderFormPage extends StatefulWidget {
   State<ProviderFormPage> createState() => _ProviderFormPageState();
 }
 
+/// _ProviderFormPageState 视图状态。
 class _ProviderFormPageState extends State<ProviderFormPage> {
   static const int _collapsedPresetCount = 8;
 

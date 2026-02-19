@@ -1,7 +1,8 @@
-import 'package:isar/isar.dart';
+﻿import 'package:isar/isar.dart';
 import '../models/chat_session.dart';
 import '../models/message.dart';
 
+/// ChatRepository 数据仓库。
 class ChatRepository {
   final Isar isar;
 

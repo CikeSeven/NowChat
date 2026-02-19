@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_highlight/flutter_highlight.dart';
 import 'package:flutter_highlight/themes/github.dart';
@@ -8,6 +8,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'package:url_launcher/url_launcher.dart';
 
+/// MarkdownMessageWidget 组件。
 class MarkdownMessageWidget extends StatelessWidget {
   final String data;
   final bool selectable;
@@ -106,6 +107,7 @@ class MarkdownMessageWidget extends StatelessWidget {
   }
 }
 
+/// 执行 _extractNodeText 逻辑。
 String _extractNodeText(md.Node node) {
   if (node is md.Text) {
     return node.text;
@@ -119,6 +121,7 @@ String _extractNodeText(md.Node node) {
   return '';
 }
 
+/// LatexBlockSyntax 类型定义。
 class LatexBlockSyntax extends md.InlineSyntax {
   LatexBlockSyntax()
     : super(r'(?<!\\)\$\$([\s\S]+?)(?<!\\)\$\$', startCharacter: 36);
@@ -135,6 +138,7 @@ class LatexBlockSyntax extends md.InlineSyntax {
   }
 }
 
+/// LatexInlineSyntax 类型定义。
 class LatexInlineSyntax extends md.InlineSyntax {
   LatexInlineSyntax()
     : super(r'(?<!\\)\$([^\$\n]+?)(?<!\\)\$', startCharacter: 36);
@@ -151,6 +155,7 @@ class LatexInlineSyntax extends md.InlineSyntax {
   }
 }
 
+/// LatexElementBuilder 类型定义。
 class LatexElementBuilder extends MarkdownElementBuilder {
   final BuildContext context;
   final bool displayMode;
@@ -206,6 +211,7 @@ class LatexElementBuilder extends MarkdownElementBuilder {
   }
 }
 
+/// HorizontalRuleBuilder 类型定义。
 class HorizontalRuleBuilder extends MarkdownElementBuilder {
   final BuildContext context;
   HorizontalRuleBuilder(this.context);
@@ -235,6 +241,7 @@ class HorizontalRuleBuilder extends MarkdownElementBuilder {
   }
 }
 
+/// CodeBlockBuilder 类型定义。
 class CodeBlockBuilder extends MarkdownElementBuilder {
   final BuildContext context;
   CodeBlockBuilder(this.context);

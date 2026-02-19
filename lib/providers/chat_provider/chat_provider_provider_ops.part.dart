@@ -1,5 +1,6 @@
-part of '../chat_provider.dart';
+﻿part of '../chat_provider.dart';
 
+/// ChatProviderProviderOps 扩展方法集合。
 extension ChatProviderProviderOps on ChatProvider {
   /// 刷新指定提供方的模型列表与模型元信息。
   Future<void> refreshConfigModels(

@@ -1,8 +1,9 @@
-import 'dart:io';
+﻿import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:now_chat/core/models/chat_session.dart';
 
+/// MessageInput 类型定义。
 class MessageInput extends StatefulWidget {
   final ChatSession? chat;
   final bool isStreaming;
@@ -45,6 +46,7 @@ class MessageInput extends StatefulWidget {
   State<MessageInput> createState() => _MessageInputState();
 }
 
+/// _MessageInputState 视图状态。
 class _MessageInputState extends State<MessageInput> {
   final TextEditingController _controller = TextEditingController();
 

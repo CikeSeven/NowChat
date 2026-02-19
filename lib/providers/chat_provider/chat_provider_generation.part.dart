@@ -1,5 +1,6 @@
-part of '../chat_provider.dart';
+﻿part of '../chat_provider.dart';
 
+/// ChatProviderGeneration 扩展方法集合。
 extension ChatProviderGeneration on ChatProvider {
   /// 判断指定助手消息是否存在“继续生成”入口。
   bool canContinueAssistantMessage(int chatId, int assistantMessageId) {

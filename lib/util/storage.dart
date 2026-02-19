@@ -1,10 +1,11 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 
 import 'package:now_chat/core/models/ai_provider_config.dart';
 import 'package:now_chat/core/models/agent_profile.dart';
 import 'package:now_chat/util/app_logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// Storage 类型定义。
 class Storage {
   static const _kAPIProvider = 'api_provider';
   static const _kAgentProfiles = 'agent_profiles';

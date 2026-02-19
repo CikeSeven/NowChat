@@ -1,6 +1,7 @@
-import 'package:logger/logger.dart';
+﻿import 'package:logger/logger.dart';
 import 'package:flutter/foundation.dart'; // for kDebugMode
 
+/// AppLogger 类型定义。
 class AppLogger {
   static final _logger = Logger(
     printer: PrettyPrinter(
