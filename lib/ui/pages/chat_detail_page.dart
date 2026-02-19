@@ -271,6 +271,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                             chat.id,
                             messageIsarId,
                           ),
+              toolLogsForMessage: chatProvider.toolLogsForMessage,
             ),
           ),
 
@@ -338,7 +339,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                   systemPrompt: _pendingSystemPrompt.trim(),
                   temperature: settings.defaultTemperature,
                   topP: settings.defaultTopP,
+                  maxTokens: settings.defaultMaxTokens,
                   maxConversationTurns: settings.defaultMaxConversationTurns,
+                  toolCallingEnabled: settings.defaultToolCallingEnabled,
+                  maxToolCalls: settings.defaultMaxToolCalls,
                   isStreaming: isStreamingForNewChat,
                 );
                 setState(() {

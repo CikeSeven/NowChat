@@ -7,6 +7,8 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
   static const int defaultMaxTokensValue = 8192;
   static const int defaultMaxConversationTurnsValue = 50;
   static const bool defaultStreamingValue = true;
+  static const bool defaultToolCallingEnabledValue = true;
+  static const int defaultMaxToolCallsValue = 5;
 
   static const _themeKey = 'theme_mode';
   static const _defaultProviderIdKey = 'default_provider_id';
@@ -17,6 +19,8 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
   static const _defaultMaxConversationTurnsKey =
       'default_max_conversation_turns';
   static const _defaultStreamingKey = 'default_streaming';
+  static const _defaultToolCallingEnabledKey = 'default_tool_calling_enabled';
+  static const _defaultMaxToolCallsKey = 'default_max_tool_calls';
 
   ThemeMode _themeMode = ThemeMode.system;
   String? _defaultProviderId;
@@ -26,6 +30,8 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
   int _defaultMaxTokens = defaultMaxTokensValue;
   int _defaultMaxConversationTurns = defaultMaxConversationTurnsValue;
   bool _defaultStreaming = defaultStreamingValue;
+  bool _defaultToolCallingEnabled = defaultToolCallingEnabledValue;
+  int _defaultMaxToolCalls = defaultMaxToolCallsValue;
 
   ThemeMode get themeMode => _themeMode;
   String? get defaultProviderId => _defaultProviderId;
@@ -35,6 +41,8 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
   int get defaultMaxTokens => _defaultMaxTokens;
   int get defaultMaxConversationTurns => _defaultMaxConversationTurns;
   bool get defaultStreaming => _defaultStreaming;
+  bool get defaultToolCallingEnabled => _defaultToolCallingEnabled;
+  int get defaultMaxToolCalls => _defaultMaxToolCalls;
 
   ThemeMode get effectiveThemeMode {
     if (_themeMode != ThemeMode.system) return _themeMode;
@@ -70,6 +78,11 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
         defaultMaxConversationTurnsValue;
     _defaultStreaming =
         prefs.getBool(_defaultStreamingKey) ?? defaultStreamingValue;
+    _defaultToolCallingEnabled =
+        prefs.getBool(_defaultToolCallingEnabledKey) ??
+        defaultToolCallingEnabledValue;
+    _defaultMaxToolCalls =
+        prefs.getInt(_defaultMaxToolCallsKey) ?? defaultMaxToolCallsValue;
     notifyListeners();
   }
 
@@ -146,6 +159,21 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
     await prefs.setBool(_defaultStreamingKey, value);
   }
 
+  Future<void> setDefaultToolCallingEnabled(bool value) async {
+    _defaultToolCallingEnabled = value;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_defaultToolCallingEnabledKey, value);
+  }
+
+  Future<void> setDefaultMaxToolCalls(int value) async {
+    if (value <= 0) return;
+    _defaultMaxToolCalls = value;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_defaultMaxToolCallsKey, value);
+  }
+
   Future<void> restoreDefaultChatParams() async {
     _defaultProviderId = null;
     _defaultModel = null;
@@ -154,6 +182,8 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
     _defaultMaxTokens = defaultMaxTokensValue;
     _defaultMaxConversationTurns = defaultMaxConversationTurnsValue;
     _defaultStreaming = defaultStreamingValue;
+    _defaultToolCallingEnabled = defaultToolCallingEnabledValue;
+    _defaultMaxToolCalls = defaultMaxToolCallsValue;
     notifyListeners();
 
     final prefs = await SharedPreferences.getInstance();
@@ -164,6 +194,8 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
     await prefs.remove(_defaultMaxTokensKey);
     await prefs.remove(_defaultMaxConversationTurnsKey);
     await prefs.remove(_defaultStreamingKey);
+    await prefs.remove(_defaultToolCallingEnabledKey);
+    await prefs.remove(_defaultMaxToolCallsKey);
   }
 
   void toggleTheme() {

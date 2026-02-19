@@ -13,6 +13,8 @@ class ChatSession {
   double topP = 1.0;
   int maxTokens = 0;
   int maxConversationTurns = 50;
+  bool toolCallingEnabled = true;
+  int maxToolCalls = 5;
   bool isStreaming = true;
   bool isGenerating = true;
   late final DateTime createdAt;
@@ -27,6 +29,8 @@ class ChatSession {
     this.topP = 1.0,
     this.maxTokens = 0,
     this.maxConversationTurns = 50,
+    this.toolCallingEnabled = true,
+    this.maxToolCalls = 5,
     this.isStreaming = true,
     this.isGenerating = true,
     required this.createdAt,
@@ -41,6 +45,8 @@ class ChatSession {
     double? topP,
     int? maxTokens,
     int? maxConversationTurns,
+    bool? toolCallingEnabled,
+    int? maxToolCalls,
     bool? isStreaming,
     bool? isGenerating,
     DateTime? lastUpdated,
@@ -53,6 +59,12 @@ class ChatSession {
     if (maxTokens != null) this.maxTokens = maxTokens;
     if (maxConversationTurns != null) {
       this.maxConversationTurns = maxConversationTurns;
+    }
+    if (toolCallingEnabled != null) {
+      this.toolCallingEnabled = toolCallingEnabled;
+    }
+    if (maxToolCalls != null) {
+      this.maxToolCalls = maxToolCalls;
     }
     if (isStreaming != null) this.isStreaming = isStreaming;
     if (isGenerating != null) this.isGenerating = isGenerating;
@@ -68,6 +80,8 @@ class ChatSession {
     double? topP,
     int? maxTokens,
     int? maxConversationTurns,
+    bool? toolCallingEnabled,
+    int? maxToolCalls,
     bool? isStreaming,
     bool? isGenerating,
     DateTime? lastUpdated,
@@ -81,6 +95,8 @@ class ChatSession {
       topP: topP ?? this.topP,
       maxTokens: maxTokens ?? this.maxTokens,
       maxConversationTurns: maxConversationTurns ?? this.maxConversationTurns,
+      toolCallingEnabled: toolCallingEnabled ?? this.toolCallingEnabled,
+      maxToolCalls: maxToolCalls ?? this.maxToolCalls,
       isStreaming: isStreaming ?? this.isStreaming,
       createdAt: createdAt,
       isGenerating: isGenerating ?? this.isGenerating,
@@ -99,6 +115,8 @@ class ChatSession {
     'topP': topP,
     'maxTokens': maxTokens,
     'maxConversationTurns': maxConversationTurns,
+    'toolCallingEnabled': toolCallingEnabled,
+    'maxToolCalls': maxToolCalls,
     'isStreaming': isStreaming,
     'isGenerating': isGenerating,
     "lastUpdated": lastUpdated.toIso8601String(),
@@ -113,6 +131,8 @@ class ChatSession {
     topP: (json['topP'] ?? 1.0).toDouble(),
     maxTokens: json['maxTokens'] ?? 0,
     maxConversationTurns: json['maxConversationTurns'] ?? 50,
+    toolCallingEnabled: json['toolCallingEnabled'] as bool? ?? true,
+    maxToolCalls: json['maxToolCalls'] ?? 5,
     isStreaming: json['isStreaming'] as bool? ?? true,
     isGenerating: json['isGenerating'] as bool? ?? true,
     createdAt: DateTime.parse(json['createdAt']),

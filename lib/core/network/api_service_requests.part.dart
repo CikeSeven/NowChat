@@ -9,6 +9,7 @@ Future<Map<String, dynamic>> _sendChatRequestInternal({
   required Isar isar,
   GenerationAbortController? abortController,
   List<Message>? overrideMessages,
+  FutureOr<void> Function(Map<String, dynamic> toolLog)? onToolLog,
 }) async {
   switch (provider.requestMode) {
     case RequestMode.openaiChat:
@@ -18,6 +19,7 @@ Future<Map<String, dynamic>> _sendChatRequestInternal({
         isar: isar,
         abortController: abortController,
         overrideMessages: overrideMessages,
+        onToolLog: onToolLog,
       );
     case RequestMode.geminiGenerateContent:
       return _sendGeminiRequest(
@@ -45,6 +47,7 @@ Future<Map<String, dynamic>> _sendOpenAIChatRequest({
   required Isar isar,
   GenerationAbortController? abortController,
   List<Message>? overrideMessages,
+  FutureOr<void> Function(Map<String, dynamic> toolLog)? onToolLog,
 }) async {
   final logger = Logger();
   final base = _normalizeBaseUrl(provider.baseUrl);
@@ -64,45 +67,121 @@ Future<Map<String, dynamic>> _sendOpenAIChatRequest({
   if (apiKey.isNotEmpty) {
     headers['Authorization'] = 'Bearer $apiKey';
   }
-
-  final body = {
-    'model': model,
-    'messages': await _buildOpenAIMessagesPayload(
-      filteredMessages,
-      allowVision: allowVision,
-      systemPrompt: systemPrompt,
-    ),
-    'temperature': session.temperature,
-    'top_p': session.topP,
-    if (session.maxTokens > 0) 'max_tokens': session.maxTokens,
-  };
+  final shouldUseTools = _isToolCallingEnabledForSession(provider, session);
+  var remainingToolCalls = session.maxToolCalls <= 0 ? 0 : session.maxToolCalls;
+  final toolLogs = <Map<String, dynamic>>[];
+  final conversation = await _buildOpenAIMessagesPayload(
+    filteredMessages,
+    allowVision: allowVision,
+    systemPrompt: systemPrompt,
+  );
+  final responseTextBuffer = StringBuffer();
 
   logger.i("(OpenAI) 向 $uri 发送对话请求");
   final client = http.Client();
   abortController?.onAbort(client.close);
   try {
-    if (_isAbortTriggered(abortController)) {
-      throw const GenerationAbortedException();
-    }
-    final response = await client.post(
-      uri,
-      headers: headers,
-      body: jsonEncode(body),
-    );
-    logger.i("返回体: ${response.body}");
+    while (true) {
+      if (_isAbortTriggered(abortController)) {
+        throw const GenerationAbortedException();
+      }
+      final body = <String, dynamic>{
+        'model': model,
+        'messages': conversation,
+        'temperature': session.temperature,
+        'top_p': session.topP,
+        if (session.maxTokens > 0) 'max_tokens': session.maxTokens,
+        if (shouldUseTools && remainingToolCalls > 0)
+          'tools': AIToolRuntime.buildOpenAIToolsSchema(),
+        if (shouldUseTools && remainingToolCalls > 0) 'tool_choice': 'auto',
+      };
 
-    if (response.statusCode != 200) {
-      throw Exception('请求失败: ${response.statusCode} ${response.body}');
-    }
-    final data = jsonDecode(response.body);
-    final content =
-        data['choices']?[0]?['message']?['content'] ??
-        data['output'] ??
-        data['response'] ??
-        data['message'] ??
-        '（无返回内容）';
+      final response = await client.post(
+        uri,
+        headers: headers,
+        body: jsonEncode(body),
+      );
+      logger.i("返回体: ${response.body}");
 
-    return {'content': content, 'reasoning': null, 'reasoningTimeMs': null};
+      if (response.statusCode != 200) {
+        throw Exception('请求失败: ${response.statusCode} ${response.body}');
+      }
+      final data = jsonDecode(response.body);
+      if (data is! Map<String, dynamic>) {
+        throw const FormatException('OpenAI 响应格式错误');
+      }
+
+      dynamic message;
+      final choices = data['choices'];
+      if (choices is List && choices.isNotEmpty) {
+        final firstChoice = choices.first;
+        if (firstChoice is Map) {
+          message = firstChoice['message'];
+        }
+      }
+
+      final content = _extractOpenAIMessageContentText(
+        message is Map ? Map<String, dynamic>.from(message) : null,
+      );
+      if (content.isNotEmpty) {
+        responseTextBuffer.write(content);
+      }
+      final toolCalls = _parseOpenAIToolCallsFromMessage(message);
+      if (toolCalls.isEmpty || !shouldUseTools) {
+        break;
+      }
+      if (remainingToolCalls <= 0) {
+        final skippedLog = <String, dynamic>{
+          'callId': 'limit_reached',
+          'toolName': 'tool_limit',
+          'status': 'skipped',
+          'summary': '工具调用达到上限(${session.maxToolCalls})，停止继续调用',
+        };
+        toolLogs.add(skippedLog);
+        await onToolLog?.call(skippedLog);
+        break;
+      }
+
+      conversation.add(<String, dynamic>{
+        'role': 'assistant',
+        if (content.isNotEmpty) 'content': content,
+        'tool_calls':
+            toolCalls
+                .map((call) => _toOpenAIToolCallPayload(call))
+                .toList(growable: false),
+      });
+
+      for (final call in toolCalls) {
+        if (remainingToolCalls <= 0) break;
+        final result = await AIToolRuntime.execute(call);
+        remainingToolCalls -= 1;
+
+        final log = <String, dynamic>{
+          'callId': call.id,
+          'toolName': call.name,
+          'status': result.status,
+          'summary': result.summary,
+          if (result.error != null) 'error': result.error,
+          if (result.durationMs != null) 'durationMs': result.durationMs,
+        };
+        toolLogs.add(log);
+        await onToolLog?.call(log);
+
+        conversation.add(<String, dynamic>{
+          'role': 'tool',
+          'tool_call_id': call.id,
+          'content': result.toolMessageContent,
+        });
+      }
+    }
+
+    final content = responseTextBuffer.toString();
+    return {
+      'content': content.isEmpty ? '（无返回内容）' : content,
+      'reasoning': null,
+      'reasoningTimeMs': null,
+      'toolLogs': toolLogs,
+    };
   } on GenerationAbortedException {
     logger.i("(OpenAI) 请求已中断");
     rethrow;

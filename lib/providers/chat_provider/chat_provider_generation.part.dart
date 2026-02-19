@@ -63,6 +63,12 @@ extension ChatProviderGeneration on ChatProvider {
     var responseStarted = false;
     var interrupted = false;
     var usedStreaming = false;
+    void handleToolLog(Map<String, dynamic> rawLog) {
+      _appendToolLogForMessage(
+        assistantMessage.isarId,
+        ToolExecutionLog.fromJson(rawLog),
+      );
+    }
 
     try {
       final effectiveStreaming =
@@ -91,6 +97,7 @@ extension ChatProviderGeneration on ChatProvider {
             }
             updateStreamingMessage(assistantMessage);
           },
+          onToolLog: handleToolLog,
           onDone: () async {
             await endStreamingMessage(assistantMessage);
           },
@@ -102,6 +109,7 @@ extension ChatProviderGeneration on ChatProvider {
           isar: isar,
           abortController: abortController,
           overrideMessages: requestMessages,
+          onToolLog: handleToolLog,
         );
         final content = (response['content'] ?? '').toString();
         final reasoning = response['reasoning']?.toString();
@@ -114,6 +122,18 @@ extension ChatProviderGeneration on ChatProvider {
           responseStarted = true;
         }
         await saveMessage(assistantMessage);
+        final rawLogs = response['toolLogs'];
+        if (rawLogs is List && rawLogs.isNotEmpty) {
+          _setToolLogsForMessage(
+            assistantMessage.isarId,
+            rawLogs
+                .whereType<Map>()
+                .map((item) => ToolExecutionLog.fromJson(
+                      Map<String, dynamic>.from(item),
+                    ))
+                .toList(),
+          );
+        }
       }
     } on GenerationAbortedException {
       interrupted = true;
@@ -184,6 +204,12 @@ extension ChatProviderGeneration on ChatProvider {
         timestamp: DateTime.now(),
       );
       await saveMessage(aiMsg);
+      void handleToolLog(Map<String, dynamic> rawLog) {
+        _appendToolLogForMessage(
+          aiMsg.isarId,
+          ToolExecutionLog.fromJson(rawLog),
+        );
+      }
 
       final effectiveStreaming =
           isStreaming && provider.requestMode.supportsStreaming;
@@ -231,6 +257,7 @@ extension ChatProviderGeneration on ChatProvider {
 
               updateStreamingMessage(aiMsg);
             },
+            onToolLog: handleToolLog,
             onDone: () async {
               reasoningTimer?.cancel();
               if (reasoningStartTime != null) {
@@ -267,6 +294,7 @@ extension ChatProviderGeneration on ChatProvider {
             session: chat,
             isar: isar,
             abortController: abortController,
+            onToolLog: handleToolLog,
           );
           aiMsg
             ..content = response['content'] ?? ''
@@ -276,6 +304,18 @@ extension ChatProviderGeneration on ChatProvider {
             responseStarted = true;
           }
           await saveMessage(aiMsg);
+          final rawLogs = response['toolLogs'];
+          if (rawLogs is List && rawLogs.isNotEmpty) {
+            _setToolLogsForMessage(
+              aiMsg.isarId,
+              rawLogs
+                  .whereType<Map>()
+                  .map((item) => ToolExecutionLog.fromJson(
+                        Map<String, dynamic>.from(item),
+                      ))
+                  .toList(),
+            );
+          }
         } on GenerationAbortedException {
           interrupted = true;
         } catch (e) {
@@ -370,6 +410,12 @@ extension ChatProviderGeneration on ChatProvider {
       final currentAiMsg = aiMsg;
 
       await saveMessage(currentAiMsg);
+      void handleToolLog(Map<String, dynamic> rawLog) {
+        _appendToolLogForMessage(
+          currentAiMsg.isarId,
+          ToolExecutionLog.fromJson(rawLog),
+        );
+      }
 
       final effectiveStreaming =
           isStreaming && provider.requestMode.supportsStreaming;
@@ -417,6 +463,7 @@ extension ChatProviderGeneration on ChatProvider {
 
               updateStreamingMessage(currentAiMsg);
             },
+            onToolLog: handleToolLog,
             onDone: () async {
               AppLogger.i('onDone: 流式请求结束');
               reasoningTimer?.cancel();
@@ -455,6 +502,7 @@ extension ChatProviderGeneration on ChatProvider {
             session: chat,
             isar: isar,
             abortController: abortController,
+            onToolLog: handleToolLog,
           );
           currentAiMsg
             ..content = response['content'] ?? ''
@@ -464,6 +512,18 @@ extension ChatProviderGeneration on ChatProvider {
             responseStarted = true;
           }
           await saveMessage(currentAiMsg);
+          final rawLogs = response['toolLogs'];
+          if (rawLogs is List && rawLogs.isNotEmpty) {
+            _setToolLogsForMessage(
+              currentAiMsg.isarId,
+              rawLogs
+                  .whereType<Map>()
+                  .map((item) => ToolExecutionLog.fromJson(
+                        Map<String, dynamic>.from(item),
+                      ))
+                  .toList(),
+            );
+          }
         } on GenerationAbortedException {
           interrupted = true;
         } catch (e) {

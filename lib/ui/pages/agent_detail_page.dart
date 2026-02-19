@@ -96,6 +96,8 @@ class _AgentDetailPageState extends State<AgentDetailPage> {
     final temperature = agent.temperature ?? settings.defaultTemperature;
     final topP = agent.topP ?? settings.defaultTopP;
     final maxTokens = agent.maxTokens ?? settings.defaultMaxTokens;
+    final toolCallingEnabled = settings.defaultToolCallingEnabled;
+    final maxToolCalls = settings.defaultMaxToolCalls;
     final streaming = (agent.isStreaming ?? settings.defaultStreaming) &&
         provider.requestMode.supportsStreaming;
 
@@ -105,6 +107,8 @@ class _AgentDetailPageState extends State<AgentDetailPage> {
       temperature: temperature,
       topP: topP,
       maxTokens: maxTokens,
+      toolCallingEnabled: toolCallingEnabled,
+      maxToolCalls: maxToolCalls,
       isStreaming: streaming,
     );
   }
@@ -175,6 +179,8 @@ class _AgentDetailPageState extends State<AgentDetailPage> {
         temperature: runtime.temperature,
         topP: runtime.topP,
         maxTokens: runtime.maxTokens,
+        toolCallingEnabled: runtime.toolCallingEnabled,
+        maxToolCalls: runtime.maxToolCalls,
         isStreaming: runtime.isStreaming,
       ),
     );
@@ -483,6 +489,8 @@ class _ResolvedAgentRuntime {
   final double temperature;
   final double topP;
   final int maxTokens;
+  final bool toolCallingEnabled;
+  final int maxToolCalls;
   final bool isStreaming;
 
   const _ResolvedAgentRuntime({
@@ -491,6 +499,8 @@ class _ResolvedAgentRuntime {
     required this.temperature,
     required this.topP,
     required this.maxTokens,
+    required this.toolCallingEnabled,
+    required this.maxToolCalls,
     required this.isStreaming,
   });
 }

@@ -35,6 +35,8 @@ class AgentOneShotRequest {
   final double temperature;
   final double topP;
   final int maxTokens;
+  final bool toolCallingEnabled;
+  final int maxToolCalls;
   final bool isStreaming;
 
   const AgentOneShotRequest({
@@ -45,6 +47,8 @@ class AgentOneShotRequest {
     required this.temperature,
     required this.topP,
     required this.maxTokens,
+    required this.toolCallingEnabled,
+    required this.maxToolCalls,
     required this.isStreaming,
   });
 }
@@ -145,6 +149,8 @@ class AgentProvider with ChangeNotifier {
       temperature: request.temperature,
       topP: request.topP,
       maxTokens: request.maxTokens,
+      toolCallingEnabled: request.toolCallingEnabled,
+      maxToolCalls: request.maxToolCalls,
       maxConversationTurns: 1,
       isStreaming: request.isStreaming,
       isGenerating: true,

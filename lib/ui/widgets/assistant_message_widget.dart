@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:now_chat/app/router.dart';
 import 'package:now_chat/core/models/message.dart';
+import 'package:now_chat/core/models/tool_execution_log.dart';
 import 'package:now_chat/ui/widgets/markdown_message_widget.dart';
 import 'message_bottom_sheet_menu.dart';
 
@@ -17,6 +18,7 @@ class AssistantMessageWidget extends StatefulWidget {
   final bool isStreamingMessage;
   final bool showResendButton;
   final bool showContinueButton;
+  final List<ToolExecutionLog> toolLogs;
   final VoidCallback onDelete;
   final VoidCallback? onResend;
   final VoidCallback? onContinue;
@@ -27,6 +29,7 @@ class AssistantMessageWidget extends StatefulWidget {
     this.isStreamingMessage = false,
     required this.showResendButton,
     this.showContinueButton = false,
+    this.toolLogs = const <ToolExecutionLog>[],
     required this.onDelete,
     this.onResend,
     this.onContinue,
@@ -278,6 +281,8 @@ class _AssistantMessageWidgetState extends State<AssistantMessageWidget>
               decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
               child: _buildMessageBody(context, message),
             ),
+            if (widget.toolLogs.isNotEmpty)
+              _buildToolLogs(context, widget.toolLogs),
 
             // 底部按钮
             if (!widget.isGenerating)
@@ -358,5 +363,70 @@ class _AssistantMessageWidgetState extends State<AssistantMessageWidget>
       );
     }
     return MarkdownMessageWidget(data: message.content);
+  }
+
+  Widget _buildToolLogs(BuildContext context, List<ToolExecutionLog> logs) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      margin: const EdgeInsets.only(left: 12, right: 12, bottom: 6),
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colors.outlineVariant.withAlpha(150)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '工具调用 ${logs.length} 次',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: colors.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 6),
+          ...logs.map((log) {
+            final statusColor =
+                log.isSuccess
+                    ? Colors.green.shade600
+                    : (log.isError
+                        ? colors.error
+                        : colors.onSurfaceVariant);
+            final statusIcon =
+                log.isSuccess
+                    ? Icons.check_circle_outline
+                    : (log.isError
+                        ? Icons.error_outline
+                        : Icons.do_not_disturb_on_outlined);
+            final durationText =
+                log.durationMs == null ? '' : ' · ${log.durationMs}ms';
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(statusIcon, size: 14, color: statusColor),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      '${log.toolName}$durationText\n${log.summary}',
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        height: 1.35,
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
   }
 }

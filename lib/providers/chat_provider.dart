@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:isar/isar.dart';
 import 'package:logger/web.dart';
 import 'package:now_chat/core/models/ai_provider_config.dart';
+import 'package:now_chat/core/models/tool_execution_log.dart';
 import 'package:now_chat/core/network/api_service.dart';
 import 'package:now_chat/util/app_logger.dart';
 
@@ -45,6 +46,8 @@ class ChatProvider with ChangeNotifier {
       <int, _PendingContinuation>{};
   final Set<int> _streamingMessageIds = <int>{};
   final Set<int> _dirtyStreamingMessageIds = <int>{};
+  final Map<int, List<ToolExecutionLog>> _toolLogsByMessageId =
+      <int, List<ToolExecutionLog>>{};
 
   Timer? _streamingNotifyTimer;
   Timer? _streamingFlushTimer;
@@ -63,6 +66,11 @@ class ChatProvider with ChangeNotifier {
   bool get hasMoreHistory => _hasMoreHistory;
   bool get isLoadingMoreHistory => _isLoadingMoreHistory;
   Set<int> get streamingMessageIds => Set.unmodifiable(_streamingMessageIds);
+  List<ToolExecutionLog> toolLogsForMessage(int messageId) {
+    final logs = _toolLogsByMessageId[messageId];
+    if (logs == null) return const <ToolExecutionLog>[];
+    return List<ToolExecutionLog>.unmodifiable(logs);
+  }
 
   ChatProvider(this.isar) {
     _loadFromLocal();
@@ -88,6 +96,29 @@ class ChatProvider with ChangeNotifier {
   /// 供 UI 查询指定消息是否正在流式输出。
   bool isMessageStreaming(int messageId) {
     return _isMessageStreaming(messageId);
+  }
+
+  /// 追加一条消息对应的工具调用日志。
+  void _appendToolLogForMessage(int messageId, ToolExecutionLog log) {
+    final logs =
+        _toolLogsByMessageId.putIfAbsent(messageId, () => <ToolExecutionLog>[]);
+    logs.add(log);
+    _notifyStateChanged();
+  }
+
+  /// 覆盖设置消息的工具调用日志列表。
+  void _setToolLogsForMessage(int messageId, List<ToolExecutionLog> logs) {
+    if (logs.isEmpty) {
+      _toolLogsByMessageId.remove(messageId);
+    } else {
+      _toolLogsByMessageId[messageId] = List<ToolExecutionLog>.from(logs);
+    }
+    _notifyStateChanged();
+  }
+
+  /// 删除消息关联的工具调用日志。
+  void _removeToolLogsForMessage(int messageId) {
+    _toolLogsByMessageId.remove(messageId);
   }
 
   /// 根据会话 ID 获取会话对象。
@@ -134,6 +165,9 @@ class ChatProvider with ChangeNotifier {
     _chatList.removeWhere((c) => c.id == id);
     _abortControllers.remove(id);
     _pendingContinuations.remove(id);
+    for (final message in _currentMessages.where((m) => m.chatId == id)) {
+      _removeToolLogsForMessage(message.isarId);
+    }
     _currentMessages.clear();
     notifyListeners();
   }
@@ -160,6 +194,8 @@ class ChatProvider with ChangeNotifier {
     double? topP,
     int? maxTokens,
     int? maxConversationTurns,
+    bool? toolCallingEnabled,
+    int? maxToolCalls,
     bool? isStreaming,
     bool? isGenerating,
     DateTime? lastUpdated,
@@ -172,6 +208,8 @@ class ChatProvider with ChangeNotifier {
       topP: topP,
       maxTokens: maxTokens,
       maxConversationTurns: maxConversationTurns,
+      toolCallingEnabled: toolCallingEnabled,
+      maxToolCalls: maxToolCalls,
       isStreaming: isStreaming,
       isGenerating: isGenerating,
       lastUpdated: lastUpdated,
@@ -199,6 +237,7 @@ class ChatProvider with ChangeNotifier {
     _pendingContinuations.clear();
     _streamingMessageIds.clear();
     _dirtyStreamingMessageIds.clear();
+    _toolLogsByMessageId.clear();
     _currentMessagesChatId = null;
     _loadedMessageCount = 0;
     _hasMoreHistory = false;

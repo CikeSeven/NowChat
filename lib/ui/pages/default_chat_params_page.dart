@@ -15,6 +15,7 @@ class DefaultChatParamsPage extends StatefulWidget {
 class _DefaultChatParamsPageState extends State<DefaultChatParamsPage> {
   final TextEditingController _maxTokensController = TextEditingController();
   final TextEditingController _maxTurnsController = TextEditingController();
+  final TextEditingController _maxToolCallsController = TextEditingController();
 
   bool _initialized = false;
   String? _providerId;
@@ -22,6 +23,7 @@ class _DefaultChatParamsPageState extends State<DefaultChatParamsPage> {
   double _temperature = SettingsProvider.defaultTemperatureValue;
   double _topP = SettingsProvider.defaultTopPValue;
   bool _streaming = SettingsProvider.defaultStreamingValue;
+  bool _toolCallingEnabled = SettingsProvider.defaultToolCallingEnabledValue;
 
   @override
   void didChangeDependencies() {
@@ -35,6 +37,7 @@ class _DefaultChatParamsPageState extends State<DefaultChatParamsPage> {
   void dispose() {
     _maxTokensController.dispose();
     _maxTurnsController.dispose();
+    _maxToolCallsController.dispose();
     super.dispose();
   }
 
@@ -44,8 +47,10 @@ class _DefaultChatParamsPageState extends State<DefaultChatParamsPage> {
     _temperature = settings.defaultTemperature;
     _topP = settings.defaultTopP;
     _streaming = settings.defaultStreaming;
+    _toolCallingEnabled = settings.defaultToolCallingEnabled;
     _maxTokensController.text = settings.defaultMaxTokens.toString();
     _maxTurnsController.text = settings.defaultMaxConversationTurns.toString();
+    _maxToolCallsController.text = settings.defaultMaxToolCalls.toString();
   }
 
   Future<void> _showModelSelector() async {
@@ -88,6 +93,7 @@ class _DefaultChatParamsPageState extends State<DefaultChatParamsPage> {
   Future<void> _save() async {
     final maxTokens = int.tryParse(_maxTokensController.text.trim());
     final maxTurns = int.tryParse(_maxTurnsController.text.trim());
+    final maxToolCalls = int.tryParse(_maxToolCallsController.text.trim());
     if (maxTokens == null || maxTokens <= 0) {
       ScaffoldMessenger.of(
         context,
@@ -100,6 +106,12 @@ class _DefaultChatParamsPageState extends State<DefaultChatParamsPage> {
       ).showSnackBar(const SnackBar(content: Text('最大消息轮次必须大于 0')));
       return;
     }
+    if (maxToolCalls == null || maxToolCalls <= 0) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('工具调用上限必须大于 0')));
+      return;
+    }
 
     final settings = context.read<SettingsProvider>();
     await settings.setDefaultModel(providerId: _providerId, model: _model);
@@ -108,6 +120,8 @@ class _DefaultChatParamsPageState extends State<DefaultChatParamsPage> {
     await settings.setDefaultMaxTokens(maxTokens);
     await settings.setDefaultMaxConversationTurns(maxTurns);
     await settings.setDefaultStreaming(_streaming);
+    await settings.setDefaultToolCallingEnabled(_toolCallingEnabled);
+    await settings.setDefaultMaxToolCalls(maxToolCalls);
     if (!mounted) return;
     Navigator.of(context).pop();
   }
@@ -259,6 +273,28 @@ class _DefaultChatParamsPageState extends State<DefaultChatParamsPage> {
                 _streaming = value;
               });
             },
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('默认启用工具调用'),
+            subtitle: const Text('仅当当前模型支持工具能力时生效'),
+            value: _toolCallingEnabled,
+            onChanged: (value) {
+              setState(() {
+                _toolCallingEnabled = value;
+              });
+            },
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _maxToolCallsController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              isDense: true,
+              labelText: '默认工具调用上限',
+              helperText: '单次请求最多允许工具调用次数，默认 5',
+            ),
           ),
         ],
       ),

@@ -82,7 +82,9 @@ class _ChatSettingsPageState extends State<ChatSettingsPage> {
     final chat = _chat;
     final maxTokens = _useMaxTokens ? _maxTokens : 0;
     final maxConversationTurns = _maxConversationTurns;
-    if (chat == null || maxTokens == null || maxConversationTurns == null) {
+    if (chat == null ||
+        maxTokens == null ||
+        maxConversationTurns == null) {
       return;
     }
     final title = _titleController.text.trim();
@@ -355,7 +357,7 @@ class _ChatSettingsPageState extends State<ChatSettingsPage> {
                         streamingSupported
                             ? (value) {
                               setState(() {
-                                _isStreaming = value;
+                            _isStreaming = value;
                               });
                             }
                             : null,

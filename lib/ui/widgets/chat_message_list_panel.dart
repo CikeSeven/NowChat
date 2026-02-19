@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:now_chat/core/models/chat_session.dart';
 import 'package:now_chat/core/models/message.dart';
+import 'package:now_chat/core/models/tool_execution_log.dart';
 import 'package:now_chat/ui/widgets/assistant_message_widget.dart';
 import 'package:now_chat/ui/widgets/system_prompt_message_item.dart';
 import 'package:now_chat/ui/widgets/user_message_widget.dart';
@@ -20,6 +21,7 @@ class ChatMessageListPanel extends StatelessWidget {
   final Future<void> Function(int messageIsarId) onDeleteMessage;
   final bool Function(int messageIsarId) isMessageStreaming;
   final bool Function(int messageIsarId) canContinueAssistantMessage;
+  final List<ToolExecutionLog> Function(int messageIsarId) toolLogsForMessage;
 
   const ChatMessageListPanel({
     super.key,
@@ -37,6 +39,7 @@ class ChatMessageListPanel extends StatelessWidget {
     required this.onDeleteMessage,
     required this.isMessageStreaming,
     required this.canContinueAssistantMessage,
+    required this.toolLogsForMessage,
   });
 
   @override
@@ -106,6 +109,7 @@ class ChatMessageListPanel extends StatelessWidget {
                     message: msg,
                     isGenerating: chat!.isGenerating,
                     isStreamingMessage: isMessageStreaming(msg.isarId),
+                    toolLogs: toolLogsForMessage(msg.isarId),
                     showResendButton: isLastMessage,
                     showContinueButton: showContinueButton,
                     onResend: onResendLastAssistant,

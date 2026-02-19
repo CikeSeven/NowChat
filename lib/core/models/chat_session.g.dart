@@ -47,33 +47,43 @@ const ChatSessionSchema = CollectionSchema(
       name: r'maxTokens',
       type: IsarType.long,
     ),
-    r'model': PropertySchema(
+    r'maxToolCalls': PropertySchema(
       id: 6,
+      name: r'maxToolCalls',
+      type: IsarType.long,
+    ),
+    r'model': PropertySchema(
+      id: 7,
       name: r'model',
       type: IsarType.string,
     ),
     r'providerId': PropertySchema(
-      id: 7,
+      id: 8,
       name: r'providerId',
       type: IsarType.string,
     ),
     r'systemPrompt': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'systemPrompt',
       type: IsarType.string,
     ),
     r'temperature': PropertySchema(
-      id: 9,
+      id: 10,
       name: r'temperature',
       type: IsarType.double,
     ),
     r'title': PropertySchema(
-      id: 10,
+      id: 11,
       name: r'title',
       type: IsarType.string,
     ),
+    r'toolCallingEnabled': PropertySchema(
+      id: 12,
+      name: r'toolCallingEnabled',
+      type: IsarType.bool,
+    ),
     r'topP': PropertySchema(
-      id: 11,
+      id: 13,
       name: r'topP',
       type: IsarType.double,
     )
@@ -132,12 +142,14 @@ void _chatSessionSerialize(
   writer.writeDateTime(offsets[3], object.lastUpdated);
   writer.writeLong(offsets[4], object.maxConversationTurns);
   writer.writeLong(offsets[5], object.maxTokens);
-  writer.writeString(offsets[6], object.model);
-  writer.writeString(offsets[7], object.providerId);
-  writer.writeString(offsets[8], object.systemPrompt);
-  writer.writeDouble(offsets[9], object.temperature);
-  writer.writeString(offsets[10], object.title);
-  writer.writeDouble(offsets[11], object.topP);
+  writer.writeLong(offsets[6], object.maxToolCalls);
+  writer.writeString(offsets[7], object.model);
+  writer.writeString(offsets[8], object.providerId);
+  writer.writeString(offsets[9], object.systemPrompt);
+  writer.writeDouble(offsets[10], object.temperature);
+  writer.writeString(offsets[11], object.title);
+  writer.writeBool(offsets[12], object.toolCallingEnabled);
+  writer.writeDouble(offsets[13], object.topP);
 }
 
 ChatSession _chatSessionDeserialize(
@@ -153,12 +165,14 @@ ChatSession _chatSessionDeserialize(
     lastUpdated: reader.readDateTime(offsets[3]),
     maxConversationTurns: reader.readLongOrNull(offsets[4]) ?? 50,
     maxTokens: reader.readLongOrNull(offsets[5]) ?? 0,
-    model: reader.readStringOrNull(offsets[6]),
-    providerId: reader.readStringOrNull(offsets[7]),
-    systemPrompt: reader.readStringOrNull(offsets[8]),
-    temperature: reader.readDoubleOrNull(offsets[9]) ?? 0.7,
-    title: reader.readString(offsets[10]),
-    topP: reader.readDoubleOrNull(offsets[11]) ?? 1.0,
+    maxToolCalls: reader.readLongOrNull(offsets[6]) ?? 5,
+    model: reader.readStringOrNull(offsets[7]),
+    providerId: reader.readStringOrNull(offsets[8]),
+    systemPrompt: reader.readStringOrNull(offsets[9]),
+    temperature: reader.readDoubleOrNull(offsets[10]) ?? 0.7,
+    title: reader.readString(offsets[11]),
+    toolCallingEnabled: reader.readBoolOrNull(offsets[12]) ?? true,
+    topP: reader.readDoubleOrNull(offsets[13]) ?? 1.0,
   );
   object.id = id;
   return object;
@@ -182,18 +196,22 @@ P _chatSessionDeserializeProp<P>(
     case 4:
       return (reader.readLongOrNull(offset) ?? 50) as P;
     case 5:
-      return (reader.readLongOrNull(offset) ?? 4096) as P;
+      return (reader.readLongOrNull(offset) ?? 0) as P;
     case 6:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readLongOrNull(offset) ?? 5) as P;
     case 7:
       return (reader.readStringOrNull(offset)) as P;
     case 8:
       return (reader.readStringOrNull(offset)) as P;
     case 9:
-      return (reader.readDoubleOrNull(offset) ?? 0.7) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 10:
-      return (reader.readString(offset)) as P;
+      return (reader.readDoubleOrNull(offset) ?? 0.7) as P;
     case 11:
+      return (reader.readString(offset)) as P;
+    case 12:
+      return (reader.readBoolOrNull(offset) ?? true) as P;
+    case 13:
       return (reader.readDoubleOrNull(offset) ?? 1.0) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -582,6 +600,62 @@ extension ChatSessionQueryFilter
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.between(
         property: r'maxTokens',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<ChatSession, ChatSession, QAfterFilterCondition>
+      maxToolCallsEqualTo(int value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'maxToolCalls',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<ChatSession, ChatSession, QAfterFilterCondition>
+      maxToolCallsGreaterThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'maxToolCalls',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<ChatSession, ChatSession, QAfterFilterCondition>
+      maxToolCallsLessThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'maxToolCalls',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<ChatSession, ChatSession, QAfterFilterCondition>
+      maxToolCallsBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'maxToolCalls',
         lower: lower,
         includeLower: includeLower,
         upper: upper,
@@ -1245,6 +1319,16 @@ extension ChatSessionQueryFilter
     });
   }
 
+  QueryBuilder<ChatSession, ChatSession, QAfterFilterCondition>
+      toolCallingEnabledEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'toolCallingEnabled',
+        value: value,
+      ));
+    });
+  }
+
   QueryBuilder<ChatSession, ChatSession, QAfterFilterCondition> topPEqualTo(
     double value, {
     double epsilon = Query.epsilon,
@@ -1391,6 +1475,19 @@ extension ChatSessionQuerySortBy
     });
   }
 
+  QueryBuilder<ChatSession, ChatSession, QAfterSortBy> sortByMaxToolCalls() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'maxToolCalls', Sort.asc);
+    });
+  }
+
+  QueryBuilder<ChatSession, ChatSession, QAfterSortBy>
+      sortByMaxToolCallsDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'maxToolCalls', Sort.desc);
+    });
+  }
+
   QueryBuilder<ChatSession, ChatSession, QAfterSortBy> sortByModel() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'model', Sort.asc);
@@ -1449,6 +1546,20 @@ extension ChatSessionQuerySortBy
   QueryBuilder<ChatSession, ChatSession, QAfterSortBy> sortByTitleDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'title', Sort.desc);
+    });
+  }
+
+  QueryBuilder<ChatSession, ChatSession, QAfterSortBy>
+      sortByToolCallingEnabled() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'toolCallingEnabled', Sort.asc);
+    });
+  }
+
+  QueryBuilder<ChatSession, ChatSession, QAfterSortBy>
+      sortByToolCallingEnabledDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'toolCallingEnabled', Sort.desc);
     });
   }
 
@@ -1554,6 +1665,19 @@ extension ChatSessionQuerySortThenBy
     });
   }
 
+  QueryBuilder<ChatSession, ChatSession, QAfterSortBy> thenByMaxToolCalls() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'maxToolCalls', Sort.asc);
+    });
+  }
+
+  QueryBuilder<ChatSession, ChatSession, QAfterSortBy>
+      thenByMaxToolCallsDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'maxToolCalls', Sort.desc);
+    });
+  }
+
   QueryBuilder<ChatSession, ChatSession, QAfterSortBy> thenByModel() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'model', Sort.asc);
@@ -1615,6 +1739,20 @@ extension ChatSessionQuerySortThenBy
     });
   }
 
+  QueryBuilder<ChatSession, ChatSession, QAfterSortBy>
+      thenByToolCallingEnabled() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'toolCallingEnabled', Sort.asc);
+    });
+  }
+
+  QueryBuilder<ChatSession, ChatSession, QAfterSortBy>
+      thenByToolCallingEnabledDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'toolCallingEnabled', Sort.desc);
+    });
+  }
+
   QueryBuilder<ChatSession, ChatSession, QAfterSortBy> thenByTopP() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'topP', Sort.asc);
@@ -1667,6 +1805,12 @@ extension ChatSessionQueryWhereDistinct
     });
   }
 
+  QueryBuilder<ChatSession, ChatSession, QDistinct> distinctByMaxToolCalls() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'maxToolCalls');
+    });
+  }
+
   QueryBuilder<ChatSession, ChatSession, QDistinct> distinctByModel(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -1698,6 +1842,13 @@ extension ChatSessionQueryWhereDistinct
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'title', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<ChatSession, ChatSession, QDistinct>
+      distinctByToolCallingEnabled() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'toolCallingEnabled');
     });
   }
 
@@ -1753,6 +1904,12 @@ extension ChatSessionQueryProperty
     });
   }
 
+  QueryBuilder<ChatSession, int, QQueryOperations> maxToolCallsProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'maxToolCalls');
+    });
+  }
+
   QueryBuilder<ChatSession, String?, QQueryOperations> modelProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'model');
@@ -1780,6 +1937,13 @@ extension ChatSessionQueryProperty
   QueryBuilder<ChatSession, String, QQueryOperations> titleProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'title');
+    });
+  }
+
+  QueryBuilder<ChatSession, bool, QQueryOperations>
+      toolCallingEnabledProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'toolCallingEnabled');
     });
   }
 

@@ -10,6 +10,7 @@ import 'package:now_chat/util/app_logger.dart';
 
 import '../models/ai_provider_config.dart';
 import '../models/chat_session.dart';
+import '../tooling/ai_tool_runtime.dart';
 
 part 'api_service_common.part.dart';
 part 'api_service_streaming.part.dart';
@@ -68,6 +69,7 @@ class ApiService {
     List<Message>? overrideMessages,
     FutureOr<void> Function(String deltaContent, String? deltaReasoning)?
     onStream,
+    FutureOr<void> Function(Map<String, dynamic> toolLog)? onToolLog,
     FutureOr<void> Function()? onDone,
   }) => _sendChatRequestStreamingInternal(
     provider: provider,
@@ -76,6 +78,7 @@ class ApiService {
     abortController: abortController,
     overrideMessages: overrideMessages,
     onStream: onStream,
+    onToolLog: onToolLog,
     onDone: onDone,
   );
 
@@ -86,12 +89,14 @@ class ApiService {
     required Isar isar,
     GenerationAbortController? abortController,
     List<Message>? overrideMessages,
+    FutureOr<void> Function(Map<String, dynamic> toolLog)? onToolLog,
   }) => _sendChatRequestInternal(
     provider: provider,
     session: session,
     isar: isar,
     abortController: abortController,
     overrideMessages: overrideMessages,
+    onToolLog: onToolLog,
   );
 
   /// 获取模型列表。

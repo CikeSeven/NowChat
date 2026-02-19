@@ -595,3 +595,134 @@ Future<List<Message>> _resolveRequestMessages(
 bool _isAbortTriggered(GenerationAbortController? controller) {
   return controller?.isAborted ?? false;
 }
+
+/// 判断当前会话是否启用工具调用（需模型能力和会话开关同时满足）。
+bool _isToolCallingEnabledForSession(
+  AIProviderConfig provider,
+  ChatSession session,
+) {
+  if (!session.toolCallingEnabled) return false;
+  final selectedModel = (session.model ?? '').trim();
+  if (selectedModel.isEmpty) return false;
+  return provider.featuresForModel(selectedModel).supportsTools;
+}
+
+/// 将 OpenAI `message.content`（字符串/分片数组）提取为纯文本。
+String _extractOpenAIMessageContentText(Map<String, dynamic>? message) {
+  if (message == null) return '';
+  final content = message['content'];
+  if (content is String) return content;
+  if (content is List) {
+    final texts = <String>[];
+    for (final item in content) {
+      if (item is String && item.trim().isNotEmpty) {
+        texts.add(item);
+        continue;
+      }
+      if (item is Map) {
+        final text = item['text']?.toString() ?? '';
+        if (text.trim().isNotEmpty) {
+          texts.add(text);
+        }
+      }
+    }
+    return texts.join('\n');
+  }
+  return '';
+}
+
+/// 从 OpenAI 普通响应中的 `tool_calls` 解析工具调用列表。
+List<AIToolCall> _parseOpenAIToolCallsFromMessage(dynamic message) {
+  if (message is! Map) return const <AIToolCall>[];
+  final rawToolCalls = message['tool_calls'];
+  if (rawToolCalls is! List || rawToolCalls.isEmpty) {
+    return const <AIToolCall>[];
+  }
+  final toolCalls = <AIToolCall>[];
+  for (final raw in rawToolCalls) {
+    if (raw is! Map) continue;
+    final functionRaw = raw['function'];
+    if (functionRaw is! Map) continue;
+    final id = (raw['id'] ?? '').toString().trim();
+    final name = (functionRaw['name'] ?? '').toString().trim();
+    final arguments = (functionRaw['arguments'] ?? '').toString();
+    if (id.isEmpty || name.isEmpty) continue;
+    toolCalls.add(AIToolCall(id: id, name: name, rawArguments: arguments));
+  }
+  return toolCalls;
+}
+
+/// 构建 OpenAI assistant 消息里的 `tool_calls` 载荷。
+Map<String, dynamic> _toOpenAIToolCallPayload(AIToolCall call) {
+  return <String, dynamic>{
+    'id': call.id,
+    'type': 'function',
+    'function': <String, dynamic>{
+      'name': call.name,
+      'arguments': call.rawArguments,
+    },
+  };
+}
+
+/// 流式 tool_call 增量聚合器。
+class _StreamingToolCallBuilder {
+  String id = '';
+  String name = '';
+  final StringBuffer arguments = StringBuffer();
+}
+
+/// 合并 OpenAI 流式响应中的 `delta.tool_calls` 增量。
+void _mergeOpenAIStreamingToolCalls(
+  List<dynamic> toolCallsRaw,
+  Map<int, _StreamingToolCallBuilder> builders,
+) {
+  for (final raw in toolCallsRaw) {
+    if (raw is! Map) continue;
+    final indexRaw = raw['index'];
+    if (indexRaw is! num) continue;
+    final index = indexRaw.toInt();
+    final builder =
+        builders.putIfAbsent(index, () => _StreamingToolCallBuilder());
+
+    final id = (raw['id'] ?? '').toString().trim();
+    if (id.isNotEmpty) {
+      builder.id = id;
+    }
+
+    final functionRaw = raw['function'];
+    if (functionRaw is Map) {
+      final name = (functionRaw['name'] ?? '').toString().trim();
+      if (name.isNotEmpty) {
+        builder.name = name;
+      }
+      final argumentsChunk = (functionRaw['arguments'] ?? '').toString();
+      if (argumentsChunk.isNotEmpty) {
+        builder.arguments.write(argumentsChunk);
+      }
+    }
+  }
+}
+
+/// 将流式聚合结果转换为稳定的工具调用列表。
+List<AIToolCall> _finalizeOpenAIStreamingToolCalls(
+  Map<int, _StreamingToolCallBuilder> builders,
+) {
+  if (builders.isEmpty) return const <AIToolCall>[];
+  final entries =
+      builders.entries.toList()..sort((a, b) => a.key.compareTo(b.key));
+  final result = <AIToolCall>[];
+  for (final entry in entries) {
+    final builder = entry.value;
+    final id = builder.id.trim();
+    final name = builder.name.trim();
+    if (id.isEmpty || name.isEmpty) continue;
+    result.add(
+      AIToolCall(
+        id: id,
+        name: name,
+        rawArguments: builder.arguments.toString(),
+      ),
+    );
+  }
+  return result;
+}

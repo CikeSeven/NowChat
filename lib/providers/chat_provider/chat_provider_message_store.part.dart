@@ -118,6 +118,7 @@ extension ChatProviderMessageStore on ChatProvider {
         removedIndex >= 0 ? _currentMessages[removedIndex].chatId : null;
     _currentMessages.removeWhere((m) => m.isarId == isarId);
     _removeMessageStateById(isarId);
+    _removeToolLogsForMessage(isarId);
     if (_currentMessagesChatId != null && removedChatId == _currentMessagesChatId) {
       _loadedMessageCount = _currentMessages.length;
     }
@@ -146,6 +147,7 @@ extension ChatProviderMessageStore on ChatProvider {
     _currentMessages.removeWhere((m) => ids.contains(m.isarId));
     for (final id in ids) {
       _removeMessageStateById(id);
+      _removeToolLogsForMessage(id);
     }
     if (_currentMessagesChatId != null) {
       _loadedMessageCount = _currentMessages.length;
