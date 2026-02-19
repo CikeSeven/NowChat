@@ -191,6 +191,10 @@ class PluginDefinition {
   final String description;
   final String version;
   final String type;
+  /// 前置插件 ID 列表。
+  ///
+  /// 当该列表不为空时，安装当前插件前必须先安装这些插件。
+  final List<String> requiredPluginIds;
   /// Python 插件的 UI 命名空间目录（例如 `sample_tool_ui`）。
   ///
   /// 运行时会按 `${pythonNamespace}/schema.py` 查找插件配置页入口，
@@ -214,6 +218,7 @@ class PluginDefinition {
     required this.description,
     required this.version,
     required this.type,
+    required this.requiredPluginIds,
     required this.pythonNamespace,
     required this.providesGlobalPythonPaths,
     required this.packages,
@@ -231,6 +236,7 @@ class PluginDefinition {
     String? description,
     String? version,
     String? type,
+    List<String>? requiredPluginIds,
     String? pythonNamespace,
     bool? providesGlobalPythonPaths,
     List<PluginPackage>? packages,
@@ -246,6 +252,7 @@ class PluginDefinition {
       description: description ?? this.description,
       version: version ?? this.version,
       type: type ?? this.type,
+      requiredPluginIds: requiredPluginIds ?? this.requiredPluginIds,
       pythonNamespace: pythonNamespace ?? this.pythonNamespace,
       providesGlobalPythonPaths:
           providesGlobalPythonPaths ?? this.providesGlobalPythonPaths,
@@ -269,6 +276,15 @@ class PluginDefinition {
     final description = (json['description'] ?? '').toString().trim();
     final typeRaw = (json['type'] ?? '').toString().trim();
     final type = typeRaw.isEmpty ? 'python' : typeRaw;
+    final rawRequiredPluginIds =
+        json['requiredPluginIds'] ?? json['prerequisitePluginIds'];
+    final requiredPluginIds =
+        rawRequiredPluginIds is List
+            ? rawRequiredPluginIds
+                .map((item) => item.toString().trim())
+                .where((item) => item.isNotEmpty)
+                .toList()
+            : const <String>[];
     final pythonNamespace = (json['pythonNamespace'] ?? '').toString().trim();
     if (id.isEmpty) {
       throw const FormatException('插件字段不完整(id)');
@@ -332,6 +348,7 @@ class PluginDefinition {
       description: description,
       version: version,
       type: type,
+      requiredPluginIds: requiredPluginIds,
       pythonNamespace: pythonNamespace,
       providesGlobalPythonPaths: json['providesGlobalPythonPaths'] == true,
       packages: packages,

@@ -179,6 +179,15 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
       notifyListeners();
       return;
     }
+    final missingRequiredPluginIds = _findMissingRequiredPluginIds(plugin);
+    if (missingRequiredPluginIds.isNotEmpty) {
+      final missingText = _buildRequiredPluginDisplayText(missingRequiredPluginIds);
+      _lastError = '请先安装前置插件：$missingText';
+      _pluginStates[pluginId] = PluginInstallState.notInstalled;
+      AppLogger.w('插件安装被拦截，缺少前置插件: plugin=$pluginId, missing=$missingRequiredPluginIds');
+      notifyListeners();
+      return;
+    }
 
     _isInstalling = true;
     _activePluginId = pluginId;
@@ -830,5 +839,29 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
           relativePath,
         ) !=
         null;
+  }
+
+  /// 返回当前插件缺失的前置插件 ID 列表。
+  ///
+  /// 仅检查“已安装”状态，不强制要求前置插件处于启用状态。
+  List<String> _findMissingRequiredPluginIds(PluginDefinition plugin) {
+    final requiredIds = plugin.requiredPluginIds.toSet();
+    requiredIds.removeWhere((item) => item == plugin.id);
+    if (requiredIds.isEmpty) return const <String>[];
+    return requiredIds.where((item) => !isInstalled(item)).toList();
+  }
+
+  /// 将前置插件 ID 列表格式化为可读提示文本。
+  ///
+  /// 若能解析到插件名称，则按“名称(id)”展示；否则仅展示 ID。
+  String _buildRequiredPluginDisplayText(List<String> pluginIds) {
+    if (pluginIds.isEmpty) return '';
+    final labels = pluginIds.map((pluginId) {
+      final plugin = getPluginById(pluginId);
+      final name = (plugin?.name ?? '').trim();
+      if (name.isEmpty) return pluginId;
+      return '$name($pluginId)';
+    }).toList();
+    return labels.join('、');
   }
 }

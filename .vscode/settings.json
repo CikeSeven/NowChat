@@ -1,6 +1,3 @@
 {
     "cmake.ignoreCMakeListsMissing": true,
-    "files.exclude": {
-    "**/pip*": true
-  }
 }
