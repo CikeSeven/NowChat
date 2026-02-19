@@ -7,7 +7,11 @@
     },
     {
       "id": "python_base_libs",
-      "repoUrl": "https://github.com/CikeSeven/now_chat_plugin_python_base_libs"
+      "repoUrl": "https://github.com/CikeSeven/now_chat_plugin_python_base_libs.git"
+    },
+    {
+      "id": "python_chart_libs",
+      "repoUrl": "https://github.com/CikeSeven/now_chat_plugin_python_chart_libs.git"
     }
   ]
 }
