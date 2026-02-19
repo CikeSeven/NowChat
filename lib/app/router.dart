@@ -5,6 +5,7 @@ import 'package:now_chat/ui/pages/agent_form_page.dart';
 import 'package:now_chat/ui/pages/chat_settings_page.dart';
 import 'package:now_chat/ui/pages/default_chat_params_page.dart';
 import 'package:now_chat/ui/pages/edit_message_page.dart';
+import 'package:now_chat/ui/pages/plugin_page.dart';
 import 'package:now_chat/ui/pages/provider_form_page.dart';
 
 import '../core/models/message.dart';
@@ -17,6 +18,7 @@ class AppRoutes {
   static const chatSettings = '/chat/settings';
   static const defaultChatParams = '/settings/default_chat_params';
   static const about = '/settings/about';
+  static const plugin = '/settings/plugin';
   static const agentForm = '/agent/form';
   static const agentDetail = '/agent/detail';
   static const providerForm = '/provider/form';
@@ -58,6 +60,11 @@ class AppRoutes {
       case about:
         return _buildSlideRoute(
           builder: (_) => const AboutPage(),
+        );
+
+      case plugin:
+        return _buildSlideRoute(
+          builder: (_) => const PluginPage(),
         );
 
       case agentForm:
