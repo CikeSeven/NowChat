@@ -7,7 +7,6 @@ import 'package:now_chat/util/app_logger.dart';
 
 const int _defaultPythonTimeoutSeconds = 20;
 const int _maxPythonTimeoutSeconds = 90;
-const int _maxToolOutputChars = 12000;
 
 /// OpenAI tool_calls 的标准化结构。
 class AIToolCall {
@@ -119,7 +118,6 @@ class AIToolRuntime {
             scriptPath: binding.tool.scriptPath,
             inlineCode: binding.tool.inlineCode,
             timeoutSec: binding.tool.timeoutSec,
-            outputLimit: binding.tool.outputLimit,
           );
           break;
         default:
@@ -214,7 +212,6 @@ class AIToolRuntime {
     required String? scriptPath,
     required String? inlineCode,
     required int timeoutSec,
-    required int outputLimit,
   }) async {
     final args = _safeParseJsonObject(rawArgs);
     final result = await PluginRuntimeExecutor.execute(
@@ -233,14 +230,9 @@ class AIToolRuntime {
       ),
     );
 
-    final stdout = _truncateText(
-      result.stdout,
-      outputLimit <= 0 ? _maxToolOutputChars : outputLimit,
-    );
-    final stderr = _truncateText(
-      result.stderr,
-      outputLimit <= 0 ? _maxToolOutputChars : outputLimit,
-    );
+    // 保留完整 stdout/stderr，便于插件与宿主日志排查问题。
+    final stdout = result.stdout;
+    final stderr = result.stderr;
     final pluginResult = _decodeJsonObjectFromStdout(result.stdout);
     final ok =
         pluginResult == null
@@ -305,12 +297,6 @@ class AIToolRuntime {
     return value;
   }
 
-  /// 裁剪过长输出，防止工具结果撑爆请求体与消息渲染。
-  static String _truncateText(String text, int maxChars) {
-    if (text.length <= maxChars) return text;
-    return '${text.substring(0, maxChars)}\n...(已截断)';
-  }
-
   /// 从 stdout 末尾提取 JSON 对象，允许脚本前面输出调试日志。
   static Map<String, dynamic>? _decodeJsonObjectFromStdout(String stdout) {
     final lines =
@@ -356,12 +342,12 @@ class AIToolRuntime {
     required AIToolExecutionResult result,
   }) {
     final message =
-        'ToolUsage END tool=${call.name} plugin=$pluginId runtime=$runtime status=${result.status} duration=${result.durationMs ?? 0}ms summary=${_truncateForLog(result.summary, 220)}';
+        'ToolUsage END tool=${call.name} plugin=$pluginId runtime=$runtime status=${result.status} duration=${result.durationMs ?? 0}ms summary=${result.summary}';
     if (result.status == 'success') {
       AppLogger.i(message);
     } else {
       AppLogger.w(
-        '$message error=${_truncateForLog(result.error ?? 'unknown', 220)}',
+        '$message error=${result.error ?? 'unknown'}',
       );
     }
   }
