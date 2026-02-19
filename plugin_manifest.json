@@ -11,7 +11,7 @@
       "repoUrl": "https://github.com/CikeSeven/sample_tool_plugin.git"
     },
     {
-      "id": "python_base_libs_plugin",
+      "id": "python_base_libs",
       "name": "Python 基础库插件",
       "author": "NowChat",
       "description": "提供 Python 代码执行能力与基础库支持。",
