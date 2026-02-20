@@ -1,8 +1,10 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
+import 'package:now_chat/core/update/app_update_models.dart';
+import 'package:now_chat/core/update/app_update_service.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-/// 应用关于页，展示应用信息并提供开源协议入口。
+/// 应用关于页：展示基础信息并提供更新检查入口。
 class AboutPage extends StatefulWidget {
   const AboutPage({super.key});
 
@@ -10,17 +12,21 @@ class AboutPage extends StatefulWidget {
   State<AboutPage> createState() => _AboutPageState();
 }
 
-/// _AboutPageState 视图状态。
+/// 关于页状态。
 class _AboutPageState extends State<AboutPage> {
   static const String _fallbackAppName = 'Now Chat';
-  static const String _fallbackVersion = '0.3.1+4';
+  static const String _fallbackVersion = '0.5.3+8';
   static const String _fallbackPackageName = 'com.nowchat';
   static const String _iconAssetPath = 'assets/icon/app_icon.png';
   static const String _projectUrl = 'https://github.com/CikeSeven/NowChat';
 
+  final AppUpdateService _appUpdateService = AppUpdateService();
+
   String _appName = _fallbackAppName;
   String _version = _fallbackVersion;
   String _packageName = _fallbackPackageName;
+  bool _isCheckingUpdate = false;
+  String _updateStatusText = '未检查';
 
   @override
   void initState() {
@@ -48,6 +54,144 @@ class _AboutPageState extends State<AboutPage> {
     } catch (_) {
       // 保持兜底信息，避免界面展示为空。
     }
+  }
+
+  /// 检查更新：直连失败后由更新服务自动尝试可用代理。
+  Future<void> _checkForUpdate() async {
+    if (_isCheckingUpdate) return;
+    setState(() {
+      _isCheckingUpdate = true;
+      _updateStatusText = '检查中...';
+    });
+    try {
+      final result = await _appUpdateService.checkLatestRelease(
+        currentVersion: _version,
+      );
+      if (!mounted) return;
+
+      if (!result.hasUpdate) {
+        setState(() {
+          _updateStatusText = '已是最新版本';
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('当前已是最新版本（${result.latestVersion}）')),
+        );
+        return;
+      }
+
+      setState(() {
+        _updateStatusText = '发现新版本 ${result.latestVersion}';
+      });
+      await _showInstallUpdateDialog(result);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _updateStatusText = '检查失败';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('检查更新失败：$e')),
+      );
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _isCheckingUpdate = false;
+      });
+    }
+  }
+
+  /// 发现新版本后，询问用户是否立即安装。
+  Future<void> _showInstallUpdateDialog(AppUpdateCheckResult result) async {
+    final publishedText =
+        result.releaseInfo.publishedAt == null
+            ? '-'
+            : result.releaseInfo.publishedAt!
+                .toLocal()
+                .toIso8601String()
+                .replaceFirst('T', ' ')
+                .split('.')
+                .first;
+
+    final shouldInstall = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('发现新版本'),
+          content: SizedBox(
+            width: 420,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('当前版本：${result.currentVersion}'),
+                  Text('最新版本：${result.latestVersion}'),
+                  Text('发布时间：$publishedText'),
+                  Text('访问通道：${result.usedMirrorName}'),
+                  const SizedBox(height: 10),
+                  const Text(
+                    '更新说明：',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _buildReleaseNotePreview(result.releaseInfo.body),
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('稍后'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('立即安装'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldInstall != true || !mounted) return;
+
+    final downloadUrl = result.resolvedDownloadUrl.trim();
+    if (downloadUrl.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('未找到可安装 APK 资源')),
+      );
+      return;
+    }
+
+    final success = await launchUrl(
+      Uri.parse(downloadUrl),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          success ? '已打开下载链接，请完成安装' : '无法打开下载链接',
+        ),
+      ),
+    );
+  }
+
+  /// 更新说明仅展示前几行，避免弹窗内容过长影响阅读。
+  String _buildReleaseNotePreview(String rawBody) {
+    final lines =
+        rawBody
+            .split('\n')
+            .map((line) => line.trim())
+            .where((line) => line.isNotEmpty)
+            .take(8)
+            .toList();
+    if (lines.isEmpty) {
+      return '暂无更新说明';
+    }
+    return lines.join('\n');
   }
 
   @override
@@ -108,6 +252,23 @@ class _AboutPageState extends State<AboutPage> {
             const SizedBox(height: 10),
             Card(
               child: ListTile(
+                leading:
+                    _isCheckingUpdate
+                        ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                        : const Icon(Icons.system_update_alt_rounded),
+                title: const Text('检查新版本'),
+                subtitle: Text(_updateStatusText),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: _isCheckingUpdate ? null : _checkForUpdate,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Card(
+              child: ListTile(
                 leading: const Icon(Icons.code_outlined),
                 title: const Text('项目主页'),
                 subtitle: const Text(_projectUrl),
@@ -149,7 +310,7 @@ class _AboutPageState extends State<AboutPage> {
   }
 }
 
-/// _InfoLine 类型定义。
+/// 信息行组件。
 class _InfoLine extends StatelessWidget {
   final String label;
   final String value;

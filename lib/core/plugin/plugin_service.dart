@@ -6,9 +6,12 @@ import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/services.dart';
+import 'package:now_chat/core/network/github_mirror_config.dart';
 import 'package:now_chat/core/models/plugin_manifest_v2.dart';
 import 'package:now_chat/util/app_logger.dart';
 import 'package:path/path.dart' as p;
+
+typedef PluginGithubMirrorPreset = GithubMirrorPreset;
 
 /// 插件包校验失败异常，包含期望与实际 SHA256。
 class PluginPackageChecksumException implements Exception {
@@ -41,12 +44,26 @@ class LocalPluginImportPayload {
 
 /// 插件服务：负责清单拉取、zip 安装与本地导入解析。
 class PluginService {
+  static const String githubMirrorDirect = GithubMirrorConfig.directId;
+  static const String githubMirrorGhfast = GithubMirrorConfig.ghfastId;
+  static const String githubMirrorGhLlkk = GithubMirrorConfig.ghllkkId;
+  static const String githubMirrorGhproxyNet = GithubMirrorConfig.ghproxyNetId;
+  static const String githubMirrorCustom = GithubMirrorConfig.customId;
+
+  /// 插件中心镜像预设由统一配置中心维护。
+  static const List<PluginGithubMirrorPreset> githubMirrorPresets =
+      GithubMirrorConfig.presets;
+
   final Dio _dio;
 
   PluginService({Dio? dio}) : _dio = dio ?? Dio();
 
   /// 读取并解析通用插件清单。
-  Future<PluginManifestV2> fetchManifest(String manifestUrl) async {
+  Future<PluginManifestV2> fetchManifest(
+    String manifestUrl, {
+    String mirrorId = githubMirrorDirect,
+    String customMirrorBaseUrl = '',
+  }) async {
     final normalizedUrl = manifestUrl.trim();
     if (normalizedUrl.isEmpty) {
       throw const FormatException('清单地址不能为空');
@@ -62,7 +79,12 @@ class PluginService {
       final raw = await rootBundle.loadString(assetPath);
       data = raw;
     } else {
-      final response = await _dio.getUri<dynamic>(Uri.parse(normalizedUrl));
+      final requestUrl = _applyMirrorToUrl(
+        normalizedUrl,
+        mirrorId: mirrorId,
+        customMirrorBaseUrl: customMirrorBaseUrl,
+      );
+      final response = await _dio.getUri<dynamic>(Uri.parse(requestUrl));
       if (response.statusCode != 200) {
         throw Exception('清单请求失败: ${response.statusCode}');
       }
@@ -90,7 +112,11 @@ class PluginService {
         continue;
       }
       try {
-        final repoPlugin = await fetchPluginDefinitionFromRepo(repoUrl);
+        final repoPlugin = await fetchPluginDefinitionFromRepo(
+          repoUrl,
+          mirrorId: mirrorId,
+          customMirrorBaseUrl: customMirrorBaseUrl,
+        );
         // 清单 ID 优先，避免仓库变更 ID 导致本地记录对不上。
         final merged = repoPlugin.copyWith(
           id: plugin.id,
@@ -173,6 +199,8 @@ class PluginService {
     required Directory pluginRootDir,
     required String targetDir,
     void Function(double progress)? onProgress,
+    String mirrorId = githubMirrorDirect,
+    String customMirrorBaseUrl = '',
   }) async {
     AppLogger.i('开始从仓库安装插件: repo=$repoUrl, targetDir=$targetDir');
     final tempDir = await Directory.systemTemp.createTemp('now_chat_plugin_git_');
@@ -188,6 +216,8 @@ class PluginService {
         repoUrl: repoUrl,
         outputZipPath: tempZipFile.path,
         onProgress: onProgress,
+        mirrorId: mirrorId,
+        customMirrorBaseUrl: customMirrorBaseUrl,
       );
 
       if (installDir.existsSync()) {
@@ -316,7 +346,11 @@ class PluginService {
   }
 
   /// 从 GitHub 仓库拉取 README 文本。
-  Future<String> fetchReadmeFromRepo(String repoUrl) async {
+  Future<String> fetchReadmeFromRepo(
+    String repoUrl, {
+    String mirrorId = githubMirrorDirect,
+    String customMirrorBaseUrl = '',
+  }) async {
     final (owner, repo) = _parseGithubOwnerRepo(repoUrl);
     final candidates = <String>[
       'https://raw.githubusercontent.com/$owner/$repo/main/README.md',
@@ -328,8 +362,13 @@ class PluginService {
     Object? lastError;
     for (final url in candidates) {
       try {
+        final requestUrl = _applyMirrorToUrl(
+          url,
+          mirrorId: mirrorId,
+          customMirrorBaseUrl: customMirrorBaseUrl,
+        );
         final response = await _dio.getUri<String>(
-          Uri.parse(url),
+          Uri.parse(requestUrl),
           options: Options(responseType: ResponseType.plain),
         );
         if (response.statusCode == 200) {
@@ -355,7 +394,11 @@ class PluginService {
   }
 
   /// 从 GitHub 仓库拉取并解析 `plugin.json`。
-  Future<PluginDefinition> fetchPluginDefinitionFromRepo(String repoUrl) async {
+  Future<PluginDefinition> fetchPluginDefinitionFromRepo(
+    String repoUrl, {
+    String mirrorId = githubMirrorDirect,
+    String customMirrorBaseUrl = '',
+  }) async {
     AppLogger.i('开始读取仓库插件定义: $repoUrl');
     final (owner, repo) = _parseGithubOwnerRepo(repoUrl);
     final candidates = <String>[
@@ -365,8 +408,13 @@ class PluginService {
     Object? lastError;
     for (final url in candidates) {
       try {
+        final requestUrl = _applyMirrorToUrl(
+          url,
+          mirrorId: mirrorId,
+          customMirrorBaseUrl: customMirrorBaseUrl,
+        );
         final response = await _dio.getUri<String>(
-          Uri.parse(url),
+          Uri.parse(requestUrl),
           options: Options(responseType: ResponseType.plain),
         );
         if (response.statusCode == 200) {
@@ -459,6 +507,8 @@ class PluginService {
     required String repoUrl,
     required String outputZipPath,
     void Function(double progress)? onProgress,
+    String mirrorId = githubMirrorDirect,
+    String customMirrorBaseUrl = '',
   }) async {
     final normalizedRepoUrl = _normalizeGitRepoUrl(repoUrl);
     final candidates = <String>[
@@ -468,8 +518,13 @@ class PluginService {
     DioException? lastDioError;
     for (final candidateUrl in candidates) {
       try {
-        await _dio.download(
+        final requestUrl = _applyMirrorToUrl(
           candidateUrl,
+          mirrorId: mirrorId,
+          customMirrorBaseUrl: customMirrorBaseUrl,
+        );
+        await _dio.download(
+          requestUrl,
           outputZipPath,
           onReceiveProgress: (received, total) {
             if (onProgress == null || total <= 0) return;
@@ -516,6 +571,60 @@ class PluginService {
       throw Exception('仓库链接格式错误: $repoUrl');
     }
     return (segments[0], segments[1]);
+  }
+
+  /// 对 GitHub 相关链接应用镜像规则；非 GitHub 链接保持原样。
+  String _applyMirrorToUrl(
+    String url, {
+    required String mirrorId,
+    String customMirrorBaseUrl = '',
+  }) {
+    return GithubMirrorConfig.applyMirrorToUrl(
+      url: url,
+      mirrorId: mirrorId,
+      customMirrorBaseUrl: customMirrorBaseUrl,
+      onlyGithubHosts: true,
+    );
+  }
+
+  /// 规范化用户输入的自定义代理地址。
+  /// 返回空字符串代表输入无效。
+  static String normalizeCustomMirrorBaseUrl(String input) {
+    return GithubMirrorConfig.normalizeCustomBaseUrl(input);
+  }
+
+  /// 对镜像做轻量测速（返回耗时毫秒，失败返回 null）。
+  Future<int?> probeMirrorLatency({
+    required String mirrorId,
+    String customMirrorBaseUrl = '',
+    Duration timeout = const Duration(seconds: 6),
+  }) async {
+    final probeTarget = 'https://raw.githubusercontent.com/CikeSeven/NowChat/main/plugin_manifest.json';
+    final requestUrl = _applyMirrorToUrl(
+      probeTarget,
+      mirrorId: mirrorId,
+      customMirrorBaseUrl: customMirrorBaseUrl,
+    );
+    final stopwatch = Stopwatch()..start();
+    try {
+      final response = await _dio.getUri<String>(
+        Uri.parse(requestUrl),
+        options: Options(
+          responseType: ResponseType.plain,
+          sendTimeout: timeout,
+          receiveTimeout: timeout,
+          validateStatus: (status) => status != null && status >= 200 && status < 500,
+        ),
+      );
+      stopwatch.stop();
+      final statusCode = response.statusCode ?? 0;
+      if (statusCode >= 200 && statusCode < 400) {
+        return stopwatch.elapsedMilliseconds;
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
   }
 
   String _normalizeRelativePath(String path) {

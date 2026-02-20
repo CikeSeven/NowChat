@@ -34,11 +34,16 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
 
   static const _kManifestUrl = 'plugin_registry_manifest_url_v2';
   static const _kLastError = 'plugin_registry_last_error_v2';
+  static const _kGithubMirrorId = 'plugin_registry_github_mirror_id_v1';
+  static const _kGithubMirrorCustomBaseUrl =
+      'plugin_registry_github_mirror_custom_base_url_v1';
 
   final PluginService _pluginService;
   final PythonPluginService _pythonService;
 
   String _manifestUrl = defaultManifestUrl;
+  String _githubMirrorId = PluginService.githubMirrorDirect;
+  String _githubMirrorCustomBaseUrl = '';
   PluginManifestV2? _manifest;
   final Map<String, PluginDefinition> _localPluginsById =
       <String, PluginDefinition>{};
@@ -56,11 +61,13 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
   bool _isRefreshingManifest = false;
   bool _isInstalling = false;
   bool _isExecuting = false;
+  bool _isProbingMirrors = false;
   double _downloadProgress = 0;
   String? _activePluginId;
   String? _lastError;
   PythonExecutionResult? _lastExecutionResult;
   String? _lastExecutionPluginId;
+  Map<String, int?> _mirrorProbeLatenciesMs = <String, int?>{};
 
   Directory? _pluginRootDir;
   Directory? _runtimeWorkDir;
@@ -78,6 +85,7 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
   bool get isRefreshingManifest => _isRefreshingManifest;
   bool get isInstalling => _isInstalling;
   bool get isExecuting => _isExecuting;
+  bool get isProbingMirrors => _isProbingMirrors;
   bool get isBusy => _isRefreshingManifest || _isInstalling || _isExecuting;
   double get downloadProgress => _downloadProgress;
   String? get activePluginId => _activePluginId;
@@ -85,6 +93,10 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
   PythonExecutionResult? get lastExecutionResult => _lastExecutionResult;
   String? get lastExecutionPluginId => _lastExecutionPluginId;
   PluginManifestV2? get manifest => _manifest;
+  String get githubMirrorId => _githubMirrorId;
+  String get githubMirrorCustomBaseUrl => _githubMirrorCustomBaseUrl;
+  Map<String, int?> get mirrorProbeLatenciesMs => _mirrorProbeLatenciesMs;
+  List<PluginGithubMirrorPreset> get githubMirrorPresets => PluginService.githubMirrorPresets;
 
   /// 读取指定插件当前 UI 页面快照。
   PluginUiPageState? pluginUiPage(String pluginId) => _pluginUiPages[pluginId];
@@ -153,7 +165,11 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
     _lastError = null;
     notifyListeners();
     try {
-      final fetched = await _pluginService.fetchManifest(_manifestUrl);
+      final fetched = await _pluginService.fetchManifest(
+        _manifestUrl,
+        mirrorId: _githubMirrorId,
+        customMirrorBaseUrl: _githubMirrorCustomBaseUrl,
+      );
       _manifest = fetched;
       await _reloadLocalPluginsFromDisk();
       await _saveBasicState();
@@ -205,6 +221,8 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
           repoUrl: plugin.repoUrl,
           pluginRootDir: _pluginRootDir!,
           targetDir: targetDir,
+          mirrorId: _githubMirrorId,
+          customMirrorBaseUrl: _githubMirrorCustomBaseUrl,
           onProgress: (progress) {
             _downloadProgress = progress;
             notifyListeners();
@@ -632,9 +650,70 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
     if (plugin.repoUrl.trim().isEmpty) {
       throw Exception('插件未提供仓库链接');
     }
-    final content = await _pluginService.fetchReadmeFromRepo(plugin.repoUrl);
+    final content = await _pluginService.fetchReadmeFromRepo(
+      plugin.repoUrl,
+      mirrorId: _githubMirrorId,
+      customMirrorBaseUrl: _githubMirrorCustomBaseUrl,
+    );
     _pluginReadmeCache[pluginId] = content;
     return content;
+  }
+
+  /// 更新当前 GitHub 镜像配置并按需刷新清单。
+  Future<void> setGithubMirrorConfig({
+    required String mirrorId,
+    String? customMirrorBaseUrl,
+    bool refreshManifestAfterChange = true,
+  }) async {
+    final normalizedId = mirrorId.trim();
+    final isValid = PluginService.githubMirrorPresets.any((item) => item.id == normalizedId);
+    if (!isValid) return;
+    final normalizedCustomBase = PluginService.normalizeCustomMirrorBaseUrl(
+      customMirrorBaseUrl ?? _githubMirrorCustomBaseUrl,
+    );
+    final shouldUseCustom = normalizedId == PluginService.githubMirrorCustom;
+    if (shouldUseCustom && normalizedCustomBase.isEmpty) {
+      _lastError = '自定义代理地址无效';
+      notifyListeners();
+      return;
+    }
+    final changed =
+        _githubMirrorId != normalizedId ||
+        _githubMirrorCustomBaseUrl != normalizedCustomBase;
+    if (!changed) {
+      if (refreshManifestAfterChange) {
+        await refreshManifest();
+      }
+      return;
+    }
+    _githubMirrorId = normalizedId;
+    _githubMirrorCustomBaseUrl = normalizedCustomBase;
+    await _saveBasicState();
+    notifyListeners();
+    if (refreshManifestAfterChange) {
+      await refreshManifest();
+    }
+  }
+
+  /// 批量测速所有预设镜像，供镜像选择弹窗显示。
+  Future<void> probeGithubMirrors() async {
+    if (_isProbingMirrors) return;
+    _isProbingMirrors = true;
+    notifyListeners();
+    final result = <String, int?>{};
+    try {
+      for (final preset in PluginService.githubMirrorPresets) {
+        final latency = await _pluginService.probeMirrorLatency(
+          mirrorId: preset.id,
+          customMirrorBaseUrl: _githubMirrorCustomBaseUrl,
+        );
+        result[preset.id] = latency;
+      }
+    } finally {
+      _mirrorProbeLatenciesMs = result;
+      _isProbingMirrors = false;
+      notifyListeners();
+    }
   }
 
   @override
@@ -706,11 +785,23 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
       _manifestUrl = defaultManifestUrl;
     }
     _lastError = prefs.getString(_kLastError)?.trim();
+    final persistedMirrorId = (prefs.getString(_kGithubMirrorId) ?? PluginService.githubMirrorDirect).trim();
+    final hasPreset = PluginService.githubMirrorPresets.any((item) => item.id == persistedMirrorId);
+    _githubMirrorId = hasPreset ? persistedMirrorId : PluginService.githubMirrorDirect;
+    _githubMirrorCustomBaseUrl = PluginService.normalizeCustomMirrorBaseUrl(
+      prefs.getString(_kGithubMirrorCustomBaseUrl) ?? '',
+    );
   }
 
   Future<void> _saveBasicState() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kManifestUrl, _manifestUrl);
+    await prefs.setString(_kGithubMirrorId, _githubMirrorId);
+    if (_githubMirrorCustomBaseUrl.trim().isEmpty) {
+      await prefs.remove(_kGithubMirrorCustomBaseUrl);
+    } else {
+      await prefs.setString(_kGithubMirrorCustomBaseUrl, _githubMirrorCustomBaseUrl);
+    }
     if ((_lastError ?? '').trim().isEmpty) {
       await prefs.remove(_kLastError);
     } else {

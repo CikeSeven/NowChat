@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:now_chat/core/models/plugin_manifest_v2.dart';
+import 'package:now_chat/core/plugin/plugin_service.dart';
 import 'package:now_chat/providers/plugin_provider.dart';
 import 'package:now_chat/ui/pages/plugin_detail_page.dart';
 import 'package:now_chat/ui/pages/plugin_readme_page.dart';
@@ -61,6 +62,154 @@ class _PluginPageState extends State<PluginPage> {
       final description = plugin.description.toLowerCase();
       return name.contains(keyword) || description.contains(keyword);
     }).toList();
+  }
+
+  /// 将镜像测速结果格式化为简短文案。
+  String _mirrorLatencyText(int? latencyMs) {
+    if (latencyMs == null) return '不可达';
+    return '${latencyMs}ms';
+  }
+
+  /// 弹出镜像切换窗口：支持预设切换与测速。
+  Future<void> _showMirrorDialog(
+    BuildContext context,
+    PluginProvider provider,
+  ) async {
+    var selectedMirrorId = provider.githubMirrorId;
+    var customMirrorBaseUrl = provider.githubMirrorCustomBaseUrl;
+    var isTesting = false;
+    var latencies = Map<String, int?>.from(provider.mirrorProbeLatenciesMs);
+    final customController = TextEditingController(text: customMirrorBaseUrl);
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        final color = Theme.of(dialogContext).colorScheme;
+        return StatefulBuilder(
+          builder: (dialogContext, setState) {
+            return AlertDialog(
+              title: const Text('选择 GitHub 镜像'),
+              content: SizedBox(
+                width: 380,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ...provider.githubMirrorPresets.map((preset) {
+                        final isSelected = selectedMirrorId == preset.id;
+                        final latency = latencies[preset.id];
+                        final isCustom = preset.id == PluginService.githubMirrorCustom;
+                        final subtitleText =
+                            isCustom && customMirrorBaseUrl.trim().isNotEmpty
+                                ? '${preset.description} · ${_mirrorLatencyText(latency)}\n当前：$customMirrorBaseUrl'
+                                : '${preset.description} · ${_mirrorLatencyText(latency)}';
+                        return RadioListTile<String>(
+                          value: preset.id,
+                          groupValue: selectedMirrorId,
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(
+                            preset.name,
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                          subtitle: Text(
+                            subtitleText,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color:
+                                  latency == null && !isSelected
+                                      ? color.error
+                                      : color.onSurfaceVariant,
+                            ),
+                          ),
+                          onChanged: (value) {
+                            if (value == null) return;
+                            setState(() {
+                              selectedMirrorId = value;
+                            });
+                          },
+                        );
+                      }),
+                      if (selectedMirrorId == PluginService.githubMirrorCustom) ...[
+                        const SizedBox(height: 6),
+                        TextField(
+                          controller: customController,
+                          onChanged: (value) {
+                            setState(() {
+                              customMirrorBaseUrl = value.trim();
+                            });
+                          },
+                          decoration: const InputDecoration(
+                            labelText: '自定义代理地址',
+                            hintText: '例如：https://my-mirror.example',
+                            border: OutlineInputBorder(),
+                            isDense: true,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton.icon(
+                  onPressed:
+                      isTesting
+                          ? null
+                          : () async {
+                            setState(() {
+                              isTesting = true;
+                            });
+                            await provider.probeGithubMirrors();
+                            if (!dialogContext.mounted) return;
+                            setState(() {
+                              latencies = Map<String, int?>.from(
+                                provider.mirrorProbeLatenciesMs,
+                              );
+                              isTesting = false;
+                            });
+                          },
+                  icon:
+                      isTesting
+                          ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                          : const Icon(Icons.speed_rounded),
+                  label: Text(isTesting ? '测速中' : '测速'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('取消'),
+                ),
+                FilledButton(
+                  onPressed:
+                      provider.isBusy ||
+                              isTesting ||
+                              (selectedMirrorId ==
+                                      PluginService.githubMirrorCustom &&
+                                  PluginService.normalizeCustomMirrorBaseUrl(
+                                        customController.text,
+                                      ).isEmpty)
+                          ? null
+                          : () async {
+                            Navigator.of(dialogContext).pop();
+                            await provider.setGithubMirrorConfig(
+                              mirrorId: selectedMirrorId,
+                              customMirrorBaseUrl: customController.text,
+                              refreshManifestAfterChange: true,
+                            );
+                          },
+                  child: const Text('保存并刷新'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    customController.dispose();
   }
 
   /// 安装前置缺失时弹窗提示，并展示当前插件声明的前置插件列表。
@@ -329,6 +478,14 @@ class _PluginPageState extends State<PluginPage> {
         appBar: AppBar(
           title: const Text('插件中心'),
           actions: [
+            IconButton(
+              tooltip: '镜像设置',
+              onPressed:
+                  provider.isBusy
+                      ? null
+                      : () => _showMirrorDialog(context, provider),
+              icon: const Icon(Icons.language_rounded),
+            ),
             // 暂时隐藏本地导入入口，避免与远程清单流程混淆。
             IconButton(
               tooltip: '刷新清单',
@@ -357,12 +514,32 @@ class _PluginPageState extends State<PluginPage> {
                           color: color.errorContainer.withAlpha(120),
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: Text(
-                          provider.lastError!,
-                          style: TextStyle(
-                            color: color.onErrorContainer,
-                            fontSize: 12.5,
-                          ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              provider.lastError!,
+                              style: TextStyle(
+                                color: color.onErrorContainer,
+                                fontSize: 12.5,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton.icon(
+                                onPressed:
+                                    provider.isBusy
+                                        ? null
+                                        : () => _showMirrorDialog(
+                                          context,
+                                          provider,
+                                        ),
+                                icon: const Icon(Icons.public_rounded, size: 16),
+                                label: const Text('切换镜像'),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     if (provider.isInstalling)
@@ -422,7 +599,7 @@ class _PluginPageState extends State<PluginPage> {
                             provider,
                             marketPlugins,
                             _searchKeyword.trim().isEmpty
-                                ? '暂无插件，请先刷新清单或导入本地 zip'
+                                ? '暂无插件，请先刷新清单'
                                 : '没有匹配的插件',
                           ),
                         ],

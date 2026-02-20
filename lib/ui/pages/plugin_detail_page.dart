@@ -20,6 +20,7 @@ class PluginDetailPage extends StatefulWidget {
 class _PluginDetailPageState extends State<PluginDetailPage> {
   final Map<String, TextEditingController> _uiTextControllers =
       <String, TextEditingController>{};
+  static const int _hookLogPreviewMaxLength = 220;
   bool _isToolsExpanded = false;
   bool _isHooksExpanded = false;
 
@@ -55,6 +56,15 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
       sum += pkg.sizeBytes ?? 0;
     }
     return sum;
+  }
+
+  /// 压缩并截断 Hook 日志正文，避免设置页单条日志过长撑爆布局。
+  String _formatHookLogMessage(String message) {
+    final normalized = message.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (normalized.length <= _hookLogPreviewMaxLength) {
+      return normalized;
+    }
+    return '${normalized.substring(0, _hookLogPreviewMaxLength)}...';
   }
 
   String _stateText(PluginInstallState state) {
@@ -650,7 +660,9 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
                       (log) => Padding(
                         padding: const EdgeInsets.only(bottom: 6),
                         child: Text(
-                          '[${log.time.toIso8601String()}] ${log.event} · ${log.ok ? "OK" : "ERR"} · ${log.message}',
+                          '[${log.time.toIso8601String()}] ${log.event} · ${log.ok ? "OK" : "ERR"} · ${_formatHookLogMessage(log.message)}',
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: 12,
                             color: log.ok ? color.onSurfaceVariant : color.error,
