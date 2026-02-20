@@ -672,16 +672,30 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
       await _loadBasicState();
       await _loadInstalledRecords();
       await _reloadLocalPluginsFromDisk();
-      await refreshManifest();
       _syncRegistry();
       await PluginHookBus.emit('app_start');
       AppLogger.i('插件系统初始化完成');
+
+      // 启动阶段仅保证“本地已安装插件”可用，远端清单改为后台异步刷新，
+      // 避免首页加载被网络请求阻塞。
+      _isInitialized = true;
+      notifyListeners();
+      unawaited(_refreshManifestInBackground());
     } catch (e, st) {
       _lastError = '插件初始化失败: $e';
       AppLogger.e('初始化插件系统失败', e, st);
-    } finally {
       _isInitialized = true;
       notifyListeners();
+    }
+  }
+
+  /// 在应用进入主页后后台刷新远端清单，不阻塞启动流程。
+  Future<void> _refreshManifestInBackground() async {
+    try {
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      await refreshManifest();
+    } catch (e, st) {
+      AppLogger.e('后台刷新插件清单失败', e, st);
     }
   }
 
