@@ -29,15 +29,19 @@ NowChat 是一款面向 Android 的多模型 AI 客户端，支持自定义 API�
 ## 界面截图
 | 会话列表 | API 管理 | 编辑 API |
 | --- | --- | --- |
-| <img src="https://github.com/user-attachments/assets/aa6dd126-70b2-416f-abde-a36d43ca452a" width="220" /> | <img src="https://github.com/user-attachments/assets/5ce9eabb-9466-4497-af84-86d6363e287e" width="220" /> | <img src="https://github.com/user-attachments/assets/e27a9af7-74b1-4ca4-95ee-08e62fcb3253" width="220" /> |
+| <img src="https://github.com/user-attachments/assets/833604c3-7021-4ed5-81d2-2b1abe8605b1" width="220" /> | <img src="https://github.com/user-attachments/assets/905fc33e-6383-46ca-b520-1db9ac320c62" width="220" /> | <img src="https://github.com/user-attachments/assets/b045ca75-1fef-4920-960d-578f2479011b" width="220" /> |
 
 | 聊天详情 | 会话设置 | 工具页 |
 | --- | --- | --- |
-| <img src="https://github.com/user-attachments/assets/d144362f-379c-44ec-a4d8-3fafd14a5d7a" width="220" /> | <img src="https://github.com/user-attachments/assets/e94b7ba8-3774-402c-bbfb-02ee9cb14dd6" width="220" /> | <img src="https://github.com/user-attachments/assets/d898e298-1693-47cf-a550-d4ae2177dc7b" width="220" /> |
+| <img src="https://github.com/user-attachments/assets/6300f64d-b44a-425f-93b1-976e9645fd8b" width="220" /> | <img src="https://github.com/user-attachments/assets/7af1a4ae-b50b-43a2-b4c3-0291be3ee18b" width="220" /> | <img src="https://github.com/user-attachments/assets/f559fde1-413a-4abd-9c10-f2fdac5adaab" width="220" /> |
 
 | 插件中心 | 设置页 | 
 | --- | --- | 
-| [] | [] | 
+| <img src="https://github.com/user-attachments/assets/7b5693d5-4fa1-4b9e-99db-d9c29d03af5b" width="220" /> | <img src="https://github.com/user-attachments/assets/db5ab4ff-eced-4c10-a10c-63a4b66f4b22" width="220" /> |
+
+
+
+
 
 ## 插件说明
 - 插件市场与已安装插件分栏展示，支持搜索。
