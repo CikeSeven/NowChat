@@ -12,6 +12,13 @@ import 'package:provider/provider.dart';
 class ChatApp extends StatelessWidget {
   const ChatApp({super.key});
 
+  /// 自定义初始路由，仅注入启动页，避免 Flutter 自动先压入 `/` 导致主页重复入栈。
+  List<Route<dynamic>> _buildInitialRoutes(String initialRoute) {
+    return <Route<dynamic>>[
+      AppRoutes.generateRoute(RouteSettings(name: initialRoute)),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = MaterialTheme(Typography.tall2021);
@@ -34,6 +41,7 @@ class ChatApp extends StatelessWidget {
           ],
           onGenerateRoute: AppRoutes.generateRoute,
           initialRoute: AppRoutes.startup,
+          onGenerateInitialRoutes: _buildInitialRoutes,
           navigatorObservers: <NavigatorObserver>[
             PluginHookNavigatorObserver(),
           ],
