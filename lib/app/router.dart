@@ -14,21 +14,75 @@ import '../core/models/message.dart';
 import '../ui/pages/chat_detail_page.dart';
 import '../ui/pages/home_page.dart';
 
-/// AppRoutes 类型定义。
+/// 全局路由表。
+///
+/// 约定：
+/// - 页面路由统一从此处维护，避免字符串散落在各页面。
+/// - `generateRoute` 负责参数解析与兜底，页面本身可假设参数已校验。
 class AppRoutes {
+  /// 启动加载页（用于应用初始化、预加载本地数据）。
   static const startup = '/startup';
+
+  /// 主页面（底部导航容器）。
   static const home = '/';
+
+  /// 聊天详情页。
+  ///
+  /// 参数：
+  /// - `arguments` 为 `Map<String, dynamic>?`
+  /// - 可选键 `chatId`（int 或可转 int 的值）
   static const chatDetail = '/chat/detail';
+
+  /// 会话设置页。
+  ///
+  /// 参数：
+  /// - `arguments` 为 `Map<String, dynamic>?`
+  /// - 必填键 `chatId`（int 或可转 int 的值）
   static const chatSettings = '/chat/settings';
+
+  /// 设置 -> 默认对话参数。
   static const defaultChatParams = '/settings/default_chat_params';
+
+  /// 设置 -> 应用数据管理（导入/导出）。
   static const appDataManagement = '/settings/app_data_management';
+
+  /// 设置 -> 关于。
   static const about = '/settings/about';
+
+  /// 设置 -> 插件中心。
   static const plugin = '/settings/plugin';
+
+  /// 工具创建/编辑页。
+  ///
+  /// 参数：
+  /// - `arguments` 为 `Map<String, dynamic>?`
+  /// - 可选键 `agentId`
   static const agentForm = '/agent/form';
+
+  /// 工具详情页。
+  ///
+  /// 参数：
+  /// - `arguments` 为 `Map<String, dynamic>?`
+  /// - 必填键 `agentId`
   static const agentDetail = '/agent/detail';
+
+  /// API 提供方创建/编辑页。
+  ///
+  /// 参数：
+  /// - `arguments` 为 `Map<String, dynamic>?`
+  /// - 可选键 `providerId`
   static const providerForm = '/provider/form';
+
+  /// 消息编辑页。
+  ///
+  /// 参数：
+  /// - `arguments` 为 `Message`
   static const editMessage = '/edit_message';
 
+  /// 路由分发入口。
+  ///
+  /// 这里统一做参数合法性检查，若参数缺失则返回一个可读的错误页，
+  /// 避免空指针异常直接暴露给用户。
   static Route<dynamic> generateRoute(RouteSettings settings) {
     switch (settings.name) {
       case startup:
@@ -38,6 +92,7 @@ class AppRoutes {
         return MaterialPageRoute(builder: (_) => const HomePage());
 
       case chatDetail:
+        // 详情页允许无 chatId（例如从某些入口新建会话后直接进入）。
         final args = settings.arguments as Map<String, dynamic>?;
         final chatId = args?['chatId'];
         return MaterialPageRoute(
@@ -45,6 +100,7 @@ class AppRoutes {
         );
 
       case chatSettings:
+        // 会话设置必须依赖有效 chatId，因此这里先做安全解析和兜底提示。
         final args = settings.arguments as Map<String, dynamic>?;
         final rawChatId = args?['chatId'];
         final chatId =
@@ -81,6 +137,7 @@ class AppRoutes {
         );
 
       case agentForm:
+        // agentId 为空表示新建；有值表示编辑。
         final args = settings.arguments as Map<String, dynamic>?;
         final agentId = args?['agentId']?.toString();
         return _buildSlideRoute(
@@ -88,6 +145,7 @@ class AppRoutes {
         );
 
       case agentDetail:
+        // 详情页必须有 agentId，否则给出明确提示而不是崩溃。
         final args = settings.arguments as Map<String, dynamic>?;
         final agentId = args?['agentId']?.toString();
         if (agentId == null || agentId.trim().isEmpty) {
@@ -100,6 +158,7 @@ class AppRoutes {
         );
 
       case providerForm:
+        // providerId 为空表示新建提供方；有值表示编辑既有提供方。
         final args = settings.arguments as Map<String, dynamic>?;
         final providerId = args?['providerId'] as String?;
         return _buildSlideRoute(
@@ -107,7 +166,7 @@ class AppRoutes {
         );
 
       case editMessage:
-        // 直接传 Message 对象，不用拆 Map
+        // 编辑消息页面直接接收 Message 实例，避免重复序列化/反序列化。
         final message = settings.arguments as Message?;
         if (message == null) {
           return MaterialPageRoute(
@@ -126,6 +185,9 @@ class AppRoutes {
     }
   }
 
+  /// 统一底部滑入转场。
+  ///
+  /// 该项目多数“二级设置/编辑页”都采用该动画，保持交互一致性。
   static Route<T> _buildSlideRoute<T>({required WidgetBuilder builder}) {
     return PageRouteBuilder<T>(
       pageBuilder: (context, animation, secondaryAnimation) => builder(context),

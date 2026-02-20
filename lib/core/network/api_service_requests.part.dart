@@ -3,6 +3,8 @@ part of 'api_service.dart';
 /// API 非流式请求与模型列表拉取实现。
 
 /// 内部非流式请求入口，根据请求模式路由协议实现。
+///
+/// 该层只负责“协议分发”，真正的请求拼装逻辑在各协议函数内。
 Future<Map<String, dynamic>> _sendChatRequestInternal({
   required AIProviderConfig provider,
   required ChatSession session,
@@ -41,6 +43,10 @@ Future<Map<String, dynamic>> _sendChatRequestInternal({
 }
 
 /// 发送 OpenAI/OpenAI 兼容协议的非流式请求。
+///
+/// 支持能力：
+/// - 文本与视觉消息混合；
+/// - 工具调用闭环（assistant tool_calls -> tool -> assistant）。
 Future<Map<String, dynamic>> _sendOpenAIChatRequest({
   required AIProviderConfig provider,
   required ChatSession session,
@@ -93,14 +99,15 @@ Future<Map<String, dynamic>> _sendOpenAIChatRequest({
         'temperature': session.temperature,
         'top_p': session.topP,
         if (session.maxTokens > 0) 'max_tokens': session.maxTokens,
-        if (shouldUseTools && remainingToolCalls > 0) ...() {
-          final runtimeTools = AIToolRuntime.buildOpenAIToolsSchema();
-          if (runtimeTools.isEmpty) return const <String, dynamic>{};
-          return <String, dynamic>{
-            'tools': runtimeTools,
-            'tool_choice': 'auto',
-          };
-        }(),
+        if (shouldUseTools && remainingToolCalls > 0)
+          ...() {
+            final runtimeTools = AIToolRuntime.buildOpenAIToolsSchema();
+            if (runtimeTools.isEmpty) return const <String, dynamic>{};
+            return <String, dynamic>{
+              'tools': runtimeTools,
+              'tool_choice': 'auto',
+            };
+          }(),
       };
 
       final response = await client.post(
@@ -153,10 +160,9 @@ Future<Map<String, dynamic>> _sendOpenAIChatRequest({
       conversation.add(<String, dynamic>{
         'role': 'assistant',
         if (content.isNotEmpty) 'content': content,
-        'tool_calls':
-            toolCalls
-                .map((call) => _toOpenAIToolCallPayload(call))
-                .toList(growable: false),
+        'tool_calls': toolCalls
+            .map((call) => _toOpenAIToolCallPayload(call))
+            .toList(growable: false),
       });
 
       for (final call in toolCalls) {
@@ -206,6 +212,8 @@ Future<Map<String, dynamic>> _sendOpenAIChatRequest({
 }
 
 /// 发送 Gemini GenerateContent 非流式请求。
+///
+/// 注意：Gemini 以 `contents` 协议组织上下文，并将系统提示拆到 `systemInstruction`。
 Future<Map<String, dynamic>> _sendGeminiRequest({
   required AIProviderConfig provider,
   required ChatSession session,
@@ -300,6 +308,8 @@ Future<Map<String, dynamic>> _sendGeminiRequest({
 }
 
 /// 发送 Claude Messages 非流式请求。
+///
+/// 当前实现为纯文本结果提取，不包含 Claude 工具调用协议扩展。
 Future<Map<String, dynamic>> _sendClaudeRequest({
   required AIProviderConfig provider,
   required ChatSession session,
@@ -383,6 +393,10 @@ Future<Map<String, dynamic>> _sendClaudeRequest({
 }
 
 /// 内部模型列表拉取入口。
+///
+/// - OpenAI/兼容协议：`/v1/models`
+/// - Gemini：`/v1beta/models`
+/// - 超时会抛出可读错误，供 UI 直接提示。
 Future<List<String>> _fetchModelsInternal(
   AIProviderConfig provider,
   String baseUrl,

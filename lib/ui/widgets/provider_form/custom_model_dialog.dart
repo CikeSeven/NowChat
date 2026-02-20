@@ -31,6 +31,7 @@ Future<CustomModelDialogResult?> showCustomModelDialog({
   bool supportsTools = initialFeatures?.supportsTools ?? false;
   String? errorText;
 
+  // 统一在弹窗内完成校验，返回结果只包含有效输入。
   final result = await showDialog<CustomModelDialogResult>(
     context: context,
     builder: (dialogContext) {
@@ -126,6 +127,7 @@ Future<CustomModelDialogResult?> showCustomModelDialog({
                     return;
                   }
 
+                  // 编辑模式下允许“保留原模型名”而不触发重复校验。
                   final isEditingCurrent = lockModelName && initialModel == model;
                   if (existingModels.contains(model) && !isEditingCurrent) {
                     setDialogState(() {

@@ -9,6 +9,7 @@ Future<void> showModalBottomSheetMenu({
   required List<SheetMenuItem> items,
   required Message message,
 }){
+  // 助手消息与用户消息菜单形态不同：助手菜单支持可拖拽展开全文。
   final isAssitant = message.role == 'assistant';
   final color = Theme.of(context).colorScheme;
   return showModalBottomSheet(
@@ -41,7 +42,7 @@ Widget _buildUserMenu ({
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        //顶部拖拽条
+        // 顶部拖拽条
         Container(
           width: 36,
           height: 4,
@@ -52,7 +53,7 @@ Widget _buildUserMenu ({
           ),
         ),
 
-        //菜单项
+        // 菜单项
         ...items.map((item) {
           return ListTile(
             leading: item.icon,
@@ -70,7 +71,7 @@ Widget _buildUserMenu ({
 }
 
 
-// AI消息菜单
+// AI 消息菜单
 /// _AssistantMenuSheet 类型定义。
 class _AssistantMenuSheet extends StatefulWidget {
   final List<SheetMenuItem> items;
@@ -83,6 +84,7 @@ class _AssistantMenuSheet extends StatefulWidget {
 
 /// _AssistantMenuSheetState 视图状态。
 class _AssistantMenuSheetState extends State<_AssistantMenuSheet> {
+  /// 记录当前底部面板高度，用于控制菜单项折叠策略。
   final controller = DraggableScrollableController();
   double sheetSize = 0.5;
 
@@ -98,6 +100,7 @@ class _AssistantMenuSheetState extends State<_AssistantMenuSheet> {
 
   @override
   Widget build(BuildContext context) {
+    // 全屏时减少菜单项，给正文阅读留出更多空间。
     final isFullScreen = sheetSize > 0.8;
     final visibleItems = isFullScreen ? widget.items.take(2).toList() : widget.items;
     final color = Theme.of(context).colorScheme;
@@ -118,7 +121,7 @@ class _AssistantMenuSheetState extends State<_AssistantMenuSheet> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                //顶部拖拽条
+                // 顶部拖拽条
                 Container(
                   width: 36,
                   height: 4,
@@ -129,7 +132,7 @@ class _AssistantMenuSheetState extends State<_AssistantMenuSheet> {
                   ),
                 ),
         
-                //菜单项
+                // 菜单项
                 AnimatedSize(
                   duration: const Duration(milliseconds: 200),
                   curve: Curves.easeInOut,
@@ -155,6 +158,7 @@ class _AssistantMenuSheetState extends State<_AssistantMenuSheet> {
                   padding: const EdgeInsets.all(8.0),
                   child: Divider(),
                 ),
+                  // 底部展示可选择复制的完整助手消息正文。
                   Column(
                     children: [
                       Padding(

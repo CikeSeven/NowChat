@@ -18,6 +18,10 @@ extension ChatProviderGeneration on ChatProvider {
   }
 
   /// 在已有中断上下文上继续生成。
+  ///
+  /// 实现策略：
+  /// 1. 复用“原助手消息”继续追加内容，而不是新建一条消息。
+  /// 2. 在请求末尾补一条“继续生成”用户提示，引导模型续写。
   Future<void> continueGeneratingAssistantMessage(
     int chatId,
     bool isStreaming,
@@ -48,6 +52,7 @@ extension ChatProviderGeneration on ChatProvider {
       return;
     }
 
+    // 将“继续指令”作为末尾用户消息，确保模型续写而非重答。
     final requestMessages = <Message>[
       ...messages.take(assistantIndex + 1),
       Message(
@@ -61,6 +66,7 @@ extension ChatProviderGeneration on ChatProvider {
     final abortController = GenerationAbortController();
     _abortControllers[chatId] = abortController;
     await _setChatGenerating(chat, true);
+    // 一旦出现首个内容 token，视为本次继续生成成功启动。
     var responseStarted = false;
     var interrupted = false;
     var usedStreaming = false;
@@ -167,6 +173,8 @@ extension ChatProviderGeneration on ChatProvider {
   }
 
   /// 删除末尾助手回复并重新生成。
+  ///
+  /// 语义：仅重生“最后一轮助手回复”，用户历史不变。
   Future<void> regenerateMessage(int chatId, bool isStreaming) async {
     final chat = getChatById(chatId);
     if (chat == null || chat.isGenerating) return;
@@ -185,6 +193,7 @@ extension ChatProviderGeneration on ChatProvider {
             .where((m) => m.role == 'assistant')
             .toList();
 
+    // 先备份旧回复：若重生失败可无损回滚。
     final backupAssistantMessages = List<Message>.from(
       trailingAssistantMessages,
     );
@@ -329,6 +338,9 @@ extension ChatProviderGeneration on ChatProvider {
       }
 
       final hasAnyOutput = _hasMessageOutput(aiMsg);
+      // 失败回滚规则：
+      // - 未产出且未中断：恢复旧回复。
+      // - 中断且已有输出：保留部分结果并挂“继续”入口。
       final shouldRestoreOldReply = !responseStarted && !interrupted;
       final shouldKeepInterruptedPartial = interrupted && hasAnyOutput;
       if (shouldRestoreOldReply) {
@@ -365,6 +377,11 @@ extension ChatProviderGeneration on ChatProvider {
   }
 
   /// 发送用户消息并生成助手回复。
+  ///
+  /// 这是主聊天入口，包含：
+  /// - chat_before_send/chat_after_send Hook
+  /// - 流式/非流式分支
+  /// - 中断与错误兜底
   Future<void> sendMessage(
     int chatId,
     String userContent,
@@ -415,7 +432,7 @@ extension ChatProviderGeneration on ChatProvider {
           'message': _toHookMessagePayload(userMsg),
         },
       );
-      // 允许 Hook 在发送前改写用户消息（例如统一前后缀、脱敏、模板注入）。
+      // 允许 Hook 在发送前改写用户消息（如前后缀、脱敏、模板注入）。
       await _applyHookMessageOverride(
         message: userMsg,
         hookResults: beforeHookResults,
@@ -577,6 +594,7 @@ extension ChatProviderGeneration on ChatProvider {
       }
       _abortControllers.remove(chatId);
       await _setChatGenerating(chat, false);
+      // 发送收尾阶段允许插件对助手最终消息做后处理改写。
       final hookResults = await PluginHookBus.emit(
         'chat_after_send',
         payload: <String, dynamic>{

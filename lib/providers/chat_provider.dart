@@ -31,8 +31,13 @@ class _PendingContinuation {
 
 /// 会话、消息与提供方的统一状态管理。
 class ChatProvider with ChangeNotifier {
+  /// 首屏默认只拉取最近消息，避免历史超长会话阻塞进入页面。
   static const int _defaultMessagePageSize = 50;
+
+  /// 流式输出 UI 节流间隔：控制 notifyListeners 频率，降低重建开销。
   static const Duration _streamingUiThrottle = Duration(milliseconds: 60);
+
+  /// 流式输出落库间隔：批量写入 Isar，减少高频小事务。
   static const Duration _streamingFlushInterval = Duration(milliseconds: 500);
 
   final Isar isar;
@@ -43,10 +48,18 @@ class ChatProvider with ChangeNotifier {
 
   final Map<int, GenerationAbortController> _abortControllers =
       <int, GenerationAbortController>{};
+
+  /// 会话 -> “可继续生成锚点”，用于中断后继续生成。
   final Map<int, _PendingContinuation> _pendingContinuations =
       <int, _PendingContinuation>{};
+
+  /// 当前正在流式生成的消息 ID 集合。
   final Set<int> _streamingMessageIds = <int>{};
+
+  /// 已发生增量更新、等待批量落库的消息 ID 集合。
   final Set<int> _dirtyStreamingMessageIds = <int>{};
+
+  /// 消息 ID -> 工具执行日志列表（仅内存态，便于 UI 快速展示）。
   final Map<int, List<ToolExecutionLog>> _toolLogsByMessageId =
       <int, List<ToolExecutionLog>>{};
 
@@ -73,13 +86,14 @@ class ChatProvider with ChangeNotifier {
     return List<ToolExecutionLog>.unmodifiable(logs);
   }
 
+  /// Provider 创建后立即从本地恢复状态，保证离线可用。
   ChatProvider(this.isar) {
     _loadFromLocal();
   }
 
   /// 强制从本地存储重载会话与提供方数据。
   ///
-  /// 用于导入备份后立即刷新 UI。
+  /// 用于导入备份后立即刷新 UI，避免重启应用才能看到新数据。
   Future<void> reloadFromStorage() async {
     _initialized = false;
     await _loadFromLocal();
@@ -103,6 +117,8 @@ class ChatProvider with ChangeNotifier {
   }
 
   /// 供 UI 查询指定消息是否正在流式输出。
+  ///
+  /// 对外暴露只读判断方法，避免 UI 层直接接触内部 Set。
   bool isMessageStreaming(int messageId) {
     return _isMessageStreaming(messageId);
   }
@@ -159,6 +175,7 @@ class ChatProvider with ChangeNotifier {
       await isar.chatSessions.put(chat);
     });
 
+    // 新会话置顶，符合“最近使用优先”的列表展示习惯。
     _chatList.insert(0, chat);
     notifyListeners();
     return chat;

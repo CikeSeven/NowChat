@@ -16,6 +16,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   int _index = 0;
 
+  /// 首页一级页面缓存，使用 BottomNavigationBar 切换。
   final List<Widget> _pages = const [
     ChatListPage(),
     AgentPage(),

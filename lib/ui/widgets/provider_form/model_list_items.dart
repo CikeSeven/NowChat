@@ -198,6 +198,7 @@ class _CapabilityToggleIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 使用统一“选中/未选中”背景，保证能力开关状态一眼可见。
     final colors = Theme.of(context).colorScheme;
     return Tooltip(
       message: tooltip,

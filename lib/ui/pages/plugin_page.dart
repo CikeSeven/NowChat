@@ -25,6 +25,8 @@ class _PluginPageState extends State<PluginPage> {
   }
 
   /// 根据插件安装状态返回颜色标识。
+  ///
+  /// 状态色用于快速识别“可用/安装中/异常”。
   Color _stateColor(BuildContext context, PluginInstallState state) {
     final color = Theme.of(context).colorScheme;
     switch (state) {
@@ -54,6 +56,8 @@ class _PluginPageState extends State<PluginPage> {
   }
 
   /// 按“名称 + 描述”进行不区分大小写的搜索过滤。
+  ///
+  /// 搜索只作用于当前 Tab 已提供的数据源。
   List<PluginDefinition> _filterPlugins(List<PluginDefinition> source) {
     final keyword = _searchKeyword.trim().toLowerCase();
     if (keyword.isEmpty) return source;
@@ -71,6 +75,8 @@ class _PluginPageState extends State<PluginPage> {
   }
 
   /// 弹出镜像切换窗口：支持预设切换与测速。
+  ///
+  /// 保存后会触发清单刷新，使市场列表立即应用新镜像策略。
   Future<void> _showMirrorDialog(
     BuildContext context,
     PluginProvider provider,
@@ -213,6 +219,8 @@ class _PluginPageState extends State<PluginPage> {
   }
 
   /// 安装前置缺失时弹窗提示，并展示当前插件声明的前置插件列表。
+  ///
+  /// 该弹窗只做引导，不会自动安装前置插件。
   Future<void> _showRequiredPluginsDialog({
     required BuildContext context,
     required PluginProvider provider,
@@ -292,6 +300,10 @@ class _PluginPageState extends State<PluginPage> {
   }
 
   /// 构建单个插件卡片。
+  ///
+  /// 交互规则：
+  /// - 已安装：点击进入详情页。
+  /// - 未安装：点击无操作，仅右侧按钮可触发安装。
   Widget _buildPluginCard(
     BuildContext context,
     PluginProvider provider,
@@ -433,6 +445,8 @@ class _PluginPageState extends State<PluginPage> {
   }
 
   /// 构建插件列表区域。
+  ///
+  /// 空态文案由调用方传入，以区分“无数据”和“搜索无结果”。
   Widget _buildPluginList(
     BuildContext context,
     PluginProvider provider,

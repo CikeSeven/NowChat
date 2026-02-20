@@ -1,11 +1,24 @@
 /// Python 插件包信息（核心包与库包共用）。
 class PythonPluginPackage {
+  /// 包 ID（在依赖关系中唯一）。
   final String id;
+
+  /// 包展示名。
   final String name;
+
+  /// 包描述。
   final String description;
+
+  /// 包版本号。
   final String version;
+
+  /// 下载地址。
   final String url;
+
+  /// 下载包 SHA256 校验值。
   final String sha256;
+
+  /// 包体积（字节），用于 UI 展示，可为空。
   final int? sizeBytes;
 
   /// 解压安装到插件根目录下的相对路径，如 `core/3.11.8`。
@@ -34,6 +47,9 @@ class PythonPluginPackage {
     this.sizeBytes,
   });
 
+  /// 从 JSON 解析 Python 插件包定义。
+  ///
+  /// [requireDownloadFields] 用于区分“可下载库包”与“本地内置核心包”。
   factory PythonPluginPackage.fromJson(
     Map<String, dynamic> json, {
     bool requireDownloadFields = true,
@@ -74,9 +90,7 @@ class PythonPluginPackage {
       if (sha256.isEmpty) missingFields.add('sha256');
     }
     if (missingFields.isNotEmpty) {
-      throw FormatException(
-        '插件包字段不完整($context): ${missingFields.join(', ')}',
-      );
+      throw FormatException('插件包字段不完整($context): ${missingFields.join(', ')}');
     }
 
     return PythonPluginPackage(
@@ -99,8 +113,13 @@ class PythonPluginPackage {
 
 /// Python 插件清单：包含核心包与可选库包。
 class PythonPluginManifest {
+  /// 清单版本号。
   final int manifestVersion;
+
+  /// 核心运行时包定义。
   final PythonPluginPackage core;
+
+  /// 可选库包列表。
   final List<PythonPluginPackage> libraries;
 
   const PythonPluginManifest({
@@ -109,38 +128,40 @@ class PythonPluginManifest {
     required this.libraries,
   });
 
+  /// 从 JSON 解析 Python 插件清单。
   factory PythonPluginManifest.fromJson(Map<String, dynamic> json) {
     final manifestVersion =
         json['manifestVersion'] is num
             ? (json['manifestVersion'] as num).toInt()
             : 1;
     final pluginContainer = _findPythonPluginContainer(json);
-    final coreRaw = pluginContainer != null ? pluginContainer['core'] : json['core'];
+    final coreRaw =
+        pluginContainer != null ? pluginContainer['core'] : json['core'];
     if (coreRaw is! Map<String, dynamic>) {
       throw const FormatException('清单缺少核心包信息');
     }
     final librariesRaw =
-        pluginContainer != null ? pluginContainer['libraries'] : json['libraries'];
+        pluginContainer != null
+            ? pluginContainer['libraries']
+            : json['libraries'];
     final libraries =
         librariesRaw is List
             ? librariesRaw.asMap().entries.map((entry) {
-                final index = entry.key;
-                final item = entry.value;
-                if (item is! Map) {
-                  throw FormatException('插件包字段不完整(library#$index): item');
-                }
-                final map = Map<String, dynamic>.from(item);
-                final idPreview = (map['id'] ?? '').toString().trim();
-                final contextLabel =
-                    idPreview.isEmpty
-                        ? 'library#$index'
-                        : 'library:$idPreview';
-                return PythonPluginPackage.fromJson(
-                  map,
-                  requireDownloadFields: true,
-                  context: contextLabel,
-                );
-              }).toList()
+              final index = entry.key;
+              final item = entry.value;
+              if (item is! Map) {
+                throw FormatException('插件包字段不完整(library#$index): item');
+              }
+              final map = Map<String, dynamic>.from(item);
+              final idPreview = (map['id'] ?? '').toString().trim();
+              final contextLabel =
+                  idPreview.isEmpty ? 'library#$index' : 'library:$idPreview';
+              return PythonPluginPackage.fromJson(
+                map,
+                requireDownloadFields: true,
+                context: contextLabel,
+              );
+            }).toList()
             : const <PythonPluginPackage>[];
 
     final core = PythonPluginPackage.fromJson(
@@ -160,6 +181,7 @@ class PythonPluginManifest {
     );
   }
 
+  /// 在多插件容器格式中定位 Python 节点。
   static Map<String, dynamic>? _findPythonPluginContainer(
     Map<String, dynamic> json,
   ) {
@@ -180,9 +202,16 @@ class PythonPluginManifest {
 
 /// 已安装库包的本地记录。
 class InstalledPythonLibrary {
+  /// 库 ID。
   final String id;
+
+  /// 库版本号。
   final String version;
+
+  /// 库安装相对目录。
   final String targetDir;
+
+  /// 安装后追加到 Python 路径的目录列表。
   final List<String> pythonPathEntries;
 
   const InstalledPythonLibrary({
@@ -192,6 +221,7 @@ class InstalledPythonLibrary {
     required this.pythonPathEntries,
   });
 
+  /// 序列化本地已安装库记录。
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -201,6 +231,7 @@ class InstalledPythonLibrary {
     };
   }
 
+  /// 从 JSON 恢复已安装库记录。
   factory InstalledPythonLibrary.fromJson(Map<String, dynamic> json) {
     final id = (json['id'] ?? '').toString().trim();
     final version = (json['version'] ?? '').toString().trim();

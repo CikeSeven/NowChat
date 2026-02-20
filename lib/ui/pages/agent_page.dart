@@ -28,6 +28,7 @@ class AgentPage extends StatelessWidget {
           ),
         ],
       ),
+      // 空态与列表态分支，保持入口清晰。
       body: agents.isEmpty
           ? Center(
               child: Text(

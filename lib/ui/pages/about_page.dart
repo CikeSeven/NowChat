@@ -34,6 +34,7 @@ class _AboutPageState extends State<AboutPage> {
     _loadPackageInfo();
   }
 
+  /// 从平台读取应用名/版本号/包名，读取失败时保留兜底值。
   Future<void> _loadPackageInfo() async {
     try {
       final info = await PackageInfo.fromPlatform();

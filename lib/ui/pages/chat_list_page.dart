@@ -18,7 +18,8 @@ class ChatListPage extends StatefulWidget {
 /// _ChatListPageState 视图状态。
 class _ChatListPageState extends State<ChatListPage> {
   bool _isSelecting = false;
-  final Set<int> _selectedIds = {}; // 记录选中的 chat id
+  /// 多选模式下的会话 ID 集合。
+  final Set<int> _selectedIds = {};
 
   @override
   Widget build(BuildContext context) {
@@ -27,7 +28,8 @@ class _ChatListPageState extends State<ChatListPage> {
     final color = Theme.of(context).colorScheme;
 
     return PopScope(
-      canPop: !_isSelecting, // 当正在选择时阻止系统返回
+      // 多选时优先退出选择态，不直接退出页面。
+      canPop: !_isSelecting,
       onPopInvokedWithResult: (bool didPop, dynamic result) {
         if (!didPop && _isSelecting) {
           // 退出多选模式
@@ -124,7 +126,7 @@ class _ChatListPageState extends State<ChatListPage> {
                       }
                     });
                   } else {
-                    // 打开聊天详情
+                    // 普通模式：进入会话详情。
                     Navigator.pushNamed(context, AppRoutes.chatDetail,
                         arguments: {"chatId": chat.id});
                   }

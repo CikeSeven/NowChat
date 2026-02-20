@@ -95,6 +95,8 @@ class _DefaultChatParamsPageState extends State<DefaultChatParamsPage> {
   }
 
   /// 保存全部默认参数到本地设置。
+  ///
+  /// 此处做基础数字校验，避免写入非法值影响新会话创建。
   Future<void> _save() async {
     final maxTokens = int.tryParse(_maxTokensController.text.trim());
     final maxTurns = int.tryParse(_maxTurnsController.text.trim());

@@ -6,6 +6,11 @@ import 'package:now_chat/core/plugin/python_plugin_service.dart';
 import 'package:path/path.dart' as p;
 
 /// 插件运行时执行器：统一执行插件声明的 runtime 处理器。
+///
+/// 职责边界：
+/// - 负责将插件声明(runtime/script/inline)转换为可执行 Python 包装代码。
+/// - 负责注入插件可见路径、工作目录和超时控制。
+/// - 不负责插件安装与状态管理（由 PluginService/Provider 处理）。
 class PluginRuntimeExecutor {
   const PluginRuntimeExecutor._();
 
@@ -18,6 +23,7 @@ class PluginRuntimeExecutor {
     Map<String, dynamic>? payload,
     Duration timeout = const Duration(seconds: 20),
   }) async {
+    // 运行时关键字统一转小写，减少配置大小写差异造成的问题。
     final normalizedRuntime = runtime.trim().toLowerCase();
     if (normalizedRuntime == 'log') {
       return const PythonExecutionResult(
@@ -29,6 +35,7 @@ class PluginRuntimeExecutor {
       );
     }
 
+    // 统一由宿主包裹执行代码，保持 inline/script 的返回协议一致。
     final wrappedCode = _buildRuntimeCode(
       pluginId: pluginId,
       runtime: normalizedRuntime,
@@ -36,7 +43,10 @@ class PluginRuntimeExecutor {
       inlineCode: inlineCode,
       payload: payload ?? const <String, dynamic>{},
     );
-    final extraPaths = PluginRegistry.instance.resolvePythonPathsForPlugin(pluginId);
+    // sys.path 由注册表统一计算，确保“当前插件优先 + 全局插件补充”。
+    final extraPaths = PluginRegistry.instance.resolvePythonPathsForPlugin(
+      pluginId,
+    );
     final workingDirectory = _resolveRuntimeWorkingDirectory(
       pluginId: pluginId,
       runtime: normalizedRuntime,
@@ -93,6 +103,7 @@ class PluginRuntimeExecutor {
     required String? inlineCode,
     required Map<String, dynamic> payload,
   }) {
+    // 双层 jsonEncode：先转 JSON，再转 Python 字符串字面量，避免引号转义问题。
     final payloadJson = jsonEncode(payload);
     final payloadLiteral = jsonEncode(payloadJson);
     if (runtime == 'python_inline') {
@@ -100,6 +111,7 @@ class PluginRuntimeExecutor {
       if (code.isEmpty) {
         throw Exception('插件 runtime 缺少 inlineCode: $pluginId');
       }
+      // inline 模式约定：插件把结果写入 `_result`，宿主负责统一输出 JSON。
       return '''
 import json
 payload = json.loads($payloadLiteral)
@@ -114,6 +126,7 @@ if _result is not None:
       final resolved = _resolveScriptPath(pluginId, scriptPath);
       final resolvedJson = jsonEncode(resolved);
       final resolvedLiteral = jsonEncode(resolvedJson);
+      // script 模式约定：优先调用 main(payload)，其次 handle(payload)。
       return '''
 import json
 payload = json.loads($payloadLiteral)
@@ -158,15 +171,21 @@ if callable(_handler):
     dynamic value,
     Map<String, dynamic>? state,
   }) async {
+    // 先解析 UI 入口，再转绝对路径，保证错误信息能定位到插件定义问题。
     final schemaRelativePath = _resolvePluginUiSchemaRelativePath(pluginId);
     final schemaPath = _resolveScriptPath(pluginId, schemaRelativePath);
     final payloadLiteral = _toPythonJsonLiteral(payload);
     final eventTypeLiteral = _toPythonJsonLiteral(eventType);
     final componentIdLiteral = _toPythonJsonLiteral(componentId);
     final valueLiteral = _toPythonJsonLiteral(value);
-    final stateLiteral = _toPythonJsonLiteral(state ?? const <String, dynamic>{});
+    final stateLiteral = _toPythonJsonLiteral(
+      state ?? const <String, dynamic>{},
+    );
     final schemaPathLiteral = _toPythonJsonLiteral(schemaPath);
 
+    // UI DSL 执行协议：
+    // - 初次加载: build(payload)
+    // - 事件交互: on_event(event)
     final code = '''
 import json
 payload = json.loads($payloadLiteral)
@@ -201,9 +220,8 @@ if _result is not None:
     print(json.dumps(_result, ensure_ascii=False))
 ''';
 
-    final extraPaths = PluginRegistry.instance
-        .resolvePythonPathsForPlugin(pluginId)
-        .toList();
+    final extraPaths =
+        PluginRegistry.instance.resolvePythonPathsForPlugin(pluginId).toList();
     // 强制注入 UI 包导入根路径，避免 `from <namespace> import ...` 报找不到模块。
     final uiImportRoot = _resolveUiImportRoot(
       schemaPath: schemaPath,
@@ -240,12 +258,13 @@ if _result is not None:
 
   /// 从 stdout 末尾提取 JSON 对象，允许插件先输出调试日志。
   static Map<String, dynamic> _decodeJsonObjectFromStdout(String stdout) {
-    final lines = stdout
-        .split('\n')
-        .map((item) => item.trim())
-        .where((item) => item.isNotEmpty)
-        .toList()
-        .reversed;
+    final lines =
+        stdout
+            .split('\n')
+            .map((item) => item.trim())
+            .where((item) => item.isNotEmpty)
+            .toList()
+            .reversed;
     for (final line in lines) {
       try {
         final decoded = jsonDecode(line);
@@ -253,9 +272,7 @@ if _result is not None:
           return decoded;
         }
         if (decoded is Map) {
-          return decoded.map(
-            (key, value) => MapEntry(key.toString(), value),
-          );
+          return decoded.map((key, value) => MapEntry(key.toString(), value));
         }
       } catch (_) {
         // 继续尝试上一行，允许日志中混入非 JSON 文本。
@@ -333,7 +350,8 @@ if _result is not None:
     if (rootPath == null || rootPath.trim().isEmpty) {
       return (fallback ?? '.').trim();
     }
-    final normalizedPluginId = pluginId.trim().isEmpty ? 'unknown_plugin' : pluginId.trim();
+    final normalizedPluginId =
+        pluginId.trim().isEmpty ? 'unknown_plugin' : pluginId.trim();
     return p.normalize(p.join(rootPath, 'runtime', normalizedPluginId));
   }
 }

@@ -13,6 +13,8 @@ class AppDataManagementPage extends StatefulWidget {
 }
 
 class _AppDataManagementPageState extends State<AppDataManagementPage> {
+  /// 是否在导出时包含 API key。
+  /// 默认关闭，避免误分享敏感凭证。
   bool _includeApiKeys = false;
   bool _isExporting = false;
   bool _isImporting = false;

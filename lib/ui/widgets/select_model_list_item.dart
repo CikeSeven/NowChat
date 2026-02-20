@@ -20,6 +20,7 @@ class SelectModelListItem extends StatefulWidget {
 
 /// _SelectModelListItemState 视图状态。
 class _SelectModelListItemState extends State<SelectModelListItem> {
+  /// 展开状态：控制 provider 下模型列表显示。
   bool _expanded = false;
 
   @override
@@ -75,7 +76,7 @@ class _SelectModelListItemState extends State<SelectModelListItem> {
               ),
             ),
 
-            /// 动画展开部分
+            // 动画展开部分
             AnimatedCrossFade(
               firstChild: const SizedBox.shrink(),
               secondChild: Padding(

@@ -90,6 +90,7 @@ class _AgentFormPageState extends State<AgentFormPage> {
     super.dispose();
   }
 
+  /// 选择并绑定工具专属模型。
   Future<void> _showModelSelector() async {
     final settings = context.read<SettingsProvider>();
     final initialProviderId = _providerId ?? settings.defaultProviderId;
@@ -118,6 +119,7 @@ class _AgentFormPageState extends State<AgentFormPage> {
     );
   }
 
+  /// 校验并保存工具配置（新建/编辑共用）。
   Future<void> _save() async {
     final name = _nameController.text.trim();
     final summary = _summaryController.text.trim();
@@ -131,6 +133,7 @@ class _AgentFormPageState extends State<AgentFormPage> {
       return;
     }
 
+    // provider/model 需成对出现，防止运行时模型解析失败。
     final normalizedProviderId = (_providerId ?? '').trim();
     final normalizedModel = (_model ?? '').trim();
     final hasProvider = normalizedProviderId.isNotEmpty;

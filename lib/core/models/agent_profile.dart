@@ -158,9 +158,10 @@ class AgentProfile {
   factory AgentProfile.fromJson(Map<String, dynamic> json) {
     final now = DateTime.now();
     return AgentProfile(
-      id: (json['id']?.toString().trim().isNotEmpty ?? false)
-          ? json['id'].toString()
-          : const Uuid().v4(),
+      id:
+          (json['id']?.toString().trim().isNotEmpty ?? false)
+              ? json['id'].toString()
+              : const Uuid().v4(),
       name: (json['name'] ?? '').toString().trim(),
       summary: (json['summary'] ?? '').toString().trim(),
       prompt: (json['prompt'] ?? '').toString().trim(),
@@ -169,7 +170,8 @@ class AgentProfile {
       temperature: _toDoubleOrNull(json['temperature']),
       topP: _toDoubleOrNull(json['topP']),
       maxTokens: _toIntOrNull(json['maxTokens']),
-      isStreaming: json['isStreaming'] is bool ? json['isStreaming'] as bool : null,
+      isStreaming:
+          json['isStreaming'] is bool ? json['isStreaming'] as bool : null,
       createdAt: _toDateTimeOrDefault(json['createdAt'], now),
       updatedAt: _toDateTimeOrDefault(json['updatedAt'], now),
     );

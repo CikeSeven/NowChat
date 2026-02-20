@@ -1,9 +1,18 @@
 /// 已安装插件包记录。
 class InstalledPluginPackageRecord {
+  /// 插件包 ID（来自 plugin.json packages[].id）。
   final String id;
+
+  /// 插件包版本号。
   final String version;
+
+  /// 安装目标目录（相对 plugin_runtime 根目录）。
   final String targetDir;
+
+  /// 该包对 Python 运行时追加的 sys.path 条目。
   final List<String> pythonPathEntries;
+
+  /// 可选入口脚本（用于插件侧自定义启动逻辑）。
   final String? entryPoint;
 
   const InstalledPluginPackageRecord({
@@ -14,6 +23,7 @@ class InstalledPluginPackageRecord {
     this.entryPoint,
   });
 
+  /// 序列化单个包安装记录。
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -24,6 +34,7 @@ class InstalledPluginPackageRecord {
     };
   }
 
+  /// 从 JSON 恢复包安装记录，并做基础字段校验。
   factory InstalledPluginPackageRecord.fromJson(Map<String, dynamic> json) {
     final id = (json['id'] ?? '').toString().trim();
     final version = (json['version'] ?? '').toString().trim();
@@ -53,12 +64,25 @@ class InstalledPluginPackageRecord {
 
 /// 已安装插件记录：状态、包信息与工具开关。
 class InstalledPluginRecord {
+  /// 插件 ID。
   final String pluginId;
+
+  /// 插件版本号。
   final String pluginVersion;
+
+  /// 插件是否启用（暂停时为 false）。
   final bool enabled;
+
+  /// 当前启用的工具名列表。
   final List<String> enabledTools;
+
+  /// 该插件安装的包记录列表。
   final List<InstalledPluginPackageRecord> packages;
+
+  /// 插件安装时间。
   final DateTime installedAt;
+
+  /// 是否来自本地导入（true=本地 zip，false=远程仓库安装）。
   final bool isLocalImport;
 
   const InstalledPluginRecord({
@@ -71,6 +95,7 @@ class InstalledPluginRecord {
     required this.isLocalImport,
   });
 
+  /// 复制插件安装记录并返回新实例。
   InstalledPluginRecord copyWith({
     bool? enabled,
     List<String>? enabledTools,
@@ -90,6 +115,7 @@ class InstalledPluginRecord {
     );
   }
 
+  /// 序列化插件安装记录。
   Map<String, dynamic> toJson() {
     return {
       'pluginId': pluginId,
@@ -102,6 +128,7 @@ class InstalledPluginRecord {
     };
   }
 
+  /// 从 JSON 恢复插件安装记录，并兜底处理可选字段。
   factory InstalledPluginRecord.fromJson(Map<String, dynamic> json) {
     final pluginId = (json['pluginId'] ?? '').toString().trim();
     final pluginVersion = (json['pluginVersion'] ?? '').toString().trim();
@@ -133,7 +160,8 @@ class InstalledPluginRecord {
 
     final installedAtRaw = (json['installedAt'] ?? '').toString().trim();
     final installedAt =
-        DateTime.tryParse(installedAtRaw) ?? DateTime.fromMillisecondsSinceEpoch(0);
+        DateTime.tryParse(installedAtRaw) ??
+        DateTime.fromMillisecondsSinceEpoch(0);
 
     return InstalledPluginRecord(
       pluginId: pluginId,

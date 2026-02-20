@@ -8,8 +8,10 @@ import '../../core/models/message.dart';
 /// 聊天会话列表项组件（支持多选高亮显示）
 class ChatListItem extends StatelessWidget {
   final ChatSession chat;
-  final bool isSelected; // 是否被选中
-  final bool isSelecting; // 是否处于多选模式
+  /// 是否被选中（多选模式）。
+  final bool isSelected;
+  /// 是否处于多选模式。
+  final bool isSelecting;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
 
@@ -22,6 +24,7 @@ class ChatListItem extends StatelessWidget {
     this.onLongPress,
   });
 
+  /// 时间显示规则：当天显示时分，跨天显示月/日。
   String _formatTime(DateTime? time) {
     if (time == null) return '';
     final now = DateTime.now();
@@ -95,6 +98,7 @@ class ChatListItem extends StatelessWidget {
                   const SizedBox(height: 4),
 
                   // 最后一条消息
+                  // 列表项仅展示最后一条消息预览。
                   FutureBuilder<Message?>(
                     future: chatProvider.getLastMessage(chat.id),
                     builder: (context, snapshot) {

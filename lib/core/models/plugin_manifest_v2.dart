@@ -66,9 +66,7 @@ class PluginPackage {
       if (sha256.isEmpty) missingFields.add('sha256');
     }
     if (missingFields.isNotEmpty) {
-      throw FormatException(
-        '插件包字段不完整($context): ${missingFields.join(', ')}',
-      );
+      throw FormatException('插件包字段不完整($context): ${missingFields.join(', ')}');
     }
 
     return PluginPackage(
@@ -136,9 +134,7 @@ class PluginToolDefinition {
       scriptPath: scriptPath.isEmpty ? null : scriptPath,
       inlineCode: inlineCode.trim().isEmpty ? null : inlineCode,
       timeoutSec:
-          json['timeoutSec'] is num
-              ? (json['timeoutSec'] as num).toInt()
-              : 20,
+          json['timeoutSec'] is num ? (json['timeoutSec'] as num).toInt() : 20,
       outputLimit:
           json['outputLimit'] is num
               ? (json['outputLimit'] as num).toInt()
@@ -191,15 +187,18 @@ class PluginDefinition {
   final String description;
   final String version;
   final String type;
+
   /// 前置插件 ID 列表。
   ///
   /// 当该列表不为空时，安装当前插件前必须先安装这些插件。
   final List<String> requiredPluginIds;
+
   /// Python 插件的 UI 命名空间目录（例如 `sample_tool_ui`）。
   ///
   /// 运行时会按 `${pythonNamespace}/schema.py` 查找插件配置页入口，
   /// 用于避免多个插件共用 `ui` 包名导致的导入冲突。
   final String pythonNamespace;
+
   /// 是否将本插件的 Python 路径暴露为“全局共享路径”。
   ///
   /// 启用后，其他插件执行 Python 代码时也会自动追加这些路径，
@@ -296,21 +295,21 @@ class PluginDefinition {
     final packages =
         rawPackages is List
             ? rawPackages.asMap().entries.map((entry) {
-                final index = entry.key;
-                final item = entry.value;
-                if (item is! Map) {
-                  throw FormatException('插件包格式错误($id#$index)');
-                }
-                final itemMap = Map<String, dynamic>.from(item);
-                final hasDownloadFields =
-                    (itemMap['url'] ?? '').toString().trim().isNotEmpty ||
-                        (itemMap['sha256'] ?? '').toString().trim().isNotEmpty;
-                return PluginPackage.fromJson(
-                  itemMap,
-                  context: '$id#$index',
-                  requireDownloadFields: hasDownloadFields,
-                );
-              }).toList()
+              final index = entry.key;
+              final item = entry.value;
+              if (item is! Map) {
+                throw FormatException('插件包格式错误($id#$index)');
+              }
+              final itemMap = Map<String, dynamic>.from(item);
+              final hasDownloadFields =
+                  (itemMap['url'] ?? '').toString().trim().isNotEmpty ||
+                  (itemMap['sha256'] ?? '').toString().trim().isNotEmpty;
+              return PluginPackage.fromJson(
+                itemMap,
+                context: '$id#$index',
+                requireDownloadFields: hasDownloadFields,
+              );
+            }).toList()
             : _legacyPackages(id, json);
 
     final rawTools = json['tools'];
@@ -318,7 +317,11 @@ class PluginDefinition {
         rawTools is List
             ? rawTools
                 .whereType<Map>()
-                .map((item) => PluginToolDefinition.fromJson(Map<String, dynamic>.from(item)))
+                .map(
+                  (item) => PluginToolDefinition.fromJson(
+                    Map<String, dynamic>.from(item),
+                  ),
+                )
                 .toList()
             : const <PluginToolDefinition>[];
 
@@ -327,7 +330,11 @@ class PluginDefinition {
         rawHooks is List
             ? rawHooks
                 .whereType<Map>()
-                .map((item) => PluginHookDefinition.fromJson(Map<String, dynamic>.from(item)))
+                .map(
+                  (item) => PluginHookDefinition.fromJson(
+                    Map<String, dynamic>.from(item),
+                  ),
+                )
                 .toList()
             : const <PluginHookDefinition>[];
 
@@ -429,9 +436,6 @@ class PluginManifestV2 {
       throw const FormatException('清单中没有可用插件');
     }
 
-    return PluginManifestV2(
-      manifestVersion: manifestVersion,
-      plugins: plugins,
-    );
+    return PluginManifestV2(manifestVersion: manifestVersion, plugins: plugins);
   }
 }

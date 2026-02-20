@@ -30,6 +30,7 @@ class _PluginReadmePageState extends State<PluginReadmePage> {
     });
   }
 
+  /// 加载 README：优先本地已安装文件，失败时可重试。
   Future<void> _loadReadme() async {
     setState(() {
       _isLoading = true;

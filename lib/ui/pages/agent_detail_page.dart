@@ -23,6 +23,7 @@ class AgentDetailPage extends StatefulWidget {
 /// _AgentDetailPageState 视图状态。
 class _AgentDetailPageState extends State<AgentDetailPage> {
   final TextEditingController _inputController = TextEditingController();
+  /// 渲染开关：Markdown 与纯文本展示模式。
   bool _renderMarkdown = true;
   bool _isSummaryExpanded = false;
 
@@ -41,6 +42,7 @@ class _AgentDetailPageState extends State<AgentDetailPage> {
     super.dispose();
   }
 
+  /// 删除工具前二次确认。
   Future<void> _deleteAgent(AgentProfile agent) async {
     final color = Theme.of(context).colorScheme;
     final confirmed = await showDialog<bool>(
@@ -75,6 +77,9 @@ class _AgentDetailPageState extends State<AgentDetailPage> {
     Navigator.of(context).pop();
   }
 
+  /// 解析本次执行实际参数。
+  ///
+  /// 若工具未绑定可用 provider/model，返回 null 并由 UI 提示先选择模型。
   _ResolvedAgentRuntime? _resolveRuntime({
     required AgentProfile agent,
     required ChatProvider chatProvider,
@@ -165,6 +170,7 @@ class _AgentDetailPageState extends State<AgentDetailPage> {
     await context.read<AgentProvider>().updateAgent(agent);
   }
 
+  /// 提交一次性请求（不保留历史）。
   Future<void> _submitOneShot({
     required AgentProfile agent,
     required _ResolvedAgentRuntime runtime,
@@ -187,6 +193,7 @@ class _AgentDetailPageState extends State<AgentDetailPage> {
     );
   }
 
+  /// 组合“正在生成/错误/中断/成功”各状态下的展示文本。
   String _buildResponseText(AgentProvider provider) {
     if (provider.isGenerating) {
       return provider.streamingContent;

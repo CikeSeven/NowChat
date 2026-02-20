@@ -8,8 +8,11 @@ import 'message_bottom_sheet_menu.dart';
 
 /// 助手消息气泡组件，负责渲染正文、思考区、操作按钮与工具调用日志。
 class AssistantMessageWidget extends StatefulWidget {
+  /// 流式渲染阈值：新增行数达到阈值就刷新 Markdown 快照。
   static const int streamingSnapshotLineThreshold = 1;
+  /// 流式渲染阈值：新增字符达到阈值就刷新 Markdown 快照。
   static const int streamingSnapshotCharThreshold = 120;
+  /// 流式渲染阈值：即使增量较小，超过时间也强制刷新一次。
   static const Duration streamingMarkdownMaxInterval = Duration(
     milliseconds: 450,
   );

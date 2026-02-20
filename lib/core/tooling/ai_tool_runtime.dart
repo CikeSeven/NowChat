@@ -53,10 +53,17 @@ class AIToolExecutionResult {
 }
 
 /// 工具运行时：从插件注册表动态构建与执行工具。
+///
+/// 设计目标：
+/// - 向模型暴露“当前可用工具”。
+/// - 执行模型下发的 tool_call，并把结果回填为标准 JSON 文本。
+/// - 全流程记录日志，便于在插件/模型/宿主三端快速定位问题。
 class AIToolRuntime {
   const AIToolRuntime._();
 
   /// 构建 OpenAI `tools` 参数（基于插件开关与工具开关）。
+  ///
+  /// 返回值会直接放入聊天请求体，因此必须确保结构稳定且字段完整。
   static List<Map<String, dynamic>> buildOpenAIToolsSchema() {
     final tools = PluginRegistry.instance.resolveEnabledTools();
     if (tools.isEmpty) return const <Map<String, dynamic>>[];
@@ -75,6 +82,13 @@ class AIToolRuntime {
   }
 
   /// 执行单个工具调用。
+  ///
+  /// 执行链路：
+  /// 1. 查找工具绑定（插件 + 工具定义）。
+  /// 2. 触发 `tool_before_execute` Hook。
+  /// 3. 按 runtime 执行。
+  /// 4. 触发 `tool_after_execute` Hook。
+  /// 5. 返回可回填给模型的工具结果。
   static Future<AIToolExecutionResult> execute(AIToolCall call) async {
     final started = DateTime.now();
     final binding = PluginRegistry.instance.resolveToolByName(call.name);
@@ -132,6 +146,7 @@ class AIToolRuntime {
           );
       }
 
+      // 统一补齐耗时字段，避免不同 runtime 返回结构不一致。
       final withDuration = _withDuration(result, started);
       await PluginHookBus.emit(
         'tool_after_execute',
@@ -154,6 +169,7 @@ class AIToolRuntime {
       );
       return withDuration;
     } catch (e, st) {
+      // 异常分支仍返回结构化结果给模型，避免 tool_call 阶段直接崩链路。
       final result = _withDuration(
         AIToolExecutionResult(
           status: 'error',
@@ -205,6 +221,10 @@ class AIToolRuntime {
   }
 
   /// 插件声明 runtime 的 Python 执行器。
+  ///
+  /// 约定：
+  /// - 插件可在 stdout 末尾输出 JSON 作为结构化返回。
+  /// - 宿主会把 stdout/stderr/exitCode 等诊断字段补回 tool payload。
   static Future<AIToolExecutionResult> _execPluginRuntimePython({
     required String pluginId,
     required String runtime,
@@ -213,6 +233,7 @@ class AIToolRuntime {
     required String? inlineCode,
     required int timeoutSec,
   }) async {
+    // 参数解析失败时回退为空对象，防止模型偶发 JSON 错误直接中断流程。
     final args = _safeParseJsonObject(rawArgs);
     final result = await PluginRuntimeExecutor.execute(
       pluginId: pluginId,
@@ -242,6 +263,7 @@ class AIToolRuntime {
     final errorFromPlugin = pluginResult?['error']?.toString();
 
     // 插件可直接返回完整 JSON 对象作为工具结果；宿主会补齐缺省字段。
+    // 面向模型的统一回包：无论插件是否返回 JSON，都具备基础诊断字段。
     final toolPayload = <String, dynamic>{
       if (pluginResult != null) ...pluginResult,
       'ok': ok,
@@ -346,9 +368,7 @@ class AIToolRuntime {
     if (result.status == 'success') {
       AppLogger.i(message);
     } else {
-      AppLogger.w(
-        '$message error=${result.error ?? 'unknown'}',
-      );
+      AppLogger.w('$message error=${result.error ?? 'unknown'}');
     }
   }
 

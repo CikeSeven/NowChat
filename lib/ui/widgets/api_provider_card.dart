@@ -24,6 +24,7 @@ class ApiProviderCard extends StatelessWidget {
     final models = provider.models;
     final baseUrl = (provider.baseUrl ?? '').trim();
     final requestPath = (provider.urlPath ?? '').trim();
+    // 空字段统一显示 `-`，避免 UI 出现空白行。
     final baseUrlText = baseUrl.isEmpty ? '-' : baseUrl;
     final requestPathText = requestPath.isEmpty ? '-' : requestPath;
 
@@ -205,6 +206,7 @@ class ApiProviderCard extends StatelessWidget {
     );
   }
 
+  /// 右上角动作按钮（编辑/删除）统一样式。
   Widget _buildActionIcon({
     required BuildContext context,
     required IconData icon,
@@ -228,6 +230,7 @@ class ApiProviderCard extends StatelessWidget {
     );
   }
 
+  /// 模型条目：展示备注名、原名和能力标记。
   Widget _buildModelItem(BuildContext context, {required String model}) {
     final colors = Theme.of(context).colorScheme;
     final displayName = provider.displayNameForModel(model);
@@ -306,6 +309,7 @@ class ApiProviderCard extends StatelessWidget {
     );
   }
 
+  /// 模型能力标记胶囊。
   Widget _buildCapabilityPill(
     BuildContext context, {
     required IconData icon,
@@ -327,6 +331,7 @@ class ApiProviderCard extends StatelessWidget {
     );
   }
 
+  /// 顶部标签（类型/协议/模型数）。
   Widget _buildTag(BuildContext context, String text) {
     final colors = Theme.of(context).colorScheme;
     return Container(

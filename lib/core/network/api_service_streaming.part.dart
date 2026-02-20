@@ -3,6 +3,11 @@ part of 'api_service.dart';
 /// API 流式请求实现（OpenAI / Gemini / Claude）。
 
 /// 内部流式请求入口，根据请求模式路由到具体协议实现。
+///
+/// 该入口保证上层只接触统一回调：
+/// - `onStream` 处理增量文本/推理内容；
+/// - `onDone` 标识流结束；
+/// - `onToolLog` 回传工具日志（仅 OpenAI 工具链）。
 Future<void> _sendChatRequestStreamingInternal({
   required AIProviderConfig provider,
   required ChatSession session,
@@ -53,6 +58,11 @@ Future<void> _sendChatRequestStreamingInternal({
 }
 
 /// 发送 OpenAI/OpenAI 兼容协议的流式请求。
+///
+/// 特性：
+/// - 解析 SSE 增量文本；
+/// - 聚合增量 `tool_calls` 后执行工具；
+/// - 将工具结果回填到 conversation 后继续请求。
 Future<void> _sendOpenAIChatStreaming({
   required AIProviderConfig provider,
   required ChatSession session,
@@ -85,7 +95,8 @@ Future<void> _sendOpenAIChatStreaming({
     final allowVision = _supportsVisionForSessionModel(provider, session);
     final systemPrompt = _resolvedSystemPrompt(session);
     final shouldUseTools = _isToolCallingEnabledForSession(provider, session);
-    var remainingToolCalls = session.maxToolCalls <= 0 ? 0 : session.maxToolCalls;
+    var remainingToolCalls =
+        session.maxToolCalls <= 0 ? 0 : session.maxToolCalls;
 
     final headers = <String, String>{'Content-Type': 'application/json'};
     final apiKey = (provider.apiKey ?? '').trim();
@@ -111,14 +122,15 @@ Future<void> _sendOpenAIChatStreaming({
         'top_p': session.topP,
         if (session.maxTokens > 0) 'max_tokens': session.maxTokens,
         'stream': true,
-        if (shouldUseTools && remainingToolCalls > 0) ...() {
-          final runtimeTools = AIToolRuntime.buildOpenAIToolsSchema();
-          if (runtimeTools.isEmpty) return const <String, dynamic>{};
-          return <String, dynamic>{
-            'tools': runtimeTools,
-            'tool_choice': 'auto',
-          };
-        }(),
+        if (shouldUseTools && remainingToolCalls > 0)
+          ...() {
+            final runtimeTools = AIToolRuntime.buildOpenAIToolsSchema();
+            if (runtimeTools.isEmpty) return const <String, dynamic>{};
+            return <String, dynamic>{
+              'tools': runtimeTools,
+              'tool_choice': 'auto',
+            };
+          }(),
       };
 
       AppLogger.i("(OpenAI) 发起流式请求 -> $uri");
@@ -171,7 +183,8 @@ Future<void> _sendOpenAIChatStreaming({
             final delta = firstChoice['delta'];
             if (delta is! Map) continue;
 
-            final reasoningRaw = delta['reasoning_content'] ?? delta['reasoning'];
+            final reasoningRaw =
+                delta['reasoning_content'] ?? delta['reasoning'];
             final contentRaw = delta['content'];
             final reasoning = reasoningRaw is String ? reasoningRaw : null;
             final content = contentRaw is String ? contentRaw : '';
@@ -213,10 +226,9 @@ Future<void> _sendOpenAIChatStreaming({
       conversation.add(<String, dynamic>{
         'role': 'assistant',
         if (assistantContent.isNotEmpty) 'content': assistantContent,
-        'tool_calls':
-            toolCalls
-                .map((call) => _toOpenAIToolCallPayload(call))
-                .toList(growable: false),
+        'tool_calls': toolCalls
+            .map((call) => _toOpenAIToolCallPayload(call))
+            .toList(growable: false),
       });
 
       for (final call in toolCalls) {
@@ -260,6 +272,8 @@ Future<void> _sendOpenAIChatStreaming({
 }
 
 /// 发送 Gemini 流式请求（SSE）。
+///
+/// Gemini 返回的是“快照式文本”，这里通过 diff 方式推导 delta，统一回调给上层。
 Future<void> _sendGeminiRequestStreaming({
   required AIProviderConfig provider,
   required ChatSession session,
@@ -399,6 +413,10 @@ Future<void> _sendGeminiRequestStreaming({
 }
 
 /// 发送 Claude 流式请求（SSE）。
+///
+/// Claude 通过事件类型区分内容分块与结束事件：
+/// - `content_block_start` / `content_block_delta`
+/// - `message_stop`
 Future<void> _sendClaudeRequestStreaming({
   required AIProviderConfig provider,
   required ChatSession session,

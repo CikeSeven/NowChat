@@ -27,10 +27,13 @@ class ToolExecutionLog {
     this.durationMs,
   });
 
+  /// 是否成功状态。
   bool get isSuccess => status == 'success';
 
+  /// 是否失败状态。
   bool get isError => status == 'error';
 
+  /// 序列化日志对象。
   Map<String, dynamic> toJson() => {
     'callId': callId,
     'toolName': toolName,
@@ -40,6 +43,7 @@ class ToolExecutionLog {
     if (durationMs != null) 'durationMs': durationMs,
   };
 
+  /// 从 JSON 恢复日志对象。
   factory ToolExecutionLog.fromJson(Map<String, dynamic> json) {
     final durationRaw = json['durationMs'];
     return ToolExecutionLog(

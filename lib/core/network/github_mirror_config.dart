@@ -1,8 +1,15 @@
 /// GitHub 镜像预设模型。
 class GithubMirrorPreset {
+  /// 镜像 ID（用于持久化与逻辑判断）。
   final String id;
+
+  /// 镜像展示名。
   final String name;
+
+  /// 镜像说明文案。
   final String description;
+
+  /// 镜像基础地址（空字符串代表直连）。
   final String baseUrl;
 
   const GithubMirrorPreset({
@@ -23,6 +30,7 @@ class GithubMirrorConfig {
   static const String ghproxyNetId = 'ghproxy_net';
   static const String customId = 'custom';
 
+  /// 镜像预设清单（统一供插件中心与更新检查使用）。
   static const List<GithubMirrorPreset> presets = <GithubMirrorPreset>[
     GithubMirrorPreset(
       id: directId,
@@ -64,6 +72,7 @@ class GithubMirrorConfig {
     ghproxyNetId,
   ];
 
+  /// 根据镜像 ID 查找预设。
   static GithubMirrorPreset? findById(String id) {
     for (final preset in presets) {
       if (preset.id == id) return preset;
@@ -116,6 +125,7 @@ class GithubMirrorConfig {
     return '$baseUrl/$url';
   }
 
+  /// 判断是否为 GitHub 相关域名链接。
   static bool _isGithubRelatedUrl(String rawUrl) {
     Uri uri;
     try {

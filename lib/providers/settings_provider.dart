@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// 全局设置状态：主题、默认会话参数与工具调用默认配置。
 class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
+  /// 新建会话默认参数：与会话设置页初始值保持一致。
   static const double defaultTemperatureValue = 0.7;
   static const double defaultTopPValue = 1.0;
   static const int defaultMaxTokensValue = 8192;
@@ -46,6 +47,7 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
   int get defaultMaxToolCalls => _defaultMaxToolCalls;
 
   ThemeMode get effectiveThemeMode {
+    // 跟随系统模式下实时读取平台亮度，避免缓存导致主题不同步。
     if (_themeMode != ThemeMode.system) return _themeMode;
     final brightness =
         WidgetsBinding.instance.platformDispatcher.platformBrightness;
@@ -56,6 +58,7 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   SettingsProvider() {
     WidgetsBinding.instance.addObserver(this);
+    // 异步加载设置；加载完成后会自行 notify 刷新 UI。
     _loadSettings();
   }
 
@@ -117,6 +120,7 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
 
     final prefs = await SharedPreferences.getInstance();
+    // 任一为空都视为“未设置默认模型”，统一清理两项存储。
     if (nextProvider == null || nextModel == null) {
       await prefs.remove(_defaultProviderIdKey);
       await prefs.remove(_defaultModelKey);
@@ -211,6 +215,8 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   /// 主题快捷切换（浅色/深色）。
+  ///
+  /// 当当前模式为系统跟随时，切换后会直接进入深色模式。
   void toggleTheme() {
     if (_themeMode == ThemeMode.dark) {
       setThemeMode(ThemeMode.light);
@@ -221,6 +227,7 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   @override
   void didChangePlatformBrightness() {
+    // 仅系统跟随模式需要响应平台亮度变化。
     if (_themeMode == ThemeMode.system) {
       notifyListeners();
     }

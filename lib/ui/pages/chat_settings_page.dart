@@ -44,6 +44,7 @@ class _ChatSettingsPageState extends State<ChatSettingsPage> {
       _temperature = chat.temperature;
       _topP = chat.topP;
       _isStreaming = chat.isStreaming;
+      // 0 表示“不传 maxTokens”；4096 兼容历史默认值场景，不视为手动覆盖。
       _useMaxTokens = chat.maxTokens > 0 && chat.maxTokens != 4096;
       _maxTokensController.text =
           _useMaxTokens ? chat.maxTokens.toString() : SettingsProvider.defaultMaxTokensValue.toString();
@@ -119,6 +120,7 @@ class _ChatSettingsPageState extends State<ChatSettingsPage> {
     );
 
     if (!mounted) return;
+    // 返回最新 systemPrompt，便于聊天页在返回后即时刷新顶部提示词。
     Navigator.of(
       context,
     ).pop({'saved': true, 'chatId': chat.id, 'systemPrompt': systemPrompt});

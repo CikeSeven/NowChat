@@ -10,6 +10,7 @@ class AppUpdateService {
   static const String _owner = 'CikeSeven';
   static const String _repo = 'NowChat';
 
+  /// HTTP 客户端。
   final Dio _dio;
 
   AppUpdateService({Dio? dio})
@@ -139,6 +140,7 @@ class AppUpdateService {
     return apkAssets.first;
   }
 
+  /// 解析 GitHub `releases/latest` 返回内容。
   AppReleaseInfo _parseReleaseInfo(dynamic rawData) {
     Map<String, dynamic> jsonMap;
     if (rawData is Map<String, dynamic>) {
@@ -199,18 +201,21 @@ class AppUpdateService {
     );
   }
 
+  /// 从 release 信息提取版本号（优先 tag）。
   String _extractVersionFromRelease(AppReleaseInfo releaseInfo) {
     final tag = releaseInfo.tagName.trim();
     if (tag.isNotEmpty) return _normalizeVersionText(tag);
     return _normalizeVersionText(releaseInfo.name);
   }
 
+  /// APK 优先级：arm64 包优先，其余回退。
   int _apkPriority(String name) {
     final lowerName = name.toLowerCase();
     if (lowerName.contains('arm64-v8a')) return 0;
     return 1;
   }
 
+  /// 解析版本号字符串为可比较结构。
   _ParsedVersion? _parseVersion(String rawVersion) {
     final normalized = _normalizeVersionText(rawVersion);
     if (normalized.isEmpty) return null;
@@ -226,12 +231,14 @@ class AppUpdateService {
     return _ParsedVersion(major: major, minor: minor, patch: patch, build: build);
   }
 
+  /// 从字符串中提取首个整数。
   int? _parseInt(String input) {
     final match = RegExp(r'\d+').firstMatch(input.trim());
     if (match == null) return null;
     return int.tryParse(match.group(0)!);
   }
 
+  /// 规范化版本字符串（去掉 `v` 前缀）。
   String _normalizeVersionText(String version) {
     var normalized = version.trim();
     if (normalized.startsWith('v') || normalized.startsWith('V')) {
@@ -243,9 +250,16 @@ class AppUpdateService {
 
 /// 版本结构体：用于可比较的数字版本。
 class _ParsedVersion {
+  /// 主版本号。
   final int major;
+
+  /// 次版本号。
   final int minor;
+
+  /// 补丁版本号。
   final int patch;
+
+  /// 构建号。
   final int build;
 
   const _ParsedVersion({

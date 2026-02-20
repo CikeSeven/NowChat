@@ -61,6 +61,7 @@ class ProviderCatalogSection extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
+            // 提供方预设快速选择区。
             Wrap(
               spacing: 6,
               runSpacing: 6,
@@ -175,6 +176,7 @@ class ProviderConnectionSection extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 10),
+            // 请求方式会决定协议类型与默认路径策略。
             DropdownButtonFormField<RequestMode>(
               value: selectedRequestMode,
               items:
@@ -385,6 +387,7 @@ class _FetchedModelsSectionState extends State<FetchedModelsSection> {
   Widget build(BuildContext context) {
     final color = Theme.of(context).colorScheme;
     final normalizedQuery = _searchQuery.trim().toLowerCase();
+    // 搜索仅在可添加模型列表内过滤。
     final visibleModels =
         normalizedQuery.isEmpty
             ? widget.addableModels

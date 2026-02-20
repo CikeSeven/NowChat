@@ -572,10 +572,7 @@ List<Message> _applyConversationTurnLimit(
   }
 
   final start = rounds.length - maxConversationTurns;
-  return rounds
-      .sublist(start)
-      .expand((round) => round)
-      .toList(growable: false);
+  return rounds.sublist(start).expand((round) => round).toList(growable: false);
 }
 
 /// 获取本次请求使用的消息（优先覆盖列表）。
@@ -681,8 +678,10 @@ void _mergeOpenAIStreamingToolCalls(
     final indexRaw = raw['index'];
     if (indexRaw is! num) continue;
     final index = indexRaw.toInt();
-    final builder =
-        builders.putIfAbsent(index, () => _StreamingToolCallBuilder());
+    final builder = builders.putIfAbsent(
+      index,
+      () => _StreamingToolCallBuilder(),
+    );
 
     final id = (raw['id'] ?? '').toString().trim();
     if (id.isNotEmpty) {

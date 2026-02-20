@@ -24,6 +24,7 @@ class ChatDetailPage extends StatefulWidget {
 /// _ChatDetailPageState 视图状态。
 class _ChatDetailPageState extends State<ChatDetailPage> {
   final ScrollController _scrollController = ScrollController();
+  /// 与底部距离超过阈值时显示“滚动到底部”按钮。
   static const double _scrollBottomButtonThreshold = 420;
 
   ChatSession? _chat;
@@ -41,7 +42,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     super.initState();
     _scrollController.addListener(_handleScroll);
     final chatProvider = context.read<ChatProvider>();
-    // 如果有传入 chatId，则加载对应会话
+    // 如果有传入 chatId，则按“打开已有会话”流程初始化。
     if (widget.chatId != null) {
       _chat = chatProvider.getChatById(widget.chatId!); // 加载当前会话的消息
       _pendingSystemPrompt = _chat?.systemPrompt ?? '';
@@ -53,6 +54,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         });
       });
     } else {
+      // 新建会话入口：先清空当前消息缓存，避免沿用上一会话内容。
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         context.read<ChatProvider>().loadInitialMessages(null);
@@ -85,6 +87,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
   void _handleScroll() {
     if (!_scrollController.hasClients) return;
+    // 靠近顶部时触发历史分页加载（上拉查看更多）。
     if (_scrollController.position.pixels > 120) return;
     _tryLoadMoreHistory();
   }
@@ -98,6 +101,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     }
 
     _isRequestingMoreHistory = true;
+    // 记录加载前滚动参数，加载后修正 offset，保持阅读位置不跳动。
     final oldMaxExtent = _scrollController.position.maxScrollExtent;
     final oldOffset = _scrollController.position.pixels;
     try {
@@ -121,6 +125,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     }
   }
 
+  /// 滚动到消息列表底部（最新消息）。
   void _scrollToLatest({bool animated = false}) {
     if (!mounted) return;
     if (!_scrollController.hasClients) {
@@ -141,6 +146,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     }
   }
 
+  /// 进入页面时多次兜底滚到底部，兼容异步布局高度变化。
   void _scrollToLatestOnEnter() {
     _scrollToLatest();
     Future<void>.delayed(const Duration(milliseconds: 120), () {
@@ -157,6 +163,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     });
   }
 
+  /// 点击发送后滚到底部，确保用户能看到新回复起始位置。
   void _scrollToLatestAfterSend() {
     _scrollToLatest(animated: true);
     Future<void>.delayed(const Duration(milliseconds: 120), () {
@@ -288,10 +295,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             onSend: (text, attachments) async {
               final settings = context.read<SettingsProvider>();
               final attachmentsToSend = List<String>.from(attachments);
-              // 如果还没有会话，则新建
+              // 如果还没有会话，则新建并落默认参数。
               if (chat == null) {
                 final newChat = await chatProvider.createNewChat();
-                // 标题为发送内容前20个字
+                // 标题默认取用户输入前 20 字；附件场景给出兜底标题。
                 final fallbackTitle =
                     attachmentsToSend.isNotEmpty
                         ? '附件: ${_attachmentName(attachmentsToSend.first)}'
@@ -334,6 +341,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                         ? (_chat?.isStreaming ?? _isStreaming)
                         : false;
 
+                // 新会话继承全局默认参数（温度/top_p/maxTokens 等）。
                 chatProvider.updateChat(
                   newChat,
                   model: candidateModel,
@@ -531,7 +539,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     _appendPendingAttachments(paths);
   }
 
-  // 选择模型
+  /// 选择模型弹窗：支持新会话临时选择和已有会话持久化更新。
   void _showModelSelector(BuildContext context) {
     final chatProvider = context.read<ChatProvider>();
     final chat =

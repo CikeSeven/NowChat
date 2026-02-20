@@ -20,6 +20,7 @@ class UserMessageWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = Theme.of(context).colorScheme;
+    // 兼容历史字段：imagePaths 同时承载图片与文件附件路径。
     final attachments =
         (message.imagePaths ?? const <String>[])
             .map((item) => item.trim())
@@ -115,7 +116,7 @@ class UserMessageWidget extends StatelessWidget {
   }
 }
 
-/// _AttachmentPreview 类型定义。
+/// 附件预览条目：图片显示缩略图，文件显示文件标签。
 class _AttachmentPreview extends StatelessWidget {
   final String path;
   const _AttachmentPreview({required this.path});

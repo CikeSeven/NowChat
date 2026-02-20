@@ -30,6 +30,8 @@ class PythonPackageChecksumException implements Exception {
 }
 
 /// Python 插件核心能力：清单拉取、包安装、代码执行。
+///
+/// 该服务既支持桌面/本地 Python 进程模式，也支持 Android Chaquopy 桥接模式。
 class PythonPluginService {
   final Dio _dio;
   static const MethodChannel _pythonBridge = MethodChannel(
@@ -38,14 +40,18 @@ class PythonPluginService {
   static const EventChannel _pythonLogStream = EventChannel(
     'nowchat/python_bridge/log_stream',
   );
-  static final Map<String, void Function(_PythonLogEvent event)> _runLogListeners =
-      <String, void Function(_PythonLogEvent event)>{};
+
+  /// 运行会话日志监听器：key=runId，用于把实时日志路由到对应执行请求。
+  static final Map<String, void Function(_PythonLogEvent event)>
+  _runLogListeners = <String, void Function(_PythonLogEvent event)>{};
   static StreamSubscription<dynamic>? _pythonLogSubscription;
   static final Random _random = Random();
 
   PythonPluginService({Dio? dio}) : _dio = dio ?? Dio();
 
   /// 拉取并解析远端插件清单。
+  ///
+  /// 与插件市场不同，这里解析的是 Python 库包清单（package 列表）。
   Future<PythonPluginManifest> fetchManifest(String manifestUrl) async {
     final normalizedUrl = manifestUrl.trim();
     if (normalizedUrl.isEmpty) {
@@ -84,6 +90,8 @@ class PythonPluginService {
   }
 
   /// 下载并安装插件包到指定目录，自动进行 SHA-256 校验。
+  ///
+  /// 安装逻辑是“覆盖式”：同 targetDir 会先清理再重装，避免旧文件残留。
   Future<void> installPackage({
     required PythonPluginPackage package,
     required Directory pluginRootDir,
@@ -123,6 +131,7 @@ class PythonPluginService {
       await targetDir.create(recursive: true);
       await _extractZip(tempZipFile, targetDir);
 
+      // 某些包会声明可执行入口（如脚本包装器），Android 下尝试补可执行权限。
       if (package.entryPoint != null && package.entryPoint!.trim().isNotEmpty) {
         final binary = File(
           '${targetDir.path}${Platform.pathSeparator}${_normalizeRelativePath(package.entryPoint!)}',
@@ -152,6 +161,9 @@ class PythonPluginService {
   }
 
   /// 执行 Python 代码。
+  ///
+  /// Android: 通过 MethodChannel 调 Chaquopy（支持实时日志）。
+  /// 其他平台: 启动外部 Python 进程执行。
   Future<PythonExecutionResult> executeCode({
     String? pythonBinaryPath,
     required String code,
@@ -163,14 +175,10 @@ class PythonPluginService {
   }) async {
     if (Platform.isAndroid) {
       final runId = _buildRunId();
+      // 先确保日志通道已建立，再注册本次 runId 监听，避免前几行日志丢失。
       await _ensurePythonLogStreamListening();
-      _runLogListeners[runId] = (
-        _PythonLogEvent event,
-      ) {
-        _emitRealtimePythonLog(
-          event: event,
-          logContext: logContext,
-        );
+      _runLogListeners[runId] = (_PythonLogEvent event) {
+        _emitRealtimePythonLog(event: event, logContext: logContext);
       };
       try {
         return _executeWithChaquopy(
@@ -323,6 +331,8 @@ class PythonPluginService {
   }
 
   /// 启动全局日志流监听，将原生事件按 runId 分发给对应执行会话。
+  ///
+  /// 该订阅只创建一次，全局复用，避免重复监听造成日志重复输出。
   static Future<void> _ensurePythonLogStreamListening() async {
     if (_pythonLogSubscription != null) return;
     _pythonLogSubscription = _pythonLogStream.receiveBroadcastStream().listen(
@@ -413,10 +423,6 @@ class _PythonLogEvent {
     final stream = (map['stream'] ?? '').toString().trim();
     final line = (map['line'] ?? '').toString();
     if (runId.isEmpty || stream.isEmpty) return null;
-    return _PythonLogEvent(
-      runId: runId,
-      stream: stream,
-      line: line,
-    );
+    return _PythonLogEvent(runId: runId, stream: stream, line: line);
   }
 }

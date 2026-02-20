@@ -8,6 +8,7 @@ import '../../providers/settings_provider.dart';
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
 
+  /// 主题枚举转中文文案。
   String _themeModeText(ThemeMode mode) {
     switch (mode) {
       case ThemeMode.light:
@@ -19,6 +20,7 @@ class SettingsPage extends StatelessWidget {
     }
   }
 
+  /// 在点击位置弹出主题选择菜单。
   Future<void> _showThemeMenu(BuildContext context, Offset position) async {
     final settings = context.read<SettingsProvider>();
     final currentMode = settings.themeMode;

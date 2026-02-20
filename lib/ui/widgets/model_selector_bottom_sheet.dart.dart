@@ -24,6 +24,7 @@ class ModelSelectorBottomSheet extends StatefulWidget {
 class _ModelSelectorBottomSheetState extends State<ModelSelectorBottomSheet> {
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
+  /// 当前激活的提供方，用于右侧模型列表过滤。
   String? _activeProviderId;
 
   @override
@@ -70,6 +71,7 @@ class _ModelSelectorBottomSheetState extends State<ModelSelectorBottomSheet> {
       );
     }
 
+    // 搜索策略：当关键词存在时，只展示“包含匹配模型”的 provider。
     final normalizedQuery = _query.trim().toLowerCase();
     final visibleProviders =
         normalizedQuery.isEmpty
@@ -80,6 +82,7 @@ class _ModelSelectorBottomSheetState extends State<ModelSelectorBottomSheet> {
                 );
               }).toList();
 
+    // 若当前激活 provider 在过滤后不存在，回退到首个可见 provider。
     final activeProviderId =
         _activeProviderId != null &&
             visibleProviders.any((provider) => provider.id == _activeProviderId)
@@ -313,6 +316,7 @@ class _ModelSelectorBottomSheetState extends State<ModelSelectorBottomSheet> {
     );
   }
 
+  /// 模型匹配规则：匹配原始模型名或展示备注名（不区分大小写）。
   bool _modelMatches(
     AIProviderConfig provider,
     String model,
@@ -323,6 +327,7 @@ class _ModelSelectorBottomSheetState extends State<ModelSelectorBottomSheet> {
     return raw.contains(normalizedQuery) || display.contains(normalizedQuery);
   }
 
+  /// 能力图标统一样式。
   Widget _capabilityIcon(
     BuildContext context, {
     required IconData icon,

@@ -77,6 +77,7 @@ class AgentProvider with ChangeNotifier {
   AgentOneShotResult? get lastResult => _lastResult;
 
   AgentProvider(this.isar) {
+    // Provider 创建后自动加载并注入示例智能体。
     loadAgents();
   }
 
@@ -93,6 +94,7 @@ class AgentProvider with ChangeNotifier {
     if (_initialized) return;
     _initialized = true;
     final loaded = await Storage.loadAgentProfiles();
+    // 兼容历史版本示例文案，保证展示一致。
     final patched = _patchBuiltInAgentContent(loaded);
     await _seedExampleAgentIfNeeded(loaded);
     if (patched) {
@@ -149,6 +151,7 @@ class AgentProvider with ChangeNotifier {
     final normalizedInput = request.input.trim();
     if (normalizedInput.isEmpty || _isGenerating) return;
 
+    // 复用主聊天 API：构造临时会话并传 overrideMessages 达到“单轮对话”效果。
     final tempSession = ChatSession(
       title: '工具临时会话',
       providerId: request.provider.id,
@@ -219,6 +222,7 @@ class AgentProvider with ChangeNotifier {
     } finally {
       _isGenerating = false;
       _abortController = null;
+      // 无论成功/失败/中断都落一份结果快照，方便 UI 稳定展示。
       _lastResult = AgentOneShotResult(
         input: normalizedInput,
         content: _streamingContent,

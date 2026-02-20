@@ -17,6 +17,7 @@ class SystemPromptMessageItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final content = text.trim();
+    // 无内容时显示占位提示，点击可快速进入编辑。
     final displayText = content.isEmpty ? '点击设置 System Prompt（可选）' : content;
 
     return Padding(

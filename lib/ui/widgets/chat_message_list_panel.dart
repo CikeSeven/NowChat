@@ -47,6 +47,7 @@ class ChatMessageListPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Stack(
       children: [
+        // 空会话与已有会话分支渲染。
         chat == null
             ? ListView(
               controller: scrollController,

@@ -29,6 +29,7 @@ class _EditMessagePageState extends State<EditMessagePage> {
     super.dispose();
   }
 
+  /// 保存编辑后的消息正文并回传上一页。
   void _saveMessage() async {
     final newContent = _controller.text.trim();
     if (newContent.isEmpty) return;

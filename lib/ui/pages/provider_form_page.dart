@@ -21,6 +21,7 @@ class ProviderFormPage extends StatefulWidget {
 
 /// _ProviderFormPageState 视图状态。
 class _ProviderFormPageState extends State<ProviderFormPage> {
+  /// 预设卡片默认折叠显示数量，避免首屏列表过长。
   static const int _collapsedPresetCount = 8;
 
   final TextEditingController _nameController = TextEditingController();
@@ -115,12 +116,14 @@ class _ProviderFormPageState extends State<ProviderFormPage> {
     });
   }
 
+  /// 表单最小可保存条件。
   bool get _canSave {
     return _nameController.text.trim().isNotEmpty &&
         _baseUrlController.text.trim().isNotEmpty &&
         _pathController.text.trim().isNotEmpty;
   }
 
+  /// 将当前表单值组装为 Provider 配置对象。
   AIProviderConfig _buildPayload(String providerId) {
     return AIProviderConfig(
       id: providerId,
@@ -138,6 +141,7 @@ class _ProviderFormPageState extends State<ProviderFormPage> {
     );
   }
 
+  /// 持久化当前配置（新建或更新）。
   Future<bool> _persistCurrentProvider() async {
     if (!_canSave || !mounted || _isDisposed) return false;
 
@@ -179,6 +183,9 @@ class _ProviderFormPageState extends State<ProviderFormPage> {
     Navigator.of(context).pop();
   }
 
+  /// 触发自动保存（带并发合并）。
+  ///
+  /// 若已有保存在执行，则只置位 `_pendingAutoSave`，完成后再补一次。
   void _scheduleAutoSave() {
     if (_isDisposed || !mounted || !_canSave) return;
     if (_isAutoSaving) {
@@ -189,6 +196,7 @@ class _ProviderFormPageState extends State<ProviderFormPage> {
     unawaited(_runAutoSave());
   }
 
+  /// 自动保存实际执行函数。
   Future<void> _runAutoSave() async {
     if (_isDisposed || !mounted) {
       _isAutoSaving = false;
@@ -212,6 +220,7 @@ class _ProviderFormPageState extends State<ProviderFormPage> {
     }
   }
 
+  /// 选择预设后应用默认配置。
   void _onSelectPreset(String presetId) {
     final previous = ProviderCatalog.findById(_selectedPresetId);
     final next = ProviderCatalog.findById(presetId);
@@ -231,6 +240,7 @@ class _ProviderFormPageState extends State<ProviderFormPage> {
     });
   }
 
+  /// 由请求模式推导 ProviderType，保证协议语义一致。
   ProviderType _typeForMode(RequestMode mode) {
     switch (mode) {
       case RequestMode.geminiGenerateContent:
@@ -242,6 +252,7 @@ class _ProviderFormPageState extends State<ProviderFormPage> {
     }
   }
 
+  /// 切换请求模式后，按需同步 path/baseUrl 默认值。
   void _onRequestModeChanged(RequestMode mode) {
     final previousMode = _selectedRequestMode;
     setState(() {
@@ -258,6 +269,7 @@ class _ProviderFormPageState extends State<ProviderFormPage> {
     });
   }
 
+  /// 新增或更新模型元信息（备注、能力开关）。
   void _upsertModel(
     String model, {
     String? remark,
@@ -293,6 +305,7 @@ class _ProviderFormPageState extends State<ProviderFormPage> {
     _scheduleAutoSave();
   }
 
+  /// 删除模型及其附属元信息。
   void _removeModel(String model) {
     setState(() {
       _models.remove(model);
@@ -302,6 +315,7 @@ class _ProviderFormPageState extends State<ProviderFormPage> {
     _scheduleAutoSave();
   }
 
+  /// 切换模型能力标签（视觉/工具）。
   void _toggleModelCapability(
     String model, {
     bool? supportsVision,
@@ -322,6 +336,7 @@ class _ProviderFormPageState extends State<ProviderFormPage> {
     _scheduleAutoSave();
   }
 
+  /// 打开自定义模型弹窗（可用于新增或编辑）。
   Future<void> _showCustomModelDialog({
     String? initialModel,
     String? initialRemark,
@@ -345,6 +360,7 @@ class _ProviderFormPageState extends State<ProviderFormPage> {
     );
   }
 
+  /// 远端拉取模型列表并写入“可添加模型”区域。
   Future<void> _fetchModels() async {
     final baseUrl = _baseUrlController.text.trim();
     final apiKey = _apiKeyController.text.trim();

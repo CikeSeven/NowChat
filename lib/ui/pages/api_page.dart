@@ -15,6 +15,8 @@ class ApiPage extends StatefulWidget {
 /// _ApiPageState 视图状态。
 class _ApiPageState extends State<ApiPage> {
   final TextEditingController _searchController = TextEditingController();
+  /// 当前展开的 provider 卡片 ID 集合。
+  /// 用于保存列表滚动中的展开状态。
   final Set<String> _expandedProviderIds = <String>{};
 
   @override
@@ -23,6 +25,7 @@ class _ApiPageState extends State<ApiPage> {
     super.dispose();
   }
 
+  /// 切换 provider 卡片展开/收起。
   void _toggleProviderExpanded(String providerId) {
     setState(() {
       if (_expandedProviderIds.contains(providerId)) {
@@ -40,6 +43,7 @@ class _ApiPageState extends State<ApiPage> {
     final colors = Theme.of(context).colorScheme;
     final query = _searchController.text.trim().toLowerCase();
 
+    // 搜索范围：名称、类型、baseUrl、模型备注。
     final filteredProviders =
         providers.where((provider) {
           final name = provider.name.toLowerCase();

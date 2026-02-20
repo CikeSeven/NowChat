@@ -24,6 +24,7 @@ class ImagePreviewPage extends StatefulWidget {
 }
 
 class _ImagePreviewPageState extends State<ImagePreviewPage> {
+  /// 原生媒体桥接：用于把字节流写入 Android 系统相册。
   static const MethodChannel _mediaChannel = MethodChannel(
     'nowchat/media_bridge',
   );
@@ -103,6 +104,7 @@ class _ImagePreviewPageState extends State<ImagePreviewPage> {
     }
   }
 
+  /// 读取图片字节：支持 http(s)、file、data URI、本地绝对路径。
   Future<Uint8List> _readImageBytes(Uri uri) async {
     if (uri.scheme == 'http' || uri.scheme == 'https') {
       final response = await http.get(uri);
@@ -129,6 +131,7 @@ class _ImagePreviewPageState extends State<ImagePreviewPage> {
     throw Exception('不支持的图片地址: $uri');
   }
 
+  /// 解码图片分辨率（宽、高）。
   Future<(int, int)> _decodeImageDimensions(Uint8List bytes) async {
     final codec = await ui.instantiateImageCodec(bytes);
     final frame = await codec.getNextFrame();
@@ -136,6 +139,7 @@ class _ImagePreviewPageState extends State<ImagePreviewPage> {
     return (image.width, image.height);
   }
 
+  /// 基于文件头推断 mimeType，避免依赖 URL 后缀。
   String _guessMimeType(Uint8List bytes) {
     if (bytes.length >= 8 &&
         bytes[0] == 0x89 &&
@@ -164,6 +168,7 @@ class _ImagePreviewPageState extends State<ImagePreviewPage> {
     return 'image/png';
   }
 
+  /// 生成默认保存文件名。
   String _buildFileName(String mimeType) {
     final ext = switch (mimeType) {
       'image/jpeg' => 'jpg',
@@ -173,6 +178,7 @@ class _ImagePreviewPageState extends State<ImagePreviewPage> {
     return 'nowchat_${DateTime.now().millisecondsSinceEpoch}.$ext';
   }
 
+  /// 将字节数格式化为可读体积文本。
   String _formatByteCount(int length) {
     if (length < 1024) return '$length B';
     final kb = length / 1024;

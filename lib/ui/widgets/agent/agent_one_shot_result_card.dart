@@ -22,6 +22,7 @@ class AgentOneShotResultCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = Theme.of(context).colorScheme;
+    // 生成中展示流式缓存，结束后展示结果快照。
     final activeContent = isGenerating ? streamingContent : (result?.content ?? '');
     final activeReasoning =
         isGenerating ? streamingReasoning : (result?.reasoning ?? '');

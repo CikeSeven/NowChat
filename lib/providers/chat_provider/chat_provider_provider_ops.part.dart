@@ -3,6 +3,8 @@
 /// ChatProviderProviderOps 扩展方法集合。
 extension ChatProviderProviderOps on ChatProvider {
   /// 刷新指定提供方的模型列表与模型元信息。
+  ///
+  /// 用于“获取模型”后写回本地配置并立即刷新 UI。
   Future<void> refreshConfigModels(
     String id,
     List<String> models, {
@@ -35,6 +37,8 @@ extension ChatProviderProviderOps on ChatProvider {
   }
 
   /// 更新提供方配置。
+  ///
+  /// 仅更新传入字段，未传入字段保持原值。
   Future<void> updateProvider(
     String providerId, {
     String? name,
@@ -65,6 +69,8 @@ extension ChatProviderProviderOps on ChatProvider {
   }
 
   /// 调用 API 拉取模型列表。
+  ///
+  /// 该方法只负责转发请求，错误由调用方捕获并提示。
   Future<List<String>> fetchModels(
     AIProviderConfig provider,
     String baseUrl,

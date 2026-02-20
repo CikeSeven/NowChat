@@ -27,11 +27,13 @@ enum PluginInstallState {
 
 /// 通用插件状态管理：安装、启用、工具开关、动作执行与 Hook 同步。
 class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
+  /// 默认远端清单地址；首次启动会使用该地址拉取插件市场。
   static const String defaultManifestUrl =
       'https://raw.githubusercontent.com/CikeSeven/NowChat/main/plugin_manifest.json';
 
   static const String recordsStorageKey = 'plugin_registry_records_v2';
 
+  /// 基础设置持久化键。
   static const _kManifestUrl = 'plugin_registry_manifest_url_v2';
   static const _kLastError = 'plugin_registry_last_error_v2';
   static const _kGithubMirrorId = 'plugin_registry_github_mirror_id_v1';
@@ -41,9 +43,11 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
   final PluginService _pluginService;
   final PythonPluginService _pythonService;
 
+  /// 当前生效的清单 URL（可由设置页覆盖）。
   String _manifestUrl = defaultManifestUrl;
   String _githubMirrorId = PluginService.githubMirrorDirect;
   String _githubMirrorCustomBaseUrl = '';
+  /// 远端清单（插件市场）快照。
   PluginManifestV2? _manifest;
   final Map<String, PluginDefinition> _localPluginsById =
       <String, PluginDefinition>{};
@@ -57,6 +61,7 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
   final Set<String> _pluginUiLoadingPluginIds = <String>{};
   final Map<String, String> _pluginReadmeCache = <String, String>{};
 
+  /// 生命周期状态位：用于控制初始化、下载、执行等互斥行为。
   bool _isInitialized = false;
   bool _isRefreshingManifest = false;
   bool _isInstalling = false;
@@ -215,6 +220,7 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
 
     try {
       // 新模式：只要声明 repoUrl，就优先按 Git 仓库安装插件。
+      // 原因：插件详细元数据与脚本都应以仓库内容为准，避免清单重复维护。
       if (plugin.repoUrl.trim().isNotEmpty) {
         final targetDir = p.join('remote_plugins', plugin.id, plugin.version);
         final installedPluginRaw = await _pluginService.installPluginFromRepo(
@@ -500,6 +506,8 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
   }
 
   /// 加载插件 DSL 页面定义。
+  ///
+  /// UI 脚本不存在时会静默视为“该插件无配置页”。
   Future<void> loadPluginUiPage({
     required String pluginId,
     Map<String, dynamic>? payload,
@@ -580,6 +588,8 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
   }
 
   /// 在插件页执行 Python 代码（用于 Python 类插件调试）。
+  ///
+  /// 该入口面向插件调试，不会影响聊天主链路。
   Future<void> executePythonCodeForPlugin({
     required String pluginId,
     required String code,
@@ -628,6 +638,8 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
   }
 
   /// 读取插件 README 文本：优先本地已安装文件，其次远端仓库。
+  ///
+  /// 读取成功后会写入内存缓存，减少重复网络请求。
   Future<String> loadPluginReadme(String pluginId) async {
     final cached = _pluginReadmeCache[pluginId];
     if (cached != null && cached.trim().isNotEmpty) {
@@ -778,6 +790,7 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
     }
   }
 
+  /// 恢复清单地址、镜像配置与最近错误等基础状态。
   Future<void> _loadBasicState() async {
     final prefs = await SharedPreferences.getInstance();
     _manifestUrl = (prefs.getString(_kManifestUrl) ?? defaultManifestUrl).trim();
@@ -793,6 +806,7 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
     );
   }
 
+  /// 持久化基础状态，供下次启动恢复。
   Future<void> _saveBasicState() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kManifestUrl, _manifestUrl);
@@ -809,6 +823,9 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
     }
   }
 
+  /// 读取已安装插件记录。
+  ///
+  /// 该记录是运行时真值来源，决定插件是否“已安装/已启用”。
   Future<void> _loadInstalledRecords() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(recordsStorageKey) ?? '';
@@ -837,6 +854,7 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
     await prefs.setString(recordsStorageKey, jsonEncode(payload));
   }
 
+  /// 扫描插件目录，恢复本地可解析的 plugin.json。
   Future<void> _reloadLocalPluginsFromDisk() async {
     _localPluginsById.clear();
     final root = _pluginRootDir;
@@ -916,6 +934,9 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
     return null;
   }
 
+  /// 将 Provider 状态同步到运行时注册表。
+  ///
+  /// 任何安装/卸载/启停/清单更新后都必须调用，确保工具与 Hook 视图一致。
   void _syncRegistry() {
     final root = _pluginRootDir;
     if (root == null) return;
@@ -929,6 +950,7 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
     );
   }
 
+  /// 检查插件是否提供 UI DSL 入口文件。
   bool _pluginHasUiSchema(String pluginId) {
     final plugin = getPluginById(pluginId);
     if (plugin == null) return false;

@@ -12,6 +12,7 @@ class StartupLoadingPage extends StatefulWidget {
 }
 
 class _StartupLoadingPageState extends State<StartupLoadingPage> {
+  /// 防止初始化完成后重复跳转首页。
   bool _navigated = false;
 
   /// 当插件系统完成初始化后执行一次性跳转。

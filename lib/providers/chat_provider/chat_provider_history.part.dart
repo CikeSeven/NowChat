@@ -29,6 +29,7 @@ extension ChatProviderHistory on ChatProvider {
             .sortByTimestampDesc()
             .limit(limit)
             .findAll();
+    // 数据库倒序取最新，再反转为时间正序给 UI 渲染。
     final latest = latestDesc.reversed.toList();
     _currentMessages = latest;
     _currentMessagesChatId = chatId;
@@ -59,6 +60,7 @@ extension ChatProviderHistory on ChatProvider {
               .offset(_loadedMessageCount)
               .limit(limit)
               .findAll();
+      // 旧数据同样从倒序结果反转后拼接到头部。
       final olderMessages = olderDesc.reversed.toList();
       if (olderMessages.isNotEmpty) {
         _currentMessages = <Message>[...olderMessages, ..._currentMessages];

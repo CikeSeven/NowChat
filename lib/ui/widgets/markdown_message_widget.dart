@@ -32,6 +32,7 @@ class MarkdownMessageWidget extends StatelessWidget {
     return MarkdownBody(
       data: data,
       selectable: selectable,
+      // 链接统一交给系统处理，避免在消息内嵌 WebView 影响性能。
       onTapLink: (text, href, title) {
         if (href != null) {
           launchUrl(Uri.parse(href));
@@ -43,6 +44,7 @@ class MarkdownMessageWidget extends StatelessWidget {
         'code': CodeBlockBuilder(context),
         'hr': HorizontalRuleBuilder(context),
       },
+      // Markdown 图片统一走可预览组件，支持点开大图与保存。
       imageBuilder: (uri, title, alt) {
         return _MarkdownImageTile(
           uri: _normalizeMarkdownImageUri(uri),
@@ -117,6 +119,8 @@ class MarkdownMessageWidget extends StatelessWidget {
 }
 
 /// 将 Markdown 图片 URI 转换为可加载的标准 URI。
+///
+/// 兼容模型返回的本地绝对路径（`/data/...`）和标准 URL。
 Uri _normalizeMarkdownImageUri(Uri uri) {
   if (uri.scheme.isNotEmpty) {
     return uri;
@@ -143,6 +147,7 @@ class _MarkdownImageTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = Theme.of(context).colorScheme;
+    // 本地路径与网络路径分开处理，分别提供错误占位。
     final image = _isLocalFile
         ? Image.file(
             File(uri.toFilePath()),
@@ -236,7 +241,7 @@ class _ImageErrorPlaceholder extends StatelessWidget {
   }
 }
 
-/// 执行 _extractNodeText 逻辑。
+/// 提取 Markdown 节点纯文本内容（递归）。
 String _extractNodeText(md.Node node) {
   if (node is md.Text) {
     return node.text;
@@ -267,7 +272,7 @@ class LatexBlockSyntax extends md.InlineSyntax {
   }
 }
 
-/// LatexInlineSyntax 类型定义。
+/// 行内 LaTeX 语法解析器：`$...$`。
 class LatexInlineSyntax extends md.InlineSyntax {
   LatexInlineSyntax()
     : super(r'(?<!\\)\$([^\$\n]+?)(?<!\\)\$', startCharacter: 36);
@@ -284,13 +289,14 @@ class LatexInlineSyntax extends md.InlineSyntax {
   }
 }
 
-/// LatexElementBuilder 类型定义。
+/// LaTeX 渲染构建器：将 `latex/latex_block` 节点转为 Math 组件。
 class LatexElementBuilder extends MarkdownElementBuilder {
   final BuildContext context;
   final bool displayMode;
 
   LatexElementBuilder(this.context, {required this.displayMode});
 
+  /// 处理转义后的 `$`，避免数学表达式解析错误。
   String _normalizeExpression(String source) {
     return source.replaceAll(r'\$', r'$').trim();
   }
@@ -340,7 +346,7 @@ class LatexElementBuilder extends MarkdownElementBuilder {
   }
 }
 
-/// HorizontalRuleBuilder 类型定义。
+/// 分割线渲染器：使用渐变细线替代默认粗横线样式。
 class HorizontalRuleBuilder extends MarkdownElementBuilder {
   final BuildContext context;
   HorizontalRuleBuilder(this.context);
@@ -370,11 +376,14 @@ class HorizontalRuleBuilder extends MarkdownElementBuilder {
   }
 }
 
-/// CodeBlockBuilder 类型定义。
+/// 代码渲染器：支持
+/// 1. 行内代码点击复制
+/// 2. 多行代码语法高亮与复制按钮
 class CodeBlockBuilder extends MarkdownElementBuilder {
   final BuildContext context;
   CodeBlockBuilder(this.context);
 
+  /// 常见语言别名映射到 highlight 支持的标准 key。
   static const Map<String, String> _languageAliases = {
     'js': 'javascript',
     'ts': 'typescript',
@@ -410,6 +419,7 @@ class CodeBlockBuilder extends MarkdownElementBuilder {
     return '';
   }
 
+  /// 未声明语言时尝试自动识别，失败则退回 plaintext。
   String _autoDetectLanguage(String code) {
     try {
       final result = hi.highlight.parse(code, autoDetection: true);
@@ -419,6 +429,7 @@ class CodeBlockBuilder extends MarkdownElementBuilder {
     }
   }
 
+  /// 去掉第三方主题默认背景色，统一由容器背景控制视觉风格。
   Map<String, TextStyle> _highlightThemeNoBg(ColorScheme color) {
     return githubTheme.map((key, style) {
       return MapEntry(
@@ -436,6 +447,7 @@ class CodeBlockBuilder extends MarkdownElementBuilder {
     return _extractNodeText(node);
   }
 
+  /// 使用可关闭 SnackBar，避免挡住底部输入区域太久。
   void _showClosableSnackBar(String message) {
     final messenger = ScaffoldMessenger.of(context);
     messenger.hideCurrentSnackBar();
@@ -462,6 +474,7 @@ class CodeBlockBuilder extends MarkdownElementBuilder {
         language.isNotEmpty ? language : _autoDetectLanguage(code);
     final isMultiline = rawCode.contains('\n') || language.isNotEmpty;
 
+    // 单行代码：轻量渲染，点击即复制。
     if (!isMultiline) {
       return MouseRegion(
         cursor: SystemMouseCursors.click,
@@ -490,6 +503,7 @@ class CodeBlockBuilder extends MarkdownElementBuilder {
       );
     }
 
+    // 多行代码：展示语言标签 + 复制按钮 + 高亮内容。
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.symmetric(vertical: 6),

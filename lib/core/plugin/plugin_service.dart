@@ -43,6 +43,10 @@ class LocalPluginImportPayload {
 }
 
 /// 插件服务：负责清单拉取、zip 安装与本地导入解析。
+///
+/// 说明：
+/// - 这里处理“插件分发层”能力（manifest/repo/zip），不参与运行时执行。
+/// - 运行时工具与 Hook 注册由 `PluginRegistry` 和 `PluginHookBus` 接管。
 class PluginService {
   static const String githubMirrorDirect = GithubMirrorConfig.directId;
   static const String githubMirrorGhfast = GithubMirrorConfig.ghfastId;
@@ -59,6 +63,11 @@ class PluginService {
   PluginService({Dio? dio}) : _dio = dio ?? Dio();
 
   /// 读取并解析通用插件清单。
+  ///
+  /// 流程：
+  /// 1. 先获取基础清单（支持 asset:// 与 http(s)）。
+  /// 2. 再按 `repoUrl` 补全每个插件的最新 plugin.json 元数据。
+  /// 3. 补全失败时回退到基础清单（避免“单插件异常拖垮整个市场”）。
   Future<PluginManifestV2> fetchManifest(
     String manifestUrl, {
     String mirrorId = githubMirrorDirect,
@@ -117,11 +126,8 @@ class PluginService {
           mirrorId: mirrorId,
           customMirrorBaseUrl: customMirrorBaseUrl,
         );
-        // 清单 ID 优先，避免仓库变更 ID 导致本地记录对不上。
-        final merged = repoPlugin.copyWith(
-          id: plugin.id,
-          repoUrl: repoUrl,
-        );
+        // 清单 ID 优先，避免仓库内误改 id 导致本地安装记录失配。
+        final merged = repoPlugin.copyWith(id: plugin.id, repoUrl: repoUrl);
         enrichedPlugins.add(merged);
       } catch (_) {
         // 仓库解析失败时，保留清单基础信息，至少能显示列表项。
@@ -141,6 +147,9 @@ class PluginService {
   }
 
   /// 下载并安装远程插件包。
+  ///
+  /// 这里主要用于 package 级资源下载（非仓库插件）。
+  /// 安装前会做 SHA256 校验，防止传输损坏或镜像返回错误包。
   Future<void> installPackageFromUrl({
     required PluginPackage package,
     required Directory pluginRootDir,
@@ -203,7 +212,9 @@ class PluginService {
     String customMirrorBaseUrl = '',
   }) async {
     AppLogger.i('开始从仓库安装插件: repo=$repoUrl, targetDir=$targetDir');
-    final tempDir = await Directory.systemTemp.createTemp('now_chat_plugin_git_');
+    final tempDir = await Directory.systemTemp.createTemp(
+      'now_chat_plugin_git_',
+    );
     final tempZipFile = File(
       '${tempDir.path}${Platform.pathSeparator}plugin_repo.zip',
     );
@@ -212,6 +223,7 @@ class PluginService {
     );
 
     try {
+      // 自动尝试 main/master，兼容不同仓库默认分支。
       await _downloadGitRepoArchive(
         repoUrl: repoUrl,
         outputZipPath: tempZipFile.path,
@@ -225,6 +237,7 @@ class PluginService {
       }
       await installDir.create(recursive: true);
 
+      // GitHub 仓库 zip 通常包含一级根目录，这里统一剥离。
       await _extractZipFlattenRoot(tempZipFile, installDir);
       final plugin = await parsePluginDefinitionFromDirectory(installDir);
       AppLogger.i('仓库插件安装完成: id=${plugin.id}, version=${plugin.version}');
@@ -237,6 +250,8 @@ class PluginService {
   }
 
   /// 从本地 zip 导入插件定义。
+  ///
+  /// 仅支持 zip，且不会在此步骤安装，只做“选择 + 元数据预览”。
   Future<LocalPluginImportPayload?> pickAndParseLocalPluginZip() async {
     final result = await FilePicker.platform.pickFiles(
       allowMultiple: false,
@@ -256,6 +271,10 @@ class PluginService {
   }
 
   /// 从 zip 中读取 `plugin.json` 并解析插件定义。
+  ///
+  /// 兼容两种常见布局：
+  /// - 根目录直接有 `plugin.json`
+  /// - 顶层目录下包含 `plugin.json`
   Future<PluginDefinition> parsePluginDefinitionFromZip(File zipFile) async {
     if (!zipFile.existsSync()) {
       throw Exception('插件包不存在: ${zipFile.path}');
@@ -284,17 +303,22 @@ class PluginService {
   }
 
   /// 从已解压目录中读取 `plugin.json` 并解析插件定义。
+  ///
+  /// 若存在多个 `plugin.json`，优先选择路径最短的那个，减少误选子模块配置。
   Future<PluginDefinition> parsePluginDefinitionFromDirectory(
     Directory pluginDir,
   ) async {
     if (!pluginDir.existsSync()) {
       throw Exception('插件目录不存在: ${pluginDir.path}');
     }
-    final candidates = pluginDir
-        .listSync(recursive: true, followLinks: false)
-        .whereType<File>()
-        .where((item) => p.basename(item.path).toLowerCase() == 'plugin.json')
-        .toList();
+    final candidates =
+        pluginDir
+            .listSync(recursive: true, followLinks: false)
+            .whereType<File>()
+            .where(
+              (item) => p.basename(item.path).toLowerCase() == 'plugin.json',
+            )
+            .toList();
     if (candidates.isEmpty) {
       throw const FormatException('插件目录缺少 plugin.json');
     }
@@ -346,6 +370,8 @@ class PluginService {
   }
 
   /// 从 GitHub 仓库拉取 README 文本。
+  ///
+  /// 按 main/master + 大小写文件名顺序尝试，提高兼容性。
   Future<String> fetchReadmeFromRepo(
     String repoUrl, {
     String mirrorId = githubMirrorDirect,
@@ -394,6 +420,8 @@ class PluginService {
   }
 
   /// 从 GitHub 仓库拉取并解析 `plugin.json`。
+  ///
+  /// 远程安装与市场展示都依赖该方法获取插件真实元数据。
   Future<PluginDefinition> fetchPluginDefinitionFromRepo(
     String repoUrl, {
     String mirrorId = githubMirrorDirect,
@@ -424,9 +452,9 @@ class PluginService {
           if (decoded is! Map<String, dynamic>) {
             throw const FormatException('plugin.json 格式错误');
           }
-          final plugin = PluginDefinition.fromJson(decoded).copyWith(
-            repoUrl: repoUrl,
-          );
+          final plugin = PluginDefinition.fromJson(
+            decoded,
+          ).copyWith(repoUrl: repoUrl);
           AppLogger.i('仓库插件定义读取完成: id=${plugin.id}, version=${plugin.version}');
           return plugin;
         }
@@ -469,6 +497,8 @@ class PluginService {
   }
 
   /// 解压 zip 并自动去掉 GitHub 仓库压缩包的顶层目录。
+  ///
+  /// 这样安装目录会直接落到插件内容，避免出现 `<plugin>/<repo-main>/...` 嵌套。
   Future<void> _extractZipFlattenRoot(File zipFile, Directory targetDir) async {
     final bytes = await zipFile.readAsBytes();
     final archive = ZipDecoder().decodeBytes(bytes, verify: true);
@@ -574,6 +604,8 @@ class PluginService {
   }
 
   /// 对 GitHub 相关链接应用镜像规则；非 GitHub 链接保持原样。
+  ///
+  /// 仅代理 GitHub 域名，避免无关第三方链接被错误重写。
   String _applyMirrorToUrl(
     String url, {
     required String mirrorId,
@@ -594,12 +626,15 @@ class PluginService {
   }
 
   /// 对镜像做轻量测速（返回耗时毫秒，失败返回 null）。
+  ///
+  /// 注意：这里只用于“可用性判断”，不代表真实下载吞吐。
   Future<int?> probeMirrorLatency({
     required String mirrorId,
     String customMirrorBaseUrl = '',
     Duration timeout = const Duration(seconds: 6),
   }) async {
-    final probeTarget = 'https://raw.githubusercontent.com/CikeSeven/NowChat/main/plugin_manifest.json';
+    final probeTarget =
+        'https://raw.githubusercontent.com/CikeSeven/NowChat/main/plugin_manifest.json';
     final requestUrl = _applyMirrorToUrl(
       probeTarget,
       mirrorId: mirrorId,
@@ -613,7 +648,8 @@ class PluginService {
           responseType: ResponseType.plain,
           sendTimeout: timeout,
           receiveTimeout: timeout,
-          validateStatus: (status) => status != null && status >= 200 && status < 500,
+          validateStatus:
+              (status) => status != null && status >= 200 && status < 500,
         ),
       );
       stopwatch.stop();

@@ -50,6 +50,7 @@ class MessageInput extends StatefulWidget {
 class _MessageInputState extends State<MessageInput> {
   final TextEditingController _controller = TextEditingController();
 
+  /// 超长模型名中间省略，避免挤压发送按钮导致溢出。
   String _middleEllipsis(String text, {int keepStart = 12, int keepEnd = 10}) {
     if (text.length <= keepStart + keepEnd + 1) return text;
     final start = text.substring(0, keepStart);
@@ -69,6 +70,7 @@ class _MessageInputState extends State<MessageInput> {
     super.dispose();
   }
 
+  /// 发送按钮处理：文本与附件至少其一非空才允许发送。
   void _handleSend() {
     final text = _controller.text.trim();
     if (text.isEmpty && widget.attachments.isEmpty) return;
@@ -76,6 +78,7 @@ class _MessageInputState extends State<MessageInput> {
     _controller.clear();
   }
 
+  /// 提取附件文件名用于 UI 展示。
   String _attachmentName(String path) {
     final normalized = path.replaceAll('\\', '/');
     final slashIndex = normalized.lastIndexOf('/');
@@ -85,6 +88,7 @@ class _MessageInputState extends State<MessageInput> {
     return normalized.substring(slashIndex + 1);
   }
 
+  /// 通过扩展名判断是否按图片缩略图样式展示。
   bool _isImagePath(String path) {
     final lower = path.toLowerCase();
     return lower.endsWith('.png') ||
@@ -97,6 +101,7 @@ class _MessageInputState extends State<MessageInput> {
         lower.endsWith('.heif');
   }
 
+  /// 构建附件预览条目：图片显示缩略图，文件显示文件标签。
   Widget _buildAttachmentPreviewItem(BuildContext context, String path) {
     final color = Theme.of(context).colorScheme;
     final isImage = _isImagePath(path);
@@ -184,6 +189,7 @@ class _MessageInputState extends State<MessageInput> {
     );
   }
 
+  /// 展开附件动作面板（上传图片/上传文件）。
   Future<void> _showAttachmentActions() async {
     if (widget.onPickImage == null && widget.onPickFile == null) {
       widget.onExpand?.call();
@@ -219,11 +225,13 @@ class _MessageInputState extends State<MessageInput> {
     );
   }
 
+  /// 发送条件：有输入内容且已选择模型。
   bool get _canSendNow =>
       (_controller.text.trim().isNotEmpty || widget.attachments.isNotEmpty) &&
       ((widget.chat?.model?.trim().isNotEmpty ?? false) ||
           (widget.model?.trim().isNotEmpty ?? false));
 
+  /// 模型能力图标（视觉/工具）统一样式。
   Widget _capabilityIcon(
     BuildContext context, {
     required IconData icon,

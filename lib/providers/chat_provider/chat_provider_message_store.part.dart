@@ -3,6 +3,8 @@
 /// ChatProviderMessageStore 扩展方法集合。
 extension ChatProviderMessageStore on ChatProvider {
   /// 将消息写入当前会话内存列表（存在则更新，不存在则追加）。
+  ///
+  /// 返回值当前固定为 true，保留该签名是为了兼容旧调用点。
   bool _upsertMessageInMemory(Message message) {
     final index = _currentMessages.indexWhere((m) => m.isarId == message.isarId);
     if (index >= 0) {
@@ -44,6 +46,8 @@ extension ChatProviderMessageStore on ChatProvider {
   }
 
   /// 批量持久化处于流式更新中的消息。
+  ///
+  /// 该方法会串行执行，避免并发事务导致落库顺序混乱。
   Future<void> _flushDirtyStreamingMessages() async {
     if (_isFlushingStreamingMessages) {
       _scheduleFlushAgain = true;
@@ -99,6 +103,8 @@ extension ChatProviderMessageStore on ChatProvider {
   }
 
   /// 保存消息到内存与数据库。
+  ///
+  /// 普通消息直接同步落库；流式消息应优先走 updateStreamingMessage。
   Future<void> saveMessage(Message message) async {
     _upsertMessageInMemory(message);
     await isar.writeTxn(() async {

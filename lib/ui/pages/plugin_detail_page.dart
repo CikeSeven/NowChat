@@ -18,8 +18,11 @@ class PluginDetailPage extends StatefulWidget {
 }
 
 class _PluginDetailPageState extends State<PluginDetailPage> {
+  /// 文本输入组件 controller 缓存，key=componentId。
+  /// 使用缓存可避免 DSL 页面刷新后输入内容被重置。
   final Map<String, TextEditingController> _uiTextControllers =
       <String, TextEditingController>{};
+  /// Hook 日志预览单条最大长度，避免设置页被超长日志撑爆。
   static const int _hookLogPreviewMaxLength = 220;
   bool _isToolsExpanded = false;
   bool _isHooksExpanded = false;
@@ -42,6 +45,7 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
     super.dispose();
   }
 
+  /// 格式化插件包体积展示文本。
   String _formatSizeBytes(int? sizeBytes) {
     if (sizeBytes == null || sizeBytes <= 0) return '未知';
     final kb = sizeBytes / 1024;
@@ -50,6 +54,7 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
     return '${mb.toStringAsFixed(2)} MB';
   }
 
+  /// 汇总插件 packages 声明中的体积字段。
   int _sumPackageSize(List<PluginPackage> packages) {
     var sum = 0;
     for (final pkg in packages) {
@@ -80,6 +85,9 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
     }
   }
 
+  /// 获取或创建 DSL 文本组件对应控制器。
+  ///
+  /// 当 Python 返回新 state 时，会同步写回文本值，保持双端状态一致。
   TextEditingController _ensureUiTextController(
     String componentId,
     String value,
@@ -99,6 +107,7 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
     return controller;
   }
 
+  /// 分发插件 UI 事件，成功后若返回 message 则提示用户。
   Future<void> _dispatchUiEvent({
     required PluginProvider provider,
     required String pluginId,
@@ -459,6 +468,7 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
                         ),
                       ),
                     ),
+                  // 当插件未提供 schema.py 或组件全部不可见时展示兜底文案。
                   if (!isPluginUiLoading &&
                       (pluginUiError ?? '').trim().isEmpty &&
                       (pluginUiState == null ||
@@ -471,6 +481,7 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
                       ),
                     ),
                   if (pluginUiState != null)
+                    // DSL 组件渲染分发：按类型映射到 Flutter 控件。
                     ...pluginUiState.components
                         .where((component) => component.visible)
                         .map((component) {
