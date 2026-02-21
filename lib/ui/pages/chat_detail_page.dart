@@ -298,6 +298,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
               // 如果还没有会话，则新建并落默认参数。
               if (chat == null) {
                 final newChat = await chatProvider.createNewChat();
+                // 新建会话后先绑定当前消息上下文，避免后台会话流式内容串入新会话页面。
+                await chatProvider.loadInitialMessages(newChat.id);
                 // 标题默认取用户输入前 20 字；附件场景给出兜底标题。
                 final fallbackTitle =
                     attachmentsToSend.isNotEmpty

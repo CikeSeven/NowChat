@@ -4,8 +4,15 @@
 extension ChatProviderMessageStore on ChatProvider {
   /// 将消息写入当前会话内存列表（存在则更新，不存在则追加）。
   ///
-  /// 返回值当前固定为 true，保留该签名是为了兼容旧调用点。
+  /// 返回值表示该消息是否属于“当前正在展示的会话”并已写入内存列表。
+  /// 非当前会话消息不会进入 `_currentMessages`，避免串会话污染 UI。
   bool _upsertMessageInMemory(Message message) {
+    // 仅允许“已绑定的当前会话”写入内存列表。
+    // 当 `_currentMessagesChatId == null`（例如新建会话尚未绑定）时，拒绝所有写入，
+    // 防止后台会话的流式消息误入当前页面。
+    if (_currentMessagesChatId == null || _currentMessagesChatId != message.chatId) {
+      return false;
+    }
     final index = _currentMessages.indexWhere((m) => m.isarId == message.isarId);
     if (index >= 0) {
       _currentMessages[index] = message;
@@ -16,6 +23,13 @@ extension ChatProviderMessageStore on ChatProvider {
       _loadedMessageCount = _currentMessages.length;
     }
     return true;
+  }
+
+  /// 非当前会话流式消息直接写库，避免污染当前页面内存列表。
+  Future<void> _persistOffscreenStreamingMessage(Message message) async {
+    await isar.writeTxn(() async {
+      await isar.messages.put(message);
+    });
   }
 
   /// 清理单条消息相关的流式状态。
@@ -81,13 +95,23 @@ extension ChatProviderMessageStore on ChatProvider {
   /// 标记消息进入流式生成状态。
   void beginStreamingMessage(Message message) {
     _streamingMessageIds.add(message.isarId);
-    _upsertMessageInMemory(message);
-    _notifyStateChanged();
+    final insertedInCurrent = _upsertMessageInMemory(message);
+    if (insertedInCurrent) {
+      _notifyStateChanged();
+      return;
+    }
+    // 后台会话不触发当前页面重建，只确保内容持续落库。
+    unawaited(_persistOffscreenStreamingMessage(message));
   }
 
   /// 应用流式增量并进入节流刷新队列。
   void updateStreamingMessage(Message message) {
-    _upsertMessageInMemory(message);
+    final insertedInCurrent = _upsertMessageInMemory(message);
+    if (!insertedInCurrent) {
+      // 非当前会话：直接落库，不参与当前会话节流刷新队列。
+      unawaited(_persistOffscreenStreamingMessage(message));
+      return;
+    }
     _dirtyStreamingMessageIds.add(message.isarId);
     _scheduleStreamingNotify();
     _scheduleStreamingFlush();
@@ -95,11 +119,17 @@ extension ChatProviderMessageStore on ChatProvider {
 
   /// 结束流式状态并确保最终落库。
   Future<void> endStreamingMessage(Message message) async {
-    _upsertMessageInMemory(message);
-    _dirtyStreamingMessageIds.add(message.isarId);
-    await _flushDirtyStreamingMessages();
+    final insertedInCurrent = _upsertMessageInMemory(message);
+    if (insertedInCurrent) {
+      _dirtyStreamingMessageIds.add(message.isarId);
+      await _flushDirtyStreamingMessages();
+    } else {
+      await _persistOffscreenStreamingMessage(message);
+    }
     _removeMessageStateById(message.isarId);
-    _notifyStateChanged();
+    if (insertedInCurrent) {
+      _notifyStateChanged();
+    }
   }
 
   /// 保存消息到内存与数据库。
@@ -176,7 +206,15 @@ extension ChatProviderMessageStore on ChatProvider {
         await isar.messages.put(msg);
       }
     });
-    _currentMessages.addAll(messages);
+    // 仅将“当前会话”的恢复消息回写到内存列表，避免串会话显示。
+    final visibleMessages =
+        _currentMessagesChatId == null
+            ? const <Message>[]
+            : messages.where((m) => m.chatId == _currentMessagesChatId).toList();
+    if (visibleMessages.isEmpty) {
+      return;
+    }
+    _currentMessages.addAll(visibleMessages);
     _currentMessages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
     if (_currentMessagesChatId != null) {
       _loadedMessageCount = _currentMessages.length;
