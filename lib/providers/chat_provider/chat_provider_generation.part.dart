@@ -28,6 +28,7 @@ extension ChatProviderGeneration on ChatProvider {
   ) async {
     final chat = getChatById(chatId);
     if (chat == null || chat.isGenerating) return;
+    await _touchChatLastUpdated(chat);
     final provider = getProviderById(chat.providerId ?? '');
     if (provider == null) return;
     final pending = _pendingContinuations[chatId];
@@ -178,6 +179,7 @@ extension ChatProviderGeneration on ChatProvider {
   Future<void> regenerateMessage(int chatId, bool isStreaming) async {
     final chat = getChatById(chatId);
     if (chat == null || chat.isGenerating) return;
+    await _touchChatLastUpdated(chat);
     final provider = getProviderById(chat.providerId ?? '');
     if (provider == null) return;
 
@@ -388,9 +390,9 @@ extension ChatProviderGeneration on ChatProvider {
     bool isStreaming,
     List<String>? attachmentPaths,
   ) async {
-    AppLogger.i('发送消息');
     final chat = getChatById(chatId);
     if (chat == null) return;
+    await _touchChatLastUpdated(chat);
     final provider = getProviderById(chat.providerId ?? '');
     if (provider == null) {
       await saveMessage(
@@ -506,7 +508,6 @@ extension ChatProviderGeneration on ChatProvider {
             },
             onToolLog: handleToolLog,
             onDone: () async {
-              AppLogger.i('onDone: 流式请求结束');
               reasoningTimer?.cancel();
               if (reasoningStartTime != null) {
                 currentAiMsg.reasoningTimeMs =

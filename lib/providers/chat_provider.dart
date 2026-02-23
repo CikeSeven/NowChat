@@ -111,6 +111,18 @@ class ChatProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  /// 更新会话最近活跃时间，并在内存列表中置顶该会话。
+  ///
+  /// 该方法只负责会话元信息维护，不触碰消息发送/重发主流程逻辑。
+  Future<void> _touchChatLastUpdated(ChatSession chat) async {
+    chat.lastUpdated = DateTime.now();
+    await isar.writeTxn(() async {
+      await isar.chatSessions.put(chat);
+    });
+    _chatList.removeWhere((item) => item.id == chat.id);
+    _chatList.insert(0, chat);
+  }
+
   /// 判断一条消息当前是否处于流式生成状态。
   bool _isMessageStreaming(int messageId) {
     return _streamingMessageIds.contains(messageId);
