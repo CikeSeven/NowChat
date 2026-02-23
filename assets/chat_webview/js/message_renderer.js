@@ -130,7 +130,8 @@ function renderAssistantMessage(msg) {
     if (msg.isLast) {
       html += `<button class="${disabledClass}" onclick="Bridge.onMessageAction(${msg.id},'resend')" title="重发"${disabledAttr}>${icon('refresh')}</button>`;
     }
-    if (msg.canContinue) {
+    // 生成期间隐藏“继续”，避免误触与状态冲突。
+    if (msg.canContinue && !actionsDisabled) {
       html += `<button class="continue-btn${disabledClass}" onclick="Bridge.onMessageAction(${msg.id},'continue')" title="继续"${disabledAttr}>${icon('play_arrow')}<span class="continue-text">继续</span></button>`;
     }
     html += '<span class="spacer"></span>';

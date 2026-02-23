@@ -74,6 +74,13 @@
   color: var(--on-surface-variant);
 }
 
+.code-block-header .code-block-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.code-block-header .preview-btn,
 .code-block-header .copy-btn {
   background: none;
   border: none;
@@ -88,12 +95,90 @@
   justify-content: center;
 }
 
+.code-block-header .preview-btn .ms-icon,
 .code-block-header .copy-btn .ms-icon {
   font-size: 20px;
 }
 
+.code-block-header .preview-btn:active,
 .code-block-header .copy-btn:active {
   background: var(--outline-variant);
+}
+
+/* 代码预览弹层：预览内容放在 iframe 内，隔离代码样式和脚本副作用。 */
+.code-preview-modal {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.28);
+  z-index: 1000;
+}
+
+.code-preview-modal.visible {
+  display: flex;
+}
+
+.code-preview-card {
+  width: min(920px, 100%);
+  height: min(76vh, 720px);
+  border-radius: 12px;
+  border: 1px solid var(--outline-variant);
+  background: var(--surface-container-highest);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.code-preview-header {
+  height: 44px;
+  padding: 0 10px 0 12px;
+  border-bottom: 1px solid var(--outline-variant);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--on-surface-variant);
+  background: var(--surface-container-high);
+}
+
+.code-preview-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.code-preview-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.code-preview-actions button {
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--on-surface-variant);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.code-preview-actions button .ms-icon {
+  font-size: 20px;
+}
+
+.code-preview-actions button:active {
+  background: var(--surface-container);
+}
+
+.code-preview-frame {
+  flex: 1;
+  width: 100%;
+  border: none;
+  background: #fff;
 }
 
 .code-block-wrapper pre {

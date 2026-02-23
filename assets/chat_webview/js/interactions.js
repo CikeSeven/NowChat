@@ -190,6 +190,181 @@ function copyCode(btn) {
     });
 }
 
+/** 规范化代码语言标识，统一大小写与前缀差异。 */
+function normalizeCodeLanguage(rawLang) {
+  return (rawLang || '').toString().trim().toLowerCase().replace(/^language-/, '');
+}
+
+/**
+ * 代码预览渲染器注册表：
+ * - key: 语言名（标准化后）
+ * - value: (code, context) => srcdoc 字符串
+ */
+const _codePreviewRenderers = new Map();
+
+/**
+ * 注册代码预览渲染器。
+ *
+ * 通过 aliases 可以一次注册多个语言别名，避免在判定逻辑里写 if/else。
+ */
+function registerCodePreviewRenderer(language, renderer, aliases = []) {
+  const normalized = normalizeCodeLanguage(language);
+  if (!normalized || typeof renderer !== 'function') return false;
+  _codePreviewRenderers.set(normalized, renderer);
+  for (const alias of aliases) {
+    const normalizedAlias = normalizeCodeLanguage(alias);
+    if (!normalizedAlias) continue;
+    _codePreviewRenderers.set(normalizedAlias, renderer);
+  }
+  return true;
+}
+
+/** 取消某个语言渲染器注册。 */
+function unregisterCodePreviewRenderer(language) {
+  const normalized = normalizeCodeLanguage(language);
+  if (!normalized) return false;
+  return _codePreviewRenderers.delete(normalized);
+}
+
+/** 获取当前已注册的可预览语言列表（去重、排序）。 */
+function getCodePreviewLanguages() {
+  return Array.from(new Set(_codePreviewRenderers.keys())).sort();
+}
+
+/** 按语言解析预览渲染器。 */
+function resolveCodePreviewRenderer(rawLang) {
+  const lang = normalizeCodeLanguage(rawLang);
+  if (!lang) return null;
+  return _codePreviewRenderers.get(lang) || null;
+}
+
+/** 判断某语言是否支持预览（由注册表决定，不写死判断）。 */
+function canPreviewCodeLanguage(rawLang) {
+  return !!resolveCodePreviewRenderer(rawLang);
+}
+
+/** 初始化默认预览能力，并允许外部扩展注入。 */
+function bootstrapCodePreviewRegistry() {
+  if (_codePreviewRenderers.size > 0) return;
+  // 默认内置：HTML 直接作为 srcdoc 渲染。
+  registerCodePreviewRenderer('html', (code) => code, ['htm']);
+  // 允许外部在 window 上注入扩展渲染器（例如插件或后续模块）。
+  const external = window.NowChatCodePreviewRenderers;
+  if (!Array.isArray(external)) return;
+  for (const item of external) {
+    if (!item || typeof item !== 'object') continue;
+    registerCodePreviewRenderer(item.language, item.render, item.aliases || []);
+  }
+}
+
+/** 从代码块按钮位置提取语言与源码。 */
+function getCodeBlockPayload(btn) {
+  const wrapper = btn.closest('.code-block-wrapper');
+  if (!wrapper) return null;
+  const codeEl = wrapper.querySelector('pre code');
+  if (!codeEl) return null;
+  return {
+    lang: normalizeCodeLanguage(wrapper.getAttribute('data-code-lang') || ''),
+    code: codeEl.textContent || '',
+  };
+}
+
+bootstrapCodePreviewRegistry();
+
+/** 对外暴露预览注册中心，便于后续脚本按需扩展语言支持。 */
+window.CodePreviewRegistry = {
+  register: registerCodePreviewRenderer,
+  unregister: unregisterCodePreviewRenderer,
+  list: getCodePreviewLanguages,
+};
+
+const _codePreviewState = {
+  lang: '',
+  code: '',
+};
+
+let _codePreviewModal = null;
+let _codePreviewFrame = null;
+
+/** 创建（或获取）代码预览弹层。 */
+function ensureCodePreviewModal() {
+  if (_codePreviewModal) return;
+  const modal = document.createElement('div');
+  modal.className = 'code-preview-modal';
+  modal.innerHTML = `
+    <div class="code-preview-card">
+      <div class="code-preview-header">
+        <span class="code-preview-title">代码预览</span>
+        <div class="code-preview-actions">
+          <button type="button" class="code-preview-reload" title="刷新预览">${icon('refresh')}</button>
+          <button type="button" class="code-preview-close" title="关闭预览">${icon('close')}</button>
+        </div>
+      </div>
+      <iframe class="code-preview-frame" sandbox="allow-scripts allow-forms"></iframe>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  _codePreviewModal = modal;
+  _codePreviewFrame = modal.querySelector('.code-preview-frame');
+  const closeBtn = modal.querySelector('.code-preview-close');
+  const reloadBtn = modal.querySelector('.code-preview-reload');
+  closeBtn.addEventListener('click', closeCodePreview);
+  reloadBtn.addEventListener('click', reloadCodePreview);
+  modal.addEventListener('click', (event) => {
+    if (event.target === modal) closeCodePreview();
+  });
+}
+
+/** 为不同语言生成可执行预览文档。 */
+function buildPreviewSrcdoc(lang, code) {
+  const renderer = resolveCodePreviewRenderer(lang);
+  if (!renderer) {
+    return `<pre style="padding:12px;font-family:monospace;">暂不支持 ${escHtml(lang || '该语言')} 预览</pre>`;
+  }
+  try {
+    const rendered = renderer(code, {
+      language: normalizeCodeLanguage(lang),
+      languages: getCodePreviewLanguages(),
+    });
+    return typeof rendered === 'string' ? rendered : '';
+  } catch (e) {
+    return `<pre style="padding:12px;font-family:monospace;">预览渲染失败：${escHtml(String(e))}</pre>`;
+  }
+}
+
+/** 打开代码预览弹层。 */
+function openCodePreview(lang, code) {
+  ensureCodePreviewModal();
+  _codePreviewState.lang = lang;
+  _codePreviewState.code = code;
+  if (!_codePreviewFrame || !_codePreviewModal) return;
+  _codePreviewFrame.srcdoc = buildPreviewSrcdoc(lang, code);
+  _codePreviewModal.classList.add('visible');
+}
+
+/** 关闭代码预览弹层。 */
+function closeCodePreview() {
+  if (!_codePreviewModal || !_codePreviewFrame) return;
+  _codePreviewModal.classList.remove('visible');
+  _codePreviewFrame.srcdoc = '';
+}
+
+/** 重新加载当前预览文档。 */
+function reloadCodePreview() {
+  if (!_codePreviewFrame) return;
+  _codePreviewFrame.srcdoc = buildPreviewSrcdoc(
+    _codePreviewState.lang,
+    _codePreviewState.code,
+  );
+}
+
+/** 代码块预览入口：仅支持白名单语言。 */
+function previewCode(btn) {
+  const payload = getCodeBlockPayload(btn);
+  if (!payload || !canPreviewCodeLanguage(payload.lang)) return;
+  openCodePreview(payload.lang, payload.code);
+}
+
 /**
  * 复制文本到剪贴板：
  * 1) 优先使用 Clipboard API
