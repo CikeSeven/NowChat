@@ -47,24 +47,27 @@ const README_SHADOW_STYLE = `
 .md-root li { margin: 2px 0; }
 
 .md-root blockquote {
-  border-left: 3px solid var(--blockquote-border);
+  border-left: 3px solid var(--md-blockquote-border, var(--blockquote-border));
   padding: 4px 12px;
   margin: 6px 0;
   color: var(--on-surface-variant);
-  background: var(--surface-container);
+  background: var(--md-blockquote-bg, var(--surface-container));
   border-radius: 0 8px 8px 0;
 }
 
 .md-root hr {
   border: none;
   height: 1px;
-  background: linear-gradient(to right, transparent, var(--outline-variant), transparent);
+  background: linear-gradient(to right, transparent, var(--md-hr, var(--outline-variant)), transparent);
   margin: 10px 0;
 }
 
 .md-root a {
-  color: var(--primary);
-  text-decoration: none;
+  color: var(--md-link, var(--primary));
+  text-decoration: underline;
+  text-decoration-color: var(--md-link-underline, var(--primary));
+  text-decoration-thickness: 1.4px;
+  text-underline-offset: 2px;
 }
 
 .md-root a:hover {
@@ -80,7 +83,8 @@ const README_SHADOW_STYLE = `
 }
 
 .md-root code:not(pre code) {
-  background: var(--code-bg);
+  background: var(--md-inline-code-bg, var(--primary-container));
+  color: var(--md-inline-code-color, var(--on-primary-container));
   padding: 1px 5px;
   border-radius: 4px;
   font-size: 0.9em;
@@ -92,8 +96,8 @@ const README_SHADOW_STYLE = `
   margin: 8px 0;
   border-radius: 10px;
   overflow: hidden;
-  background: var(--code-bg);
-  border: 1px solid var(--outline-variant);
+  background: var(--md-codeblock-bg, var(--code-bg));
+  border: 1px solid var(--md-codeblock-border, var(--outline-variant));
   max-width: 100%;
 }
 
@@ -102,7 +106,7 @@ const README_SHADOW_STYLE = `
   justify-content: space-between;
   align-items: center;
   padding: 4px 12px;
-  background: var(--surface-container-high);
+  background: var(--md-code-header-bg, var(--surface-container-high));
   font-size: 12px;
   color: var(--on-surface-variant);
 }
@@ -144,7 +148,7 @@ const README_SHADOW_STYLE = `
 }
 
 .md-root th, .md-root td {
-  border: 1px solid var(--outline-variant);
+  border: 1px solid var(--md-table-border, var(--outline-variant));
   padding: 6px 10px;
   text-align: left;
 }

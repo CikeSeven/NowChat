@@ -235,6 +235,18 @@ class _PluginReadmeWebViewPanelState extends State<PluginReadmeWebViewPanel> {
       'outline-variant': _colorToHex(cs.outlineVariant),
       'error': _colorToHex(cs.error),
       'code-bg': _colorToHex(cs.surfaceContainerLow),
+      // Markdown 主题色：与 Flutter MarkdownMessageWidget 配色保持一致。
+      'md-link': _colorToHex(cs.primary),
+      'md-link-underline': _colorToRgba(cs.primary, 160 / 255),
+      'md-codeblock-bg': _colorToRgba(cs.surfaceContainerHighest, 150 / 255),
+      'md-codeblock-border': _colorToRgba(cs.outline, 70 / 255),
+      'md-code-header-bg': _colorToHex(cs.surfaceContainerHigh),
+      'md-inline-code-bg': _colorToRgba(cs.primaryContainer, 120 / 255),
+      'md-inline-code-color': _colorToHex(cs.onPrimaryContainer),
+      'md-blockquote-bg': _colorToRgba(cs.secondaryContainer, 90 / 255),
+      'md-blockquote-border': _colorToHex(cs.secondary),
+      'md-table-border': _colorToRgba(cs.outline, 120 / 255),
+      'md-hr': _colorToRgba(cs.outlineVariant, 160 / 255),
     };
     _evalJs("ReadmeBridge.setTheme('${_escJs(jsonEncode(colors))}')");
   }
@@ -290,6 +302,12 @@ class _PluginReadmeWebViewPanelState extends State<PluginReadmeWebViewPanel> {
     return '#${c.red.toRadixString(16).padLeft(2, '0')}'
         '${c.green.toRadixString(16).padLeft(2, '0')}'
         '${c.blue.toRadixString(16).padLeft(2, '0')}';
+  }
+
+  /// 将 Flutter Color 转为 CSS rgba 字符串（保留透明度）。
+  String _colorToRgba(Color c, double opacity) {
+    final clamped = opacity.clamp(0.0, 1.0);
+    return 'rgba(${c.red}, ${c.green}, ${c.blue}, ${clamped.toStringAsFixed(3)})';
   }
 
   @override
