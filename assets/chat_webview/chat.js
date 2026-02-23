@@ -229,6 +229,9 @@ function renderAssistantMessage(msg) {
   const isStreaming = msg.isStreaming;
   const hasContent = (msg.content || '').trim().length > 0;
   const hasReasoning = (msg.reasoning || '').trim().length > 0;
+  const actionsDisabled = state.isGenerating;
+  const disabledAttr = actionsDisabled ? ' disabled' : '';
+  const disabledClass = actionsDisabled ? ' is-disabled' : '';
 
   let html = `<div class="msg msg-assistant" data-id="${msg.id}">`;
 
@@ -272,15 +275,15 @@ function renderAssistantMessage(msg) {
   if (!isStreaming) {
     html += `<div class="msg-actions">`;
     if (msg.isLast) {
-      html += `<button onclick="Bridge.onMessageAction(${msg.id},'resend')" title="重发">${icon('refresh')}</button>`;
+      html += `<button class="${disabledClass}" onclick="Bridge.onMessageAction(${msg.id},'resend')" title="重发"${disabledAttr}>${icon('refresh')}</button>`;
     }
     if (msg.canContinue) {
-      html += `<button onclick="Bridge.onMessageAction(${msg.id},'continue')" title="继续">${icon('play_arrow')}</button>`;
+      html += `<button class="${disabledClass}" onclick="Bridge.onMessageAction(${msg.id},'continue')" title="继续"${disabledAttr}>${icon('play_arrow')}</button>`;
     }
     html += `<span class="spacer"></span>`;
-    html += `<button onclick="Bridge.onMessageAction(${msg.id},'edit')" title="编辑">${icon('edit')}</button>`;
-    html += `<button onclick="Bridge.onMessageAction(${msg.id},'copy')" title="复制">${icon('content_copy')}</button>`;
-    html += `<button onclick="Bridge.onMessageAction(${msg.id},'more')" title="更多">${icon('more_horiz')}</button>`;
+    html += `<button class="${disabledClass}" onclick="Bridge.onMessageAction(${msg.id},'edit')" title="编辑"${disabledAttr}>${icon('edit')}</button>`;
+    html += `<button class="${disabledClass}" onclick="Bridge.onMessageAction(${msg.id},'copy')" title="复制"${disabledAttr}>${icon('content_copy')}</button>`;
+    html += `<button class="${disabledClass}" onclick="Bridge.onMessageAction(${msg.id},'more')" title="更多"${disabledAttr}>${icon('more_horiz')}</button>`;
     html += `</div>`;
   }
 
@@ -405,6 +408,7 @@ window.ChatBridge = {
   setGeneratingState(isGenerating) {
     state.isGenerating = isGenerating;
     updateSendButton();
+    refreshMessageActionButtonsState();
     if (isGenerating) {
       $input.placeholder = '消息生成中...';
     } else {
@@ -515,6 +519,20 @@ function updateSendButton() {
     $sendBtn.className = 'disabled';
     $sendBtn.innerHTML = icon('send');
     $sendBtn.title = '发送消息';
+  }
+}
+
+/** 根据全局生成状态，批量更新消息区操作按钮可用性。 */
+function refreshMessageActionButtonsState() {
+  const buttons = $list ? $list.querySelectorAll('.msg-actions button') : [];
+  for (const btn of buttons) {
+    if (state.isGenerating) {
+      btn.disabled = true;
+      btn.classList.add('is-disabled');
+    } else {
+      btn.disabled = false;
+      btn.classList.remove('is-disabled');
+    }
   }
 }
 

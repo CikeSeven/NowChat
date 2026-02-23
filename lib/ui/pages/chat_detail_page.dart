@@ -244,7 +244,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             ),
         onRemoveAttachment: (path) {
           setState(() {
-            _pendingAttachmentPaths.remove(path);
+            _pendingAttachmentPaths =
+                _pendingAttachmentPaths.where((p) => p != path).toList();
           });
         },
         onSelectModel: () => _showModelSelector(context),
@@ -457,10 +458,12 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   void _appendPendingAttachments(List<String> newPaths) {
     if (newPaths.isEmpty) return;
     setState(() {
+      final next = List<String>.from(_pendingAttachmentPaths);
       for (final path in newPaths) {
-        if (_pendingAttachmentPaths.contains(path)) continue;
-        _pendingAttachmentPaths.add(path);
+        if (next.contains(path)) continue;
+        next.add(path);
       }
+      _pendingAttachmentPaths = next;
     });
   }
 

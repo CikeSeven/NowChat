@@ -374,6 +374,13 @@ html, body {
   background: var(--surface-container-high);
 }
 
+.msg-actions button:disabled,
+.msg-actions button.is-disabled {
+  opacity: 0.45;
+  cursor: default;
+  pointer-events: none;
+}
+
 .msg-actions .spacer {
   flex: 1;
 }

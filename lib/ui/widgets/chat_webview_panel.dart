@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:now_chat/core/models/chat_session.dart';
@@ -341,7 +342,8 @@ class _ChatWebViewPanelState extends State<ChatWebViewPanel> {
     }
 
     // 附件
-    if (widget.attachments != oldWidget.attachments) {
+    // 上层可能会原地修改同一个 List 实例，必须按内容比较才能稳定触发同步。
+    if (!listEquals(widget.attachments, oldWidget.attachments)) {
       _evalJs(
         "ChatBridge.setAttachments('${_escJs(jsonEncode(widget.attachments))}')",
       );
