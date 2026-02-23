@@ -187,7 +187,9 @@ class _PluginReadmeWebViewPanelState extends State<PluginReadmeWebViewPanel> {
       'assets/readme_webview/readme.js',
     );
     // README 样式复用聊天页面样式，保证视觉一致。
-    final chatCss = await rootBundle.loadString('assets/chat_webview/style.css');
+    final chatCss = await rootBundle.loadString(
+      'assets/chat_webview/style.css',
+    );
     final bridgeJs = await rootBundle.loadString(
       'assets/chat_webview/bridge.js',
     );
@@ -251,7 +253,7 @@ class _PluginReadmeWebViewPanelState extends State<PluginReadmeWebViewPanel> {
       'outline-variant': _colorToHex(cs.outlineVariant),
       'error': _colorToHex(cs.error),
       'code-bg': _colorToHex(cs.surfaceContainerLow),
-      // Markdown 主题色：与 Flutter MarkdownMessageWidget 配色保持一致。
+      // Markdown 主题色：与应用内统一 Markdown 视觉语义保持一致。
       'md-link': _colorToHex(cs.primary),
       'md-link-underline': _colorToRgba(cs.primary, 160 / 255),
       'md-codeblock-bg': _colorToRgba(cs.surfaceContainerHighest, 150 / 255),

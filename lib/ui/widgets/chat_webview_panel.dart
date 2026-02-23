@@ -230,7 +230,9 @@ class _ChatWebViewPanelState extends State<ChatWebViewPanel> {
       // 确保图片代理服务器已启动
       await _LocalImageServer.instance.start();
 
-      final html = await rootBundle.loadString('assets/chat_webview/index.html');
+      final html = await rootBundle.loadString(
+        'assets/chat_webview/index.html',
+      );
       final css = await rootBundle.loadString('assets/chat_webview/style.css');
       final bridgeJs = await rootBundle.loadString(
         'assets/chat_webview/bridge.js',
@@ -256,8 +258,7 @@ class _ChatWebViewPanelState extends State<ChatWebViewPanel> {
     } catch (e, st) {
       debugPrint('ChatWebViewPanel: loadHtmlFromAssets failed: $e\n$st');
       // 兜底错误页：避免出现“纯白屏”，便于用户与开发定位问题。
-      await _controller.loadHtmlString(
-        '''
+      await _controller.loadHtmlString('''
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
@@ -266,8 +267,7 @@ class _ChatWebViewPanelState extends State<ChatWebViewPanel> {
   <p style="margin:0;">WebView 资源初始化异常，请返回重试。</p>
 </body>
 </html>
-''',
-      );
+''');
     }
   }
 
@@ -544,7 +544,7 @@ class _ChatWebViewPanelState extends State<ChatWebViewPanel> {
       'outline-variant': _colorToHex(cs.outlineVariant),
       'error': _colorToHex(cs.error),
       'code-bg': _colorToHex(cs.surfaceContainerLow),
-      // Markdown 主题色：对齐 Flutter MarkdownMessageWidget 的配色语义。
+      // Markdown 主题色：与应用内统一 Markdown 视觉语义对齐。
       'md-link': _colorToHex(cs.primary),
       'md-link-underline': _colorToRgba(cs.primary, 160 / 255),
       'md-codeblock-bg': _colorToRgba(cs.surfaceContainerHighest, 150 / 255),
