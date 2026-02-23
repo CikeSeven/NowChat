@@ -139,8 +139,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         chat: chat,
         messages: messages,
         model: selectedModelDisplay,
-        isGenerating:
-            chat == null ? false : chatProvider.isChatRequestRunning(chat.id),
+        isGenerating: chat?.isGenerating ?? false,
         modelSupportsVision: selectedModelFeatures.supportsVision,
         modelSupportsTools: selectedModelFeatures.supportsTools,
         isStreaming: _chat?.isStreaming ?? _isStreaming,

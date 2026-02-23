@@ -111,20 +111,6 @@ class ChatProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  /// 标记会话为“最近活跃”，并将其置顶到会话列表首位。
-  ///
-  /// 用于发送消息、重发消息、继续生成等用户可感知操作，
-  /// 确保会话列表按最近交互时间排序。
-  Future<void> _touchChatLastUpdatedAndPinTop(ChatSession chat) async {
-    chat.lastUpdated = DateTime.now();
-    await isar.writeTxn(() async {
-      await isar.chatSessions.put(chat);
-    });
-    _chatList.removeWhere((item) => item.id == chat.id);
-    _chatList.insert(0, chat);
-    _notifyStateChanged();
-  }
-
   /// 判断一条消息当前是否处于流式生成状态。
   bool _isMessageStreaming(int messageId) {
     return _streamingMessageIds.contains(messageId);
@@ -135,14 +121,6 @@ class ChatProvider with ChangeNotifier {
   /// 对外暴露只读判断方法，避免 UI 层直接接触内部 Set。
   bool isMessageStreaming(int messageId) {
     return _isMessageStreaming(messageId);
-  }
-
-  /// 判断指定会话当前是否存在进行中的网络请求。
-  ///
-  /// 与持久化字段 `chat.isGenerating` 相比，运行时控制器状态更可靠，
-  /// 可避免历史脏数据导致发送/重发入口被误拦截。
-  bool isChatRequestRunning(int chatId) {
-    return _abortControllers.containsKey(chatId);
   }
 
   /// 追加一条消息对应的工具调用日志。

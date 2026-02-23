@@ -43,8 +43,8 @@ class ChatSession {
   /// 是否默认使用流式输出。
   bool isStreaming = true;
 
-  /// 会话当前是否处于“正在生成”状态（运行时快照）。
-  bool isGenerating = false;
+  /// 是否允许“继续生成”能力。
+  bool isGenerating = true;
 
   /// 会话创建时间。
   late final DateTime createdAt;
@@ -64,7 +64,7 @@ class ChatSession {
     this.toolCallingEnabled = true,
     this.maxToolCalls = 5,
     this.isStreaming = true,
-    this.isGenerating = false,
+    this.isGenerating = true,
     required this.createdAt,
     required this.lastUpdated,
   });
