@@ -310,17 +310,28 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     int messageId,
     String action,
   ) {
-    switch (action) {
+    // WebView 回调在极端重建时可能携带旧闭包中的 null chat，
+    // 这里统一回查可用会话，避免“继续/重发点击无响应”。
+    final effectiveChat =
+        chat ??
+        _chat ??
+        (widget.chatId == null ? null : chatProvider.getChatById(widget.chatId!));
+    final normalizedAction = action.trim();
+
+    switch (normalizedAction) {
       case 'resend':
-        if (chat != null) {
-          chatProvider.regenerateMessage(chat.id, chat.isStreaming);
+        if (effectiveChat != null) {
+          chatProvider.regenerateMessage(
+            effectiveChat.id,
+            effectiveChat.isStreaming,
+          );
         }
         break;
       case 'continue':
-        if (chat != null) {
+        if (effectiveChat != null) {
           chatProvider.continueGeneratingAssistantMessage(
-            chat.id,
-            chat.isStreaming,
+            effectiveChat.id,
+            effectiveChat.isStreaming,
           );
         }
         break;

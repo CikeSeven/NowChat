@@ -169,17 +169,18 @@
 
 /* “继续”按钮使用浅色卡片风格，不使用阴影。 */
 .msg-actions .continue-btn {
-  background: var(--surface-container-highest);
-  border: 1px solid var(--outline-variant);
-  border-radius: 10px;
-  padding: 4px 10px;
-  gap: 4px;
+  background: var(--md-inline-code-bg, var(--primary-container));
+  color: var(--md-inline-code-color, var(--on-primary-container));
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 2px 8px;
+  gap: 3px;
 }
 
 .msg-actions .continue-btn .continue-text {
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1;
-  color: var(--on-surface-variant);
+  color: inherit;
 }
 
 .msg-actions button:active {

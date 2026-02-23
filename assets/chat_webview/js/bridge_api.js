@@ -95,10 +95,17 @@ window.ChatBridge = {
 
   /** 设置生成状态 */
   setGeneratingState(isGenerating) {
-    state.isGenerating = isGenerating;
+    const normalized = !!isGenerating;
+    const changed = state.isGenerating !== normalized;
+    state.isGenerating = normalized;
     updateSendButton();
-    refreshMessageActionButtonsState();
-    if (isGenerating) {
+    // “继续”按钮在渲染期按生成态控制显隐，状态变化时需重绘才能正确恢复。
+    if (changed) {
+      renderAllMessages();
+    } else {
+      refreshMessageActionButtonsState();
+    }
+    if (normalized) {
       $input.placeholder = '消息生成中...';
     } else {
       $input.placeholder = '输入消息...';

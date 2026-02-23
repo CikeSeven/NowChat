@@ -144,18 +144,27 @@ function setupMarked() {
       lang = code.lang;
       code = code.text;
     }
-    const language = lang && hljs.getLanguage(lang) ? lang : 'plaintext';
-    const label = lang || 'code';
+    const rawLang = (lang || '').toString();
+    const normalizedLang = rawLang.trim().toLowerCase();
+    const language =
+      normalizedLang && hljs.getLanguage(normalizedLang)
+        ? normalizedLang
+        : 'plaintext';
+    const label = rawLang || 'code';
+    const showPreview = canPreviewCodeLanguage(normalizedLang);
+    const previewBtn = showPreview
+      ? `<button class="preview-btn" onclick="previewCode(this)" title="预览代码">${icon('visibility')}</button>`
+      : '';
     let highlighted;
     try {
       highlighted = hljs.highlight(code, { language }).value;
     } catch (_) {
       highlighted = hljs.highlightAuto(code).value;
     }
-    return `<div class="code-block-wrapper">
+    return `<div class="code-block-wrapper" data-code-lang="${escHtml(normalizedLang)}">
       <div class="code-block-header">
         <span>${escHtml(label)}</span>
-        <button class="copy-btn" onclick="copyCode(this)" title="复制代码">${icon('content_copy')}</button>
+        <span class="code-block-actions">${previewBtn}<button class="copy-btn" onclick="copyCode(this)" title="复制代码">${icon('content_copy')}</button></span>
       </div>
       <pre><code class="hljs language-${escHtml(language)}">${highlighted}</code></pre>
     </div>`;
@@ -345,6 +354,13 @@ const ASSISTANT_SHADOW_STYLE = `
   color: var(--on-surface-variant);
 }
 
+.code-block-header .code-block-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.code-block-header .preview-btn,
 .code-block-header .copy-btn {
   background: none;
   border: none;
@@ -359,8 +375,13 @@ const ASSISTANT_SHADOW_STYLE = `
   justify-content: center;
 }
 
+.code-block-header .preview-btn .ms-icon,
 .code-block-header .copy-btn .ms-icon {
   font-size: 20px;
+}
+
+.code-block-header .preview-btn:active {
+  background: var(--outline-variant);
 }
 
 .code-block-header .copy-btn:active {
@@ -571,7 +592,8 @@ function renderAssistantMessage(msg) {
     if (msg.isLast) {
       html += `<button class="${disabledClass}" onclick="Bridge.onMessageAction(${msg.id},'resend')" title="重发"${disabledAttr}>${icon('refresh')}</button>`;
     }
-    if (msg.canContinue) {
+    // 生成期间隐藏“继续”，避免误触与状态冲突。
+    if (msg.canContinue && !actionsDisabled) {
       html += `<button class="continue-btn${disabledClass}" onclick="Bridge.onMessageAction(${msg.id},'continue')" title="继续"${disabledAttr}>${icon('play_arrow')}<span class="continue-text">继续</span></button>`;
     }
     html += '<span class="spacer"></span>';
@@ -982,10 +1004,17 @@ window.ChatBridge = {
 
   /** 设置生成状态 */
   setGeneratingState(isGenerating) {
-    state.isGenerating = isGenerating;
+    const normalized = !!isGenerating;
+    const changed = state.isGenerating !== normalized;
+    state.isGenerating = normalized;
     updateSendButton();
-    refreshMessageActionButtonsState();
-    if (isGenerating) {
+    // “继续”按钮在渲染期按生成态控制显隐，状态变化时需重绘才能正确恢复。
+    if (changed) {
+      renderAllMessages();
+    } else {
+      refreshMessageActionButtonsState();
+    }
+    if (normalized) {
       $input.placeholder = '消息生成中...';
     } else {
       $input.placeholder = '输入消息...';
