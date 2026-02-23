@@ -1,4 +1,5 @@
-﻿import 'package:flutter/material.dart';
+﻿import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
@@ -424,6 +425,28 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     });
   }
 
+  /// 二次确认弹窗，返回 true 表示用户确认。
+  Future<bool> _confirmAction(String title, String content) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(content),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('确认'),
+          ),
+        ],
+      ),
+    );
+    return result == true;
+  }
+
   String _attachmentName(String path) {
     final normalized = path.replaceAll('\\', '/');
     final idx = normalized.lastIndexOf('/');
@@ -539,6 +562,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
   /// 用户消息长按菜单。
   void _showUserMessageMenu(ChatProvider chatProvider, int messageId) {
+    final color = Theme.of(context).colorScheme;
     final msg = chatProvider.currentMessages
         .where((m) => m.isarId == messageId)
         .firstOrNull;
@@ -565,22 +589,32 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           },
         ),
         SheetMenuItem(
-          icon: const Icon(Icons.delete_outline),
+          icon: Icon(Icons.delete_outline, color: color.error,),
           label: '删除',
-          onTap: () {
-            chatProvider.deleteMessage(messageId);
+          onTap: () async {
+            final confirmed = await _confirmAction('删除确认', '确定要删除这条消息吗？');
+            if (confirmed) chatProvider.deleteMessage(messageId);
+          },
+        ),
+        SheetMenuItem(
+          icon: Icon(Icons.delete_forever, color: color.error,),
+          label: '删除这条及之后的消息',
+          onTap: () async {
+            final confirmed = await _confirmAction('删除确认', '将删除此消息及之后的所有消息，是否继续？');
+            if (confirmed) chatProvider.deleteMessageAndAfter(messageId);
           },
         ),
       ],
     );
   }
 
-  /// AI 消息长按菜单。
+  /// AI 消息更多菜单。
   void _showAssistantMessageMenu(
     ChatProvider chatProvider,
     ChatSession? chat,
     int messageId,
   ) {
+    final color = Theme.of(context).colorScheme;
     final msg = chatProvider.currentMessages
         .where((m) => m.isarId == messageId)
         .firstOrNull;
@@ -607,10 +641,19 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           },
         ),
         SheetMenuItem(
-          icon: const Icon(Icons.delete_outline),
+          icon: Icon(Icons.delete_outline, color: color.error),
           label: '删除',
-          onTap: () {
-            chatProvider.deleteMessage(messageId);
+          onTap: () async {
+            final confirmed = await _confirmAction('删除确认', '确定要删除这条消息吗？');
+            if (confirmed) chatProvider.deleteMessage(messageId);
+          },
+        ),
+        SheetMenuItem(
+          icon: Icon(Icons.delete_forever, color: color.error,),
+          label: '删除这条及之后的消息',
+          onTap: () async {
+            final confirmed = await _confirmAction('删除确认', '将删除此消息及之后的所有消息，是否继续？');
+            if (confirmed) chatProvider.deleteMessageAndAfter(messageId);
           },
         ),
       ],

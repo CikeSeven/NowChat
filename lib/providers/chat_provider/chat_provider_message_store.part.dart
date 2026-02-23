@@ -168,6 +168,15 @@ extension ChatProviderMessageStore on ChatProvider {
     _notifyStateChanged();
   }
 
+  /// 删除指定消息及其之后的所有消息（回溯）。
+  Future<void> deleteMessageAndAfter(int isarId) async {
+    final idx = _currentMessages.indexWhere((m) => m.isarId == isarId);
+    if (idx < 0) return;
+    final idsToDelete =
+        _currentMessages.sublist(idx).map((m) => m.isarId).toSet();
+    await _deleteMessagesByIds(idsToDelete);
+  }
+
   /// 按 ID 批量删除消息。
   Future<void> _deleteMessagesByIds(Set<int> ids) async {
     if (ids.isEmpty) return;
