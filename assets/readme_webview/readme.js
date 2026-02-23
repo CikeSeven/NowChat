@@ -30,6 +30,24 @@ const README_SHADOW_STYLE = `
 }
 *, *::before, *::after { box-sizing: border-box; }
 
+.ms-icon {
+  font-family: "Material Symbols Rounded";
+  font-weight: normal;
+  font-style: normal;
+  font-size: 28px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-smoothing: antialiased;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
 .md-root {
   line-height: 1.65;
   color: var(--on-surface);
@@ -107,7 +125,8 @@ const README_SHADOW_STYLE = `
   align-items: center;
   padding: 4px 12px;
   background: var(--md-code-header-bg, var(--surface-container-high));
-  font-size: 12px;
+  font-size: 14px;
+  font-weight: 600;
   color: var(--on-surface-variant);
 }
 
@@ -116,9 +135,17 @@ const README_SHADOW_STYLE = `
   border: none;
   color: var(--on-surface-variant);
   cursor: pointer;
-  font-size: 12px;
-  padding: 2px 6px;
-  border-radius: 4px;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.code-block-header .copy-btn .ms-icon {
+  font-size: 28px;
 }
 
 .code-block-header .copy-btn:active {
@@ -181,7 +208,7 @@ function setupMarked() {
     return `<div class="code-block-wrapper">
       <div class="code-block-header">
         <span>${escHtml(label)}</span>
-        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+        <button class="copy-btn" onclick="copyCode(this)" title="复制代码">${icon('content_copy')}</button>
       </div>
       <pre><code class="hljs language-${escHtml(language)}">${highlighted}</code></pre>
     </div>`;
@@ -415,9 +442,44 @@ function isLocalAbsolutePath(path) {
 function copyCode(btn) {
   const pre = btn.closest('.code-block-wrapper')?.querySelector('pre code');
   if (!pre) return;
-  navigator.clipboard.writeText(pre.textContent || '').then(() => {
-    btn.textContent = '已复制';
-    setTimeout(() => { btn.textContent = '复制'; }, 1500);
+  copyTextToClipboard(pre.textContent || '').then(() => {
+    btn.innerHTML = icon('check');
+    setTimeout(() => { btn.innerHTML = icon('content_copy'); }, 1200);
+  }).catch(() => {
+    btn.innerHTML = icon('content_copy');
+  });
+}
+
+function copyTextToClipboard(text) {
+  if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+    return navigator.clipboard.writeText(text).catch(() => fallbackCopyText(text));
+  }
+  return fallbackCopyText(text);
+}
+
+function fallbackCopyText(text) {
+  return new Promise((resolve, reject) => {
+    try {
+      const input = document.createElement('textarea');
+      input.value = text;
+      input.setAttribute('readonly', '');
+      input.style.position = 'fixed';
+      input.style.top = '-9999px';
+      input.style.opacity = '0';
+      document.body.appendChild(input);
+      input.focus();
+      input.select();
+      input.setSelectionRange(0, input.value.length);
+      const ok = document.execCommand('copy');
+      document.body.removeChild(input);
+      if (ok) {
+        resolve();
+      } else {
+        reject(new Error('execCommand copy failed'));
+      }
+    } catch (e) {
+      reject(e);
+    }
   });
 }
 
@@ -436,4 +498,9 @@ function escJs(str) {
     .replace(/\\/g, '\\\\')
     .replace(/'/g, "\\'")
     .replace(/\n/g, '\\n');
+}
+
+function icon(name, extraClass = '') {
+  const cls = extraClass ? `ms-icon ${extraClass}` : 'ms-icon';
+  return `<span class="${cls}" aria-hidden="true">${name}</span>`;
 }

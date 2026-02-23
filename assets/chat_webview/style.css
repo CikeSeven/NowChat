@@ -128,6 +128,7 @@ html, body {
 /* ===== Assistant message ===== */
 .msg-assistant {
   padding: 6px 10px;
+  margin-bottom: 10px;
 }
 
 /* Assistant 正文 Host：消息正文在 Shadow DOM 中渲染，防止样式外溢。 */
@@ -274,7 +275,8 @@ html, body {
   align-items: center;
   padding: 4px 12px;
   background: var(--md-code-header-bg, var(--surface-container-high));
-  font-size: 12px;
+  font-size: 14px;
+  font-weight: 600;
   color: var(--on-surface-variant);
 }
 
@@ -283,9 +285,17 @@ html, body {
   border: none;
   color: var(--on-surface-variant);
   cursor: pointer;
-  font-size: 12px;
-  padding: 2px 6px;
-  border-radius: 4px;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.code-block-header .copy-btn .ms-icon {
+  font-size: 28px;
 }
 
 .code-block-header .copy-btn:active {
@@ -361,8 +371,8 @@ html, body {
   display: flex;
   align-items: center;
   gap: 4px;
-  margin-top: 6px;
-  padding-top: 4px;
+  margin-top: 2px;
+  padding-top: 0;
   position: relative;
   z-index: 2;
 }
@@ -381,7 +391,7 @@ html, body {
 }
 
 .msg-actions button .ms-icon {
-  font-size: 22px;
+  font-size: 28px;
 }
 
 .msg-actions button:active {
