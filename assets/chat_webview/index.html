@@ -16,6 +16,9 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 
+  <!-- Material Symbols（聊天页统一图标库） -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:FILL@0&display=swap">
+
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -31,7 +34,9 @@
       <textarea id="msg-input" rows="1" placeholder="输入消息..."></textarea>
       <div id="attachment-preview"></div>
       <div id="input-toolbar">
-        <button id="add-btn" title="添加附件">＋</button>
+        <button id="add-btn" title="添加附件">
+          <span class="ms-icon">add</span>
+        </button>
         <label id="streaming-toggle">
           <span>流式输出</span>
           <input type="checkbox" id="stream-check" checked>
@@ -42,7 +47,7 @@
           <span>▾</span>
         </span>
         <button id="send-btn" class="disabled" title="发送消息">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          <span class="ms-icon">send</span>
         </button>
       </div>
     </div>

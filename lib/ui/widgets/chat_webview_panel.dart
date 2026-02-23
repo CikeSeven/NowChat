@@ -31,6 +31,15 @@ class _LocalImageServer {
 
   void _handleRequest(HttpRequest request) async {
     try {
+      // 仅暴露单一代理端点，避免误请求时返回不明确结果。
+      if (request.uri.path != '/local-image') {
+        request.response
+          ..statusCode = HttpStatus.notFound
+          ..write('Not found')
+          ..close();
+        return;
+      }
+
       final filePath = request.uri.queryParameters['path'];
       if (filePath == null || filePath.isEmpty) {
         request.response
@@ -39,7 +48,8 @@ class _LocalImageServer {
           ..close();
         return;
       }
-      final file = File(filePath);
+      final normalizedPath = _normalizeIncomingPath(filePath);
+      final file = File(normalizedPath);
       if (!await file.exists()) {
         request.response
           ..statusCode = HttpStatus.notFound
@@ -47,7 +57,7 @@ class _LocalImageServer {
           ..close();
         return;
       }
-      final ext = p.extension(filePath).toLowerCase().replaceFirst('.', '');
+      final ext = p.extension(normalizedPath).toLowerCase().replaceFirst('.', '');
       const mimeMap = {
         'png': 'image/png',
         'jpg': 'image/jpeg',
@@ -62,6 +72,8 @@ class _LocalImageServer {
       request.response
         ..statusCode = HttpStatus.ok
         ..headers.contentType = ContentType.parse(mime)
+        // 聊天消息中的图片可能会被频繁刷新，禁用缓存避免旧图残留。
+        ..headers.set(HttpHeaders.cacheControlHeader, 'no-store')
         ..headers.set('Access-Control-Allow-Origin', '*');
       await request.response.addStream(file.openRead());
       await request.response.close();
@@ -70,6 +82,26 @@ class _LocalImageServer {
         ..statusCode = HttpStatus.internalServerError
         ..write('Error: $e')
         ..close();
+    }
+  }
+
+  /// 统一处理 query 参数中的文件路径，兼容 file:// URI 与百分号编码路径。
+  String _normalizeIncomingPath(String rawPath) {
+    final trimmed = rawPath.trim();
+    if (trimmed.startsWith('file://')) {
+      final uri = Uri.tryParse(trimmed);
+      if (uri != null && uri.scheme == 'file') {
+        try {
+          return uri.toFilePath(windows: Platform.isWindows);
+        } catch (_) {
+          // 忽略解析失败，回退到原始字符串。
+        }
+      }
+    }
+    try {
+      return Uri.decodeFull(trimmed);
+    } catch (_) {
+      return trimmed;
     }
   }
 
@@ -439,8 +471,12 @@ class _ChatWebViewPanelState extends State<ChatWebViewPanel> {
       final newToolCount = toolLogs.length;
 
       if (newContentLen != oldContentLen) {
+        final rewrittenContent = _rewriteLocalImageUrlsInContent(
+          m.content,
+          _LocalImageServer.instance,
+        );
         _evalJs(
-          "ChatBridge.updateMessageContent(${m.isarId}, '${_escJs(m.content)}')",
+          "ChatBridge.updateMessageContent(${m.isarId}, '${_escJs(rewrittenContent)}')",
         );
         _syncedContentLengths[m.isarId] = newContentLen;
       }
@@ -462,10 +498,6 @@ class _ChatWebViewPanelState extends State<ChatWebViewPanel> {
         _syncedToolLogCounts[m.isarId] = newToolCount;
       }
 
-      // 检测流式结束
-      final wasStreaming = _syncedMessageIds.contains(m.isarId) &&
-          widget.isMessageStreaming(m.isarId) == false &&
-          oldContentLen > 0;
       // 更精确：如果之前在流式中，现在不在了
       if (!widget.isMessageStreaming(m.isarId) && m.role == 'assistant') {
         final canContinue = widget.canContinueAssistantMessage(m.isarId);
@@ -507,21 +539,20 @@ class _ChatWebViewPanelState extends State<ChatWebViewPanel> {
     final isLast = widget.messages.isNotEmpty &&
         widget.messages.last.isarId == m.isarId;
     final toolLogs = widget.toolLogsForMessage(m.isarId);
-
-    // 将本地图片路径转为代理 URL
-    final rawPaths = m.imagePaths ?? [];
     final server = _LocalImageServer.instance;
+    final rewrittenContent = _rewriteLocalImageUrlsInContent(m.content, server);
+
+    // 附件中的本地图片路径统一转为代理 URL，避免 WebView 直接访问 file 路径失败。
+    final rawPaths = m.imagePaths ?? [];
     final resolvedPaths = rawPaths.map((path) {
-      if (_isImageFile(path) && server.isRunning) {
-        return server.proxyUrl(path);
-      }
-      return path;
+      return _toProxyImageUrl(path, server);
     }).toList();
 
     return {
       'id': m.isarId,
       'role': m.role,
-      'content': m.content,
+      // 正文中的 Markdown/HTML 图片 URL 也需要重写，确保本地图片可见。
+      'content': rewrittenContent,
       'reasoning': m.reasoning ?? '',
       'reasoningTimeMs': m.reasoningTimeMs ?? 0,
       'imagePaths': resolvedPaths,
@@ -535,9 +566,125 @@ class _ChatWebViewPanelState extends State<ChatWebViewPanel> {
   }
 
   static bool _isImageFile(String path) {
-    final ext = p.extension(path).toLowerCase();
+    final ext = p.extension(path.split('?').first.split('#').first).toLowerCase();
     return {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.heic', '.heif'}
         .contains(ext);
+  }
+
+  /// 匹配 Markdown 图片语法：![alt](url "title")
+  static final RegExp _markdownImagePattern = RegExp(
+    r'!\[([^\]]*)\]\(\s*(<[^>]+>|[^)\s]+)([^)]*)\)',
+    multiLine: true,
+  );
+
+  /// 匹配 HTML 图片标签中带引号的 src 属性。
+  static final RegExp _htmlImgSrcQuotedPattern = RegExp(
+    r"""(<img\b[^>]*\bsrc\s*=\s*)(["'])([^"']+)(\2)""",
+    caseSensitive: false,
+    multiLine: true,
+  );
+
+  /// 匹配 HTML 图片标签中不带引号的 src 属性。
+  static final RegExp _htmlImgSrcUnquotedPattern = RegExp(
+    r"""(<img\b[^>]*\bsrc\s*=\s*)([^"'\s>]+)""",
+    caseSensitive: false,
+    multiLine: true,
+  );
+
+  /// 重写消息正文里的本地图片路径（Markdown + HTML img）。
+  static String _rewriteLocalImageUrlsInContent(
+    String content,
+    _LocalImageServer server,
+  ) {
+    if (content.isEmpty || !server.isRunning) return content;
+
+    var rewritten = content.replaceAllMapped(_markdownImagePattern, (match) {
+      final alt = match.group(1) ?? '';
+      final urlToken = match.group(2) ?? '';
+      final tail = match.group(3) ?? '';
+      final rawUrl = _stripAngleBrackets(urlToken.trim());
+      final proxied = _toProxyImageUrl(rawUrl, server);
+      if (proxied == rawUrl) {
+        return match.group(0) ?? '';
+      }
+      final wrappedUrl = urlToken.trim().startsWith('<') && urlToken.trim().endsWith('>')
+          ? '<$proxied>'
+          : proxied;
+      return '![$alt]($wrappedUrl$tail)';
+    });
+
+    rewritten = rewritten.replaceAllMapped(_htmlImgSrcQuotedPattern, (match) {
+      final prefix = match.group(1) ?? '';
+      final quote = match.group(2) ?? '"';
+      final src = match.group(3) ?? '';
+      final proxied = _toProxyImageUrl(src, server);
+      return '$prefix$quote$proxied$quote';
+    });
+
+    rewritten = rewritten.replaceAllMapped(_htmlImgSrcUnquotedPattern, (match) {
+      final prefix = match.group(1) ?? '';
+      final src = match.group(2) ?? '';
+      final proxied = _toProxyImageUrl(src, server);
+      return '$prefix$proxied';
+    });
+
+    return rewritten;
+  }
+
+  /// 将本地路径转换为 WebView 可访问的 localhost 代理 URL。
+  static String _toProxyImageUrl(String rawPath, _LocalImageServer server) {
+    final trimmed = rawPath.trim();
+    if (trimmed.isEmpty) return rawPath;
+
+    // 远程 URL 或 data URI 保持不变。
+    if (trimmed.startsWith('http://') ||
+        trimmed.startsWith('https://') ||
+        trimmed.startsWith('data:')) {
+      return rawPath;
+    }
+
+    final normalized = _normalizeLocalPath(trimmed);
+    if (!_isLocalImagePath(normalized) || !server.isRunning) {
+      return rawPath;
+    }
+    return server.proxyUrl(normalized);
+  }
+
+  /// 统一规整 file URI 与编码路径，避免同一路径因格式差异导致匹配失败。
+  static String _normalizeLocalPath(String rawPath) {
+    final trimmed = rawPath.trim();
+    if (trimmed.startsWith('file://')) {
+      final uri = Uri.tryParse(trimmed);
+      if (uri != null && uri.scheme == 'file') {
+        try {
+          return uri.toFilePath(windows: Platform.isWindows);
+        } catch (_) {
+          // 保持回退语义，尽量不破坏原始内容。
+        }
+      }
+    }
+    try {
+      return Uri.decodeFull(trimmed);
+    } catch (_) {
+      return trimmed;
+    }
+  }
+
+  /// 判断路径是否为“本地绝对图片路径”。
+  static bool _isLocalImagePath(String path) {
+    final normalized = path.split('?').first.split('#').first;
+    final isAndroidAbs = normalized.startsWith('/data/') ||
+        normalized.startsWith('/storage/') ||
+        normalized.startsWith('/sdcard/');
+    final isWindowsAbs = RegExp(r'^[a-zA-Z]:[\\/]').hasMatch(normalized);
+    return (isAndroidAbs || isWindowsAbs) && _isImageFile(normalized);
+  }
+
+  static String _stripAngleBrackets(String value) {
+    if (value.startsWith('<') && value.endsWith('>') && value.length > 1) {
+      return value.substring(1, value.length - 1);
+    }
+    return value;
   }
 
   // ===== 工具方法 =====

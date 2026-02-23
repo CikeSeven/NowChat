@@ -34,6 +34,25 @@ html, body {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* ===== Material Symbols ===== */
+.ms-icon {
+  font-family: "Material Symbols Rounded";
+  font-weight: normal;
+  font-style: normal;
+  font-size: 22px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-smoothing: antialiased;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
 /* ===== Layout ===== */
 #app {
   display: flex;
@@ -347,6 +366,10 @@ html, body {
   gap: 3px;
 }
 
+.msg-actions button .ms-icon {
+  font-size: 22px;
+}
+
 .msg-actions button:active {
   background: var(--surface-container-high);
 }
@@ -380,8 +403,9 @@ html, body {
   font-weight: 600;
 }
 
-.system-prompt-card .sp-header svg {
+.system-prompt-card .sp-header .ms-icon {
   flex-shrink: 0;
+  font-size: 18px;
 }
 
 .system-prompt-card .sp-text {
@@ -512,6 +536,10 @@ html, body {
   padding: 0;
 }
 
+#add-btn .ms-icon {
+  font-size: 28px;
+}
+
 .toolbar-spacer { flex: 1; }
 
 #streaming-toggle {
@@ -560,9 +588,10 @@ html, body {
   justify-content: center;
 }
 
-#send-btn.generating svg { color: var(--error); }
-#send-btn.can-send svg { color: var(--primary); }
-#send-btn.disabled svg { color: var(--on-surface-variant); opacity: 0.4; }
+#send-btn .ms-icon { font-size: 24px; }
+#send-btn.generating .ms-icon { color: var(--error); }
+#send-btn.can-send .ms-icon { color: var(--primary); }
+#send-btn.disabled .ms-icon { color: var(--on-surface-variant); opacity: 0.4; }
 
 /* ===== Scroll to bottom FAB ===== */
 #scroll-to-bottom {

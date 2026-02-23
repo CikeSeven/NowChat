@@ -59,7 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 附件按钮
   const addBtn = document.getElementById('add-btn');
-  addBtn.innerHTML = SVG_ADD_CIRCLE;
+  addBtn.innerHTML = icon('add');
   addBtn.addEventListener('click', () => {
     Bridge.onShowAttachmentMenu();
   });
@@ -196,7 +196,7 @@ function renderSystemPromptCard() {
     : '点击设置 System Prompt（可选）';
   const textClass = hasContent ? 'sp-text' : 'sp-text sp-placeholder';
   return `<div class="system-prompt-card ripple" onclick="Bridge.onMessageAction(0,'editSystemPrompt')">
-    <div class="sp-header">${SVG_TUNE}<span>System Prompt</span></div>
+    <div class="sp-header">${icon('tune')}<span>System Prompt</span></div>
     <div class="${textClass}">${displayText}</div>
   </div>`;
 }
@@ -272,15 +272,15 @@ function renderAssistantMessage(msg) {
   if (!isStreaming) {
     html += `<div class="msg-actions">`;
     if (msg.isLast) {
-      html += `<button onclick="Bridge.onMessageAction(${msg.id},'resend')" title="重发">${SVG_REFRESH}</button>`;
+      html += `<button onclick="Bridge.onMessageAction(${msg.id},'resend')" title="重发">${icon('refresh')}</button>`;
     }
     if (msg.canContinue) {
-      html += `<button onclick="Bridge.onMessageAction(${msg.id},'continue')" title="继续">${SVG_PLAY}</button>`;
+      html += `<button onclick="Bridge.onMessageAction(${msg.id},'continue')" title="继续">${icon('play_arrow')}</button>`;
     }
     html += `<span class="spacer"></span>`;
-    html += `<button onclick="Bridge.onMessageAction(${msg.id},'edit')" title="编辑">${SVG_EDIT}</button>`;
-    html += `<button onclick="Bridge.onMessageAction(${msg.id},'copy')" title="复制">${SVG_COPY}</button>`;
-    html += `<button onclick="Bridge.onMessageAction(${msg.id},'more')" title="更多">${SVG_MORE}</button>`;
+    html += `<button onclick="Bridge.onMessageAction(${msg.id},'edit')" title="编辑">${icon('edit')}</button>`;
+    html += `<button onclick="Bridge.onMessageAction(${msg.id},'copy')" title="复制">${icon('content_copy')}</button>`;
+    html += `<button onclick="Bridge.onMessageAction(${msg.id},'more')" title="更多">${icon('more_horiz')}</button>`;
     html += `</div>`;
   }
 
@@ -505,15 +505,15 @@ function updateSendButton() {
   $sendBtn.className = '';
   if (state.isGenerating) {
     $sendBtn.className = 'generating';
-    $sendBtn.innerHTML = SVG_STOP;
+    $sendBtn.innerHTML = icon('stop_circle');
     $sendBtn.title = '打断生成';
   } else if (hasContent && hasModel) {
     $sendBtn.className = 'can-send';
-    $sendBtn.innerHTML = SVG_SEND;
+    $sendBtn.innerHTML = icon('send');
     $sendBtn.title = '发送消息';
   } else {
     $sendBtn.className = 'disabled';
-    $sendBtn.innerHTML = SVG_SEND;
+    $sendBtn.innerHTML = icon('send');
     $sendBtn.title = '发送消息';
   }
 }
@@ -653,13 +653,8 @@ function proxyImageUrl(path) {
   return path;
 }
 
-// ===== SVG Icons =====
-const SVG_SEND = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>`;
-const SVG_STOP = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>`;
-const SVG_REFRESH = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>`;
-const SVG_PLAY = `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
-const SVG_EDIT = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
-const SVG_COPY = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
-const SVG_ADD_CIRCLE = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>`;
-const SVG_MORE = `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>`;
-const SVG_TUNE = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>`;
+// ===== Material Symbols icon helper =====
+function icon(name, extraClass = '') {
+  const cls = extraClass ? `ms-icon ${extraClass}` : 'ms-icon';
+  return `<span class="${cls}" aria-hidden="true">${name}</span>`;
+}
