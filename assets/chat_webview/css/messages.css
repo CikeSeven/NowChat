@@ -167,6 +167,21 @@
   font-size: 28px;
 }
 
+/* “继续”按钮使用浅色卡片风格，不使用阴影。 */
+.msg-actions .continue-btn {
+  background: var(--surface-container-highest);
+  border: 1px solid var(--outline-variant);
+  border-radius: 10px;
+  padding: 4px 10px;
+  gap: 4px;
+}
+
+.msg-actions .continue-btn .continue-text {
+  font-size: 13px;
+  line-height: 1;
+  color: var(--on-surface-variant);
+}
+
 .msg-actions button:active {
   background: var(--surface-container-high);
 }

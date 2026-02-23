@@ -224,17 +224,17 @@ const ASSISTANT_SHADOW_STYLE = `
   border: none;
   color: var(--on-surface-variant);
   cursor: pointer;
-  width: 34px;
-  height: 34px;
+  width: 28px;
+  height: 28px;
   padding: 0;
-  border-radius: 8px;
+  border-radius: 6px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
 
 .code-block-header .copy-btn .ms-icon {
-  font-size: 28px;
+  font-size: 20px;
 }
 
 .code-block-header .copy-btn:active {

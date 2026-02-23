@@ -350,17 +350,17 @@ const ASSISTANT_SHADOW_STYLE = `
   border: none;
   color: var(--on-surface-variant);
   cursor: pointer;
-  width: 34px;
-  height: 34px;
+  width: 28px;
+  height: 28px;
   padding: 0;
-  border-radius: 8px;
+  border-radius: 6px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
 
 .code-block-header .copy-btn .ms-icon {
-  font-size: 28px;
+  font-size: 20px;
 }
 
 .code-block-header .copy-btn:active {
@@ -572,7 +572,7 @@ function renderAssistantMessage(msg) {
       html += `<button class="${disabledClass}" onclick="Bridge.onMessageAction(${msg.id},'resend')" title="重发"${disabledAttr}>${icon('refresh')}</button>`;
     }
     if (msg.canContinue) {
-      html += `<button class="${disabledClass}" onclick="Bridge.onMessageAction(${msg.id},'continue')" title="继续"${disabledAttr}>${icon('play_arrow')}</button>`;
+      html += `<button class="continue-btn${disabledClass}" onclick="Bridge.onMessageAction(${msg.id},'continue')" title="继续"${disabledAttr}>${icon('play_arrow')}<span class="continue-text">继续</span></button>`;
     }
     html += '<span class="spacer"></span>';
     html += `<button class="${disabledClass}" onclick="Bridge.onMessageAction(${msg.id},'edit')" title="编辑"${disabledAttr}>${icon('edit')}</button>`;

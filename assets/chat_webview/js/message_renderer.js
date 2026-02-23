@@ -131,7 +131,7 @@ function renderAssistantMessage(msg) {
       html += `<button class="${disabledClass}" onclick="Bridge.onMessageAction(${msg.id},'resend')" title="重发"${disabledAttr}>${icon('refresh')}</button>`;
     }
     if (msg.canContinue) {
-      html += `<button class="${disabledClass}" onclick="Bridge.onMessageAction(${msg.id},'continue')" title="继续"${disabledAttr}>${icon('play_arrow')}</button>`;
+      html += `<button class="continue-btn${disabledClass}" onclick="Bridge.onMessageAction(${msg.id},'continue')" title="继续"${disabledAttr}>${icon('play_arrow')}<span class="continue-text">继续</span></button>`;
     }
     html += '<span class="spacer"></span>';
     html += `<button class="${disabledClass}" onclick="Bridge.onMessageAction(${msg.id},'edit')" title="编辑"${disabledAttr}>${icon('edit')}</button>`;
