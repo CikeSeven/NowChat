@@ -1,87 +1,149 @@
-/**
- * chat.js - 消息渲染引擎
+﻿/**
+ * chat.js - 运行时 bundle 入口
  *
- * 使用 marked.js 渲染 Markdown，highlight.js 代码高亮，KaTeX 数学公式。
- * Flutter 侧通过 window.ChatBridge.xxx() 调用此处暴露的方法。
+ * 该文件由 assets/chat_webview/js/*.js 按顺序拼接生成，
+ * 供 Flutter WebView 稳定内联加载。
+ */
+/**
+ * state.js
+ *
+ * 仅负责聊天 WebView 的全局状态与核心 DOM 引用声明。
+ * 其它模块通过这些全局变量协作，避免在单文件中混合状态与行为。
  */
 
 // ===== State =====
 const state = {
-  messages: [],           // { id, role, content, reasoning, reasoningTimeMs, imagePaths, toolLogs, isStreaming }
+  // { id, role, content, reasoning, reasoningTimeMs, imagePaths, toolLogs, isStreaming }
+  messages: [],
   isGenerating: false,
   systemPrompt: '',
-  attachments: [],        // 输入框附件路径
+  attachments: [], // 输入框附件路径
   model: '',
   modelSupportsVision: false,
   modelSupportsTools: false,
   isStreaming: true,
   streamingSupported: true,
   isLoadingMore: false,
-  _scrollLock: false,     // 防止滚动事件重入
-  imageProxyBase: '',     // 本地图片代理服务器 base URL
+  _scrollLock: false, // 防止滚动事件重入
+  imageProxyBase: '', // 本地图片代理服务器 base URL
 };
 
 // ===== DOM refs =====
-let $list, $input, $sendBtn, $attachPreview, $scrollFab, $streamCheck, $modelName, $modelCaps;
+let $list;
+let $input;
+let $sendBtn;
+let $attachPreview;
+let $scrollFab;
+let $streamCheck;
+let $modelName;
+let $modelCaps;
 
-// ===== Init =====
-document.addEventListener('DOMContentLoaded', () => {
-  $list = document.getElementById('message-list');
-  $input = document.getElementById('msg-input');
-  $sendBtn = document.getElementById('send-btn');
-  $attachPreview = document.getElementById('attachment-preview');
-  $scrollFab = document.getElementById('scroll-to-bottom');
-  $streamCheck = document.getElementById('stream-check');
-  $modelName = document.getElementById('model-name');
-  $modelCaps = document.getElementById('model-caps');
 
-  // 自动增高 textarea
-  $input.addEventListener('input', autoResize);
+/**
+ * utils.js
+ *
+ * 放置通用工具方法：
+ * - 字符串转义
+ * - 图标渲染
+ * - 路径与图片判定
+ * - 本地图片代理 URL 生成
+ */
 
-  // 发送
-  $sendBtn.addEventListener('click', handleSend);
+function escHtml(str) {
+  if (!str) return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
 
-  // 滚动监听
-  $list.addEventListener('scroll', handleScroll);
+function escJs(str) {
+  if (!str) return '';
+  return str
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/\n/g, '\\n');
+}
 
-  // 滚到底部按钮
-  $scrollFab.addEventListener('click', () => scrollToBottom(true));
+function truncate(str, max) {
+  if (!str || str.length <= max) return str;
+  return str.substring(0, max) + '...';
+}
 
-  // 流式开关
-  $streamCheck.addEventListener('change', () => {
-    state.isStreaming = $streamCheck.checked;
-    Bridge.onToggleStreaming($streamCheck.checked);
-  });
+function fileName(path) {
+  const normalized = path.replace(/\\/g, '/');
+  const idx = normalized.lastIndexOf('/');
+  return idx === -1 ? normalized : normalized.substring(idx + 1);
+}
 
-  // 模型选择
-  document.getElementById('model-selector').addEventListener('click', () => {
-    Bridge.onSelectModel();
-  });
+function isImagePath(path) {
+  if (!path) return false;
+  const lower = path.toLowerCase();
+  const pure = lower.split('?')[0].split('#')[0];
+  return /\.(png|jpg|jpeg|webp|gif|bmp|heic|heif)$/.test(pure);
+}
 
-  // 附件按钮
-  const addBtn = document.getElementById('add-btn');
-  addBtn.innerHTML = icon('add');
-  addBtn.addEventListener('click', () => {
-    Bridge.onShowAttachmentMenu();
-  });
-
-  // 配置 marked
-  setupMarked();
-  if ($modelCaps) {
-    $modelCaps.innerHTML = '';
+/** 判断附件是否应按图片渲染，避免普通文件误渲染成破图。 */
+function isRenderableImageAttachment(path) {
+  if (!path) return false;
+  const lower = path.toLowerCase();
+  if (/^data:image\//i.test(lower)) return true;
+  if (isImagePath(path)) return true;
+  if (!/^https?:\/\//i.test(path)) return false;
+  try {
+    const url = new URL(path);
+    if (url.pathname === '/local-image') return true;
+    return isImagePath(url.pathname);
+  } catch (_) {
+    return false;
   }
+}
 
-  Bridge.onReady();
-});
+/** 将本地文件路径转为代理 URL（如果代理服务器可用） */
+function proxyImageUrl(path) {
+  if (!path) return path;
+  // 已经是 http/https/data URI，不处理
+  if (/^(https?:|data:)/i.test(path)) return path;
+  // 仅图片路径走代理，避免普通文件被误包装成图片 URL。
+  if (!isImagePath(path)) return path;
+  // 本地路径（以 / 开头或包含盘符如 C:\）走代理
+  if (
+    state.imageProxyBase &&
+    (path.startsWith('/') || path.startsWith('file://') || /^[a-zA-Z]:/.test(path))
+  ) {
+    return `${state.imageProxyBase}/local-image?path=${encodeURIComponent(path)}`;
+  }
+  return path;
+}
+
+// ===== Material Symbols icon helper =====
+function icon(name, extraClass = '') {
+  const cls = extraClass ? `ms-icon ${extraClass}` : 'ms-icon';
+  return `<span class="${cls}" aria-hidden="true">${name}</span>`;
+}
+
+
+/**
+ * markdown_renderer.js
+ *
+ * 负责 Markdown 渲染相关能力：
+ * - marked/highlight/katex 配置
+ * - Assistant 正文 Shadow DOM 样式隔离
+ * - Shadow DOM 挂载与批量更新
+ */
 
 // ===== Marked 配置 =====
 function setupMarked() {
   const renderer = new marked.Renderer();
 
   // 代码块：包裹 header + highlight
-  renderer.code = function(code, lang) {
+  renderer.code = function (code, lang) {
     // marked v14+ passes an object; v4 passes (code, lang)
-    if (typeof code === 'object') { lang = code.lang; code = code.text; }
+    if (typeof code === 'object') {
+      lang = code.lang;
+      code = code.text;
+    }
     const language = lang && hljs.getLanguage(lang) ? lang : 'plaintext';
     const label = lang || 'code';
     let highlighted;
@@ -100,15 +162,23 @@ function setupMarked() {
   };
 
   // 图片点击 — 本地路径自动走代理
-  renderer.image = function(href, title, text) {
-    if (typeof href === 'object') { title = href.title; text = href.text; href = href.href; }
+  renderer.image = function (href, title, text) {
+    if (typeof href === 'object') {
+      title = href.title;
+      text = href.text;
+      href = href.href;
+    }
     const src = proxyImageUrl(href);
     return `<img src="${escHtml(src)}" alt="${escHtml(text || '')}" title="${escHtml(title || '')}" onclick="Bridge.onImageTap('${escJs(href)}')" />`;
   };
 
   // 链接拦截
-  renderer.link = function(href, title, text) {
-    if (typeof href === 'object') { title = href.title; text = href.text; href = href.href; }
+  renderer.link = function (href, title, text) {
+    if (typeof href === 'object') {
+      title = href.title;
+      text = href.text;
+      href = href.href;
+    }
     return `<a href="javascript:void(0)" onclick="Bridge.onLinkTap('${escJs(href)}')" title="${escHtml(title || '')}">${text}</a>`;
   };
 
@@ -141,7 +211,7 @@ function renderMarkdown(text) {
 
   // 还原 LaTeX
   html = html.replace(/%%LATEX_BLOCK_(\d+)%%/g, (_, i) => {
-    const b = blocks[parseInt(i)];
+    const b = blocks[parseInt(i, 10)];
     try {
       return katex.renderToString(b.tex, { displayMode: true, throwOnError: false });
     } catch (e) {
@@ -149,7 +219,7 @@ function renderMarkdown(text) {
     }
   });
   html = html.replace(/%%LATEX_INLINE_(\d+)%%/g, (_, i) => {
-    const b = blocks[parseInt(i)];
+    const b = blocks[parseInt(i, 10)];
     try {
       return katex.renderToString(b.tex, { displayMode: false, throwOnError: false });
     } catch (e) {
@@ -344,7 +414,7 @@ function shadowHostSelector(messageId) {
 
 /** 在消息正文 host 上挂载 Shadow DOM 内容。 */
 function mountAssistantShadowContent(messageId, root = document) {
-  const msg = state.messages.find(m => m.id === messageId);
+  const msg = state.messages.find((m) => m.id === messageId);
   if (!msg || msg.role !== 'assistant') return;
   const host = root.querySelector ? root.querySelector(shadowHostSelector(messageId)) : null;
   if (!host) return;
@@ -368,7 +438,15 @@ function mountAllAssistantShadowContents(root = document) {
   }
 }
 
-// ===== DOM 渲染 =====
+
+/**
+ * message_renderer.js
+ *
+ * 负责消息区域 DOM 生成与增量更新：
+ * - 全量渲染
+ * - 单条消息渲染
+ * - 流式场景增量替换
+ */
 
 /** 完整重绘消息列表 */
 function renderAllMessages() {
@@ -424,13 +502,15 @@ function renderMessage(msg) {
 function renderUserMessage(msg) {
   let attachHtml = '';
   if (msg.imagePaths && msg.imagePaths.length > 0) {
-    const items = msg.imagePaths.map(p => {
-      if (isRenderableImageAttachment(p)) {
-        const src = proxyImageUrl(p);
-        return `<img src="${escHtml(src)}" onclick="Bridge.onImageTap('${escJs(p)}')" />`;
-      }
-      return `<span class="file-chip">${escHtml(fileName(p))}</span>`;
-    }).join('');
+    const items = msg.imagePaths
+      .map((p) => {
+        if (isRenderableImageAttachment(p)) {
+          const src = proxyImageUrl(p);
+          return `<img src="${escHtml(src)}" onclick="Bridge.onImageTap('${escJs(p)}')" />`;
+        }
+        return `<span class="file-chip">${escHtml(fileName(p))}</span>`;
+      })
+      .join('');
     attachHtml = `<div class="msg-attachments">${items}</div>`;
   }
   return `<div class="msg msg-user" data-id="${msg.id}">
@@ -475,10 +555,10 @@ function renderAssistantMessage(msg) {
   if (msg.toolLogs && msg.toolLogs.length > 0) {
     html += '<div class="tool-logs">';
     for (const log of msg.toolLogs) {
-      const icon = log.status === 'success' ? '✓' : (log.status === 'error' ? '✗' : '○');
+      const logIcon = log.status === 'success' ? '✓' : (log.status === 'error' ? '✗' : '○');
       const cls = log.status === 'success' ? 'success' : (log.status === 'error' ? 'error' : '');
       html += `<div class="tool-log-item">
-        <span class="tool-log-icon ${cls}">${icon}</span>
+        <span class="tool-log-icon ${cls}">${logIcon}</span>
         <span>${escHtml(log.toolName)}: ${escHtml(log.summary)}</span>
       </div>`;
     }
@@ -487,18 +567,18 @@ function renderAssistantMessage(msg) {
 
   // Action buttons (only when not streaming)
   if (!isStreaming) {
-    html += `<div class="msg-actions">`;
+    html += '<div class="msg-actions">';
     if (msg.isLast) {
       html += `<button class="${disabledClass}" onclick="Bridge.onMessageAction(${msg.id},'resend')" title="重发"${disabledAttr}>${icon('refresh')}</button>`;
     }
     if (msg.canContinue) {
       html += `<button class="${disabledClass}" onclick="Bridge.onMessageAction(${msg.id},'continue')" title="继续"${disabledAttr}>${icon('play_arrow')}</button>`;
     }
-    html += `<span class="spacer"></span>`;
+    html += '<span class="spacer"></span>';
     html += `<button class="${disabledClass}" onclick="Bridge.onMessageAction(${msg.id},'edit')" title="编辑"${disabledAttr}>${icon('edit')}</button>`;
     html += `<button class="${disabledClass}" onclick="Bridge.onMessageAction(${msg.id},'copy')" title="复制"${disabledAttr}>${icon('content_copy')}</button>`;
     html += `<button class="${disabledClass}" onclick="Bridge.onMessageAction(${msg.id},'more')" title="更多"${disabledAttr}>${icon('more_horiz')}</button>`;
-    html += `</div>`;
+    html += '</div>';
   }
 
   html += '</div>';
@@ -533,6 +613,285 @@ function updateMessageDOM(msg) {
   }
 }
 
+
+/**
+ * interactions.js
+ *
+ * 负责输入、滚动、复制、长按等交互行为。
+ * 该文件不直接持有业务状态，仅通过 state 与渲染函数协作。
+ */
+
+// ===== Init =====
+document.addEventListener('DOMContentLoaded', () => {
+  $list = document.getElementById('message-list');
+  $input = document.getElementById('msg-input');
+  $sendBtn = document.getElementById('send-btn');
+  $attachPreview = document.getElementById('attachment-preview');
+  $scrollFab = document.getElementById('scroll-to-bottom');
+  $streamCheck = document.getElementById('stream-check');
+  $modelName = document.getElementById('model-name');
+  $modelCaps = document.getElementById('model-caps');
+
+  // 自动增高 textarea
+  $input.addEventListener('input', autoResize);
+
+  // 发送
+  $sendBtn.addEventListener('click', handleSend);
+
+  // 滚动监听
+  $list.addEventListener('scroll', handleScroll);
+
+  // 滚到底部按钮
+  $scrollFab.addEventListener('click', () => scrollToBottom(true));
+
+  // 流式开关
+  $streamCheck.addEventListener('change', () => {
+    state.isStreaming = $streamCheck.checked;
+    Bridge.onToggleStreaming($streamCheck.checked);
+  });
+
+  // 模型选择
+  document.getElementById('model-selector').addEventListener('click', () => {
+    Bridge.onSelectModel();
+  });
+
+  // 附件按钮
+  const addBtn = document.getElementById('add-btn');
+  addBtn.innerHTML = icon('add');
+  addBtn.addEventListener('click', () => {
+    Bridge.onShowAttachmentMenu();
+  });
+
+  // 配置 marked
+  setupMarked();
+  if ($modelCaps) {
+    $modelCaps.innerHTML = '';
+  }
+
+  Bridge.onReady();
+});
+
+// ===== 输入处理 =====
+function handleSend() {
+  if (state.isGenerating) {
+    Bridge.onStopGenerating();
+    return;
+  }
+  const text = $input.value.trim();
+  if (!text && state.attachments.length === 0) return;
+  if (!state.model) return;
+  Bridge.onSendMessage(text);
+  $input.value = '';
+  autoResize();
+  updateSendButton();
+}
+
+function autoResize() {
+  $input.style.height = 'auto';
+  $input.style.height = `${Math.min($input.scrollHeight, 120)}px`;
+  updateSendButton();
+}
+
+function updateSendButton() {
+  const hasContent = $input.value.trim().length > 0 || state.attachments.length > 0;
+  const hasModel = !!state.model;
+  $sendBtn.className = '';
+  if (state.isGenerating) {
+    $sendBtn.className = 'generating';
+    $sendBtn.innerHTML = icon('stop_circle');
+    $sendBtn.title = '打断生成';
+  } else if (hasContent && hasModel) {
+    $sendBtn.className = 'can-send';
+    $sendBtn.innerHTML = icon('send');
+    $sendBtn.title = '发送消息';
+  } else {
+    $sendBtn.className = 'disabled';
+    $sendBtn.innerHTML = icon('send');
+    $sendBtn.title = '发送消息';
+  }
+}
+
+/** 根据全局生成状态，批量更新消息区操作按钮可用性。 */
+function refreshMessageActionButtonsState() {
+  const buttons = $list ? $list.querySelectorAll('.msg-actions button') : [];
+  for (const btn of buttons) {
+    if (state.isGenerating) {
+      btn.disabled = true;
+      btn.classList.add('is-disabled');
+    } else {
+      btn.disabled = false;
+      btn.classList.remove('is-disabled');
+    }
+  }
+}
+
+function renderAttachments() {
+  if (!$attachPreview) return;
+  if (state.attachments.length === 0) {
+    $attachPreview.innerHTML = '';
+    return;
+  }
+  $attachPreview.innerHTML = state.attachments
+    .map((p) => {
+      if (isImagePath(p)) {
+        const src = proxyImageUrl(p);
+        return `<div class="att-item">
+          <img class="att-img" src="${escHtml(src)}" />
+          <button class="att-remove" onclick="Bridge.onRemoveAttachment('${escJs(p)}')">×</button>
+        </div>`;
+      }
+      return `<div class="att-item">
+        <span class="att-file">${escHtml(fileName(p))}</span>
+        <button class="att-remove" onclick="Bridge.onRemoveAttachment('${escJs(p)}')">×</button>
+      </div>`;
+    })
+    .join('');
+}
+
+// ===== 滚动处理 =====
+function handleScroll() {
+  if (state._scrollLock) return;
+  // 显示/隐藏滚到底部按钮
+  if (isNearBottom()) {
+    $scrollFab.classList.remove('visible');
+  } else {
+    $scrollFab.classList.add('visible');
+  }
+  // 接近顶部时触发加载更多
+  if ($list.scrollTop < 80 && !state.isLoadingMore) {
+    state._scrollLock = true;
+    Bridge.onScrollNearTop();
+    setTimeout(() => {
+      state._scrollLock = false;
+    }, 500);
+  }
+}
+
+function isNearBottom() {
+  if (!$list) return true;
+  return $list.scrollHeight - $list.scrollTop - $list.clientHeight < 150;
+}
+
+function scrollToBottom(animated) {
+  if (!$list) return;
+  if (animated) {
+    $list.scrollTo({ top: $list.scrollHeight, behavior: 'smooth' });
+  } else {
+    $list.scrollTop = $list.scrollHeight;
+  }
+  $scrollFab.classList.remove('visible');
+}
+
+// ===== 工具函数 =====
+function toggleReasoning(el) {
+  const arrow = el.querySelector('.arrow');
+  const content = el.nextElementSibling;
+  arrow.classList.toggle('open');
+  content.classList.toggle('open');
+}
+
+function copyCode(btn) {
+  const pre = btn.closest('.code-block-wrapper').querySelector('pre code');
+  if (!pre) return;
+  copyTextToClipboard(pre.textContent || '')
+    .then(() => {
+      btn.innerHTML = icon('check');
+      setTimeout(() => {
+        btn.innerHTML = icon('content_copy');
+      }, 1200);
+    })
+    .catch(() => {
+      // WebView 某些上下文不允许 clipboard API，失败时保留原图标，避免误导。
+      btn.innerHTML = icon('content_copy');
+    });
+}
+
+/**
+ * 复制文本到剪贴板：
+ * 1) 优先使用 Clipboard API
+ * 2) 在不满足安全上下文或权限时回退到 execCommand
+ */
+function copyTextToClipboard(text) {
+  if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+    return navigator.clipboard.writeText(text).catch(() => fallbackCopyText(text));
+  }
+  return fallbackCopyText(text);
+}
+
+function fallbackCopyText(text) {
+  return new Promise((resolve, reject) => {
+    try {
+      const input = document.createElement('textarea');
+      input.value = text;
+      input.setAttribute('readonly', '');
+      input.style.position = 'fixed';
+      input.style.top = '-9999px';
+      input.style.opacity = '0';
+      document.body.appendChild(input);
+      input.focus();
+      input.select();
+      input.setSelectionRange(0, input.value.length);
+      const ok = document.execCommand('copy');
+      document.body.removeChild(input);
+      if (ok) {
+        resolve();
+      } else {
+        reject(new Error('execCommand copy failed'));
+      }
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
+
+// ===== Long press detection =====
+let _longPressTimer = null;
+
+function startLongPress(event, id) {
+  cancelLongPress();
+  _longPressTimer = setTimeout(() => {
+    _longPressTimer = null;
+    Bridge.onUserMessageLongPress(id);
+  }, 500);
+}
+
+function cancelLongPress() {
+  if (_longPressTimer) {
+    clearTimeout(_longPressTimer);
+    _longPressTimer = null;
+  }
+}
+
+function handleContextMenu(event, id) {
+  event.preventDefault();
+  Bridge.onUserMessageLongPress(id);
+}
+
+function copyMessageContent(id) {
+  Bridge.onMessageAction(id, 'copy');
+}
+
+/** 渲染模型能力图标（视觉/工具）。 */
+function renderModelCapabilityBadges(supportsVision, supportsTools, hasModel) {
+  if (!hasModel) return '';
+  const caps = [];
+  if (supportsVision) {
+    caps.push('<span class="ms-icon model-cap" title="支持视觉">visibility</span>');
+  }
+  if (supportsTools) {
+    caps.push('<span class="ms-icon model-cap" title="支持工具">build</span>');
+  }
+  return caps.join('');
+}
+
+
+/**
+ * bridge_api.js
+ *
+ * Flutter -> JS 的公开 API。
+ * 约束：仅在此处暴露 window.ChatBridge，避免散落定义导致难以维护。
+ */
+
 // ===== Flutter → JS API (window.ChatBridge) =====
 window.ChatBridge = {
   /** 添加一条消息 */
@@ -556,7 +915,7 @@ window.ChatBridge = {
 
   /** 更新消息内容（流式追加） */
   updateMessageContent(id, content) {
-    const msg = state.messages.find(m => m.id === id);
+    const msg = state.messages.find((m) => m.id === id);
     if (!msg) return;
     msg.content = content;
     updateMessageDOM(msg);
@@ -565,7 +924,7 @@ window.ChatBridge = {
 
   /** 更新思考内容（流式追加） */
   updateThinkingContent(id, content, timeMs) {
-    const msg = state.messages.find(m => m.id === id);
+    const msg = state.messages.find((m) => m.id === id);
     if (!msg) return;
     msg.reasoning = content;
     if (timeMs !== undefined) msg.reasoningTimeMs = timeMs;
@@ -575,7 +934,7 @@ window.ChatBridge = {
 
   /** 标记消息流式结束 */
   endStreaming(id, canContinue) {
-    const msg = state.messages.find(m => m.id === id);
+    const msg = state.messages.find((m) => m.id === id);
     if (!msg) return;
     msg.isStreaming = false;
     msg.canContinue = !!canContinue;
@@ -584,7 +943,7 @@ window.ChatBridge = {
 
   /** 删除消息 */
   deleteMessage(id) {
-    const idx = state.messages.findIndex(m => m.id === id);
+    const idx = state.messages.findIndex((m) => m.id === id);
     if (idx === -1) return;
     state.messages.splice(idx, 1);
     const el = $list.querySelector(`.msg[data-id="${id}"]`);
@@ -641,7 +1000,7 @@ window.ChatBridge = {
 
   /** 添加工具日志 */
   addToolLog(messageId, logJson) {
-    const msg = state.messages.find(m => m.id === messageId);
+    const msg = state.messages.find((m) => m.id === messageId);
     if (!msg) return;
     const log = JSON.parse(logJson);
     if (!msg.toolLogs) msg.toolLogs = [];
@@ -708,278 +1067,3 @@ window.ChatBridge = {
   },
 };
 
-// ===== 输入处理 =====
-function handleSend() {
-  if (state.isGenerating) {
-    Bridge.onStopGenerating();
-    return;
-  }
-  const text = $input.value.trim();
-  if (!text && state.attachments.length === 0) return;
-  if (!state.model) return;
-  Bridge.onSendMessage(text);
-  $input.value = '';
-  autoResize();
-  updateSendButton();
-}
-
-function autoResize() {
-  $input.style.height = 'auto';
-  $input.style.height = Math.min($input.scrollHeight, 120) + 'px';
-  updateSendButton();
-}
-
-function updateSendButton() {
-  const hasContent = $input.value.trim().length > 0 || state.attachments.length > 0;
-  const hasModel = !!state.model;
-  $sendBtn.className = '';
-  if (state.isGenerating) {
-    $sendBtn.className = 'generating';
-    $sendBtn.innerHTML = icon('stop_circle');
-    $sendBtn.title = '打断生成';
-  } else if (hasContent && hasModel) {
-    $sendBtn.className = 'can-send';
-    $sendBtn.innerHTML = icon('send');
-    $sendBtn.title = '发送消息';
-  } else {
-    $sendBtn.className = 'disabled';
-    $sendBtn.innerHTML = icon('send');
-    $sendBtn.title = '发送消息';
-  }
-}
-
-/** 根据全局生成状态，批量更新消息区操作按钮可用性。 */
-function refreshMessageActionButtonsState() {
-  const buttons = $list ? $list.querySelectorAll('.msg-actions button') : [];
-  for (const btn of buttons) {
-    if (state.isGenerating) {
-      btn.disabled = true;
-      btn.classList.add('is-disabled');
-    } else {
-      btn.disabled = false;
-      btn.classList.remove('is-disabled');
-    }
-  }
-}
-
-function renderAttachments() {
-  if (!$attachPreview) return;
-  if (state.attachments.length === 0) {
-    $attachPreview.innerHTML = '';
-    return;
-  }
-  $attachPreview.innerHTML = state.attachments.map(p => {
-    if (isImagePath(p)) {
-      const src = proxyImageUrl(p);
-      return `<div class="att-item">
-        <img class="att-img" src="${escHtml(src)}" />
-        <button class="att-remove" onclick="Bridge.onRemoveAttachment('${escJs(p)}')">×</button>
-      </div>`;
-    }
-    return `<div class="att-item">
-      <span class="att-file">${escHtml(fileName(p))}</span>
-      <button class="att-remove" onclick="Bridge.onRemoveAttachment('${escJs(p)}')">×</button>
-    </div>`;
-  }).join('');
-}
-
-// ===== 滚动处理 =====
-function handleScroll() {
-  if (state._scrollLock) return;
-  // 显示/隐藏滚到底部按钮
-  if (isNearBottom()) {
-    $scrollFab.classList.remove('visible');
-  } else {
-    $scrollFab.classList.add('visible');
-  }
-  // 接近顶部时触发加载更多
-  if ($list.scrollTop < 80 && !state.isLoadingMore) {
-    state._scrollLock = true;
-    Bridge.onScrollNearTop();
-    setTimeout(() => { state._scrollLock = false; }, 500);
-  }
-}
-
-function isNearBottom() {
-  if (!$list) return true;
-  return ($list.scrollHeight - $list.scrollTop - $list.clientHeight) < 150;
-}
-
-function scrollToBottom(animated) {
-  if (!$list) return;
-  if (animated) {
-    $list.scrollTo({ top: $list.scrollHeight, behavior: 'smooth' });
-  } else {
-    $list.scrollTop = $list.scrollHeight;
-  }
-  $scrollFab.classList.remove('visible');
-}
-
-// ===== 工具函数 =====
-function toggleReasoning(el) {
-  const arrow = el.querySelector('.arrow');
-  const content = el.nextElementSibling;
-  arrow.classList.toggle('open');
-  content.classList.toggle('open');
-}
-
-function copyCode(btn) {
-  const pre = btn.closest('.code-block-wrapper').querySelector('pre code');
-  if (!pre) return;
-  copyTextToClipboard(pre.textContent || '').then(() => {
-    btn.innerHTML = icon('check');
-    setTimeout(() => { btn.innerHTML = icon('content_copy'); }, 1200);
-  }).catch(() => {
-    // WebView 某些上下文不允许 clipboard API，失败时保留原图标，避免误导。
-    btn.innerHTML = icon('content_copy');
-  });
-}
-
-/**
- * 复制文本到剪贴板：
- * 1) 优先使用 Clipboard API
- * 2) 在不满足安全上下文或权限时回退到 execCommand
- */
-function copyTextToClipboard(text) {
-  if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-    return navigator.clipboard.writeText(text).catch(() => fallbackCopyText(text));
-  }
-  return fallbackCopyText(text);
-}
-
-function fallbackCopyText(text) {
-  return new Promise((resolve, reject) => {
-    try {
-      const input = document.createElement('textarea');
-      input.value = text;
-      input.setAttribute('readonly', '');
-      input.style.position = 'fixed';
-      input.style.top = '-9999px';
-      input.style.opacity = '0';
-      document.body.appendChild(input);
-      input.focus();
-      input.select();
-      input.setSelectionRange(0, input.value.length);
-      const ok = document.execCommand('copy');
-      document.body.removeChild(input);
-      if (ok) {
-        resolve();
-      } else {
-        reject(new Error('execCommand copy failed'));
-      }
-    } catch (e) {
-      reject(e);
-    }
-  });
-}
-
-// ===== Long press detection =====
-let _longPressTimer = null;
-
-function startLongPress(event, id, role) {
-  cancelLongPress();
-  _longPressTimer = setTimeout(() => {
-    _longPressTimer = null;
-    Bridge.onUserMessageLongPress(id);
-  }, 500);
-}
-
-function cancelLongPress() {
-  if (_longPressTimer) {
-    clearTimeout(_longPressTimer);
-    _longPressTimer = null;
-  }
-}
-
-function handleContextMenu(event, id, role) {
-  event.preventDefault();
-  Bridge.onUserMessageLongPress(id);
-}
-
-function copyMessageContent(id) {
-  Bridge.onMessageAction(id, 'copy');
-}
-
-/** 渲染模型能力图标（视觉/工具）。 */
-function renderModelCapabilityBadges(supportsVision, supportsTools, hasModel) {
-  if (!hasModel) return '';
-  const caps = [];
-  if (supportsVision) {
-    caps.push(
-      `<span class="ms-icon model-cap" title="支持视觉">visibility</span>`,
-    );
-  }
-  if (supportsTools) {
-    caps.push(
-      `<span class="ms-icon model-cap" title="支持工具">build</span>`,
-    );
-  }
-  return caps.join('');
-}
-
-function escHtml(str) {
-  if (!str) return '';
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-function escJs(str) {
-  if (!str) return '';
-  return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n');
-}
-
-function truncate(str, max) {
-  if (!str || str.length <= max) return str;
-  return str.substring(0, max) + '...';
-}
-
-function fileName(path) {
-  const normalized = path.replace(/\\/g, '/');
-  const idx = normalized.lastIndexOf('/');
-  return idx === -1 ? normalized : normalized.substring(idx + 1);
-}
-
-function isImagePath(path) {
-  if (!path) return false;
-  const lower = path.toLowerCase();
-  const pure = lower.split('?')[0].split('#')[0];
-  return /\.(png|jpg|jpeg|webp|gif|bmp|heic|heif)$/.test(pure);
-}
-
-/** 判断附件是否应按图片渲染，避免普通文件误渲染成破图。 */
-function isRenderableImageAttachment(path) {
-  if (!path) return false;
-  const lower = path.toLowerCase();
-  if (/^data:image\//i.test(lower)) return true;
-  if (isImagePath(path)) return true;
-  if (!/^https?:\/\//i.test(path)) return false;
-  try {
-    const url = new URL(path);
-    if (url.pathname === '/local-image') return true;
-    return isImagePath(url.pathname);
-  } catch (_) {
-    return false;
-  }
-}
-
-/** 将本地文件路径转为代理 URL（如果代理服务器可用） */
-function proxyImageUrl(path) {
-  if (!path) return path;
-  // 已经是 http/https/data URI，不处理
-  if (/^(https?:|data:)/i.test(path)) return path;
-  // 仅图片路径走代理，避免普通文件被误包装成图片 URL。
-  if (!isImagePath(path)) return path;
-  // 本地路径（以 / 开头或包含盘符如 C:\）走代理
-  if (
-    state.imageProxyBase &&
-    (path.startsWith('/') || path.startsWith('file://') || /^[a-zA-Z]:/.test(path))
-  ) {
-    return state.imageProxyBase + '/local-image?path=' + encodeURIComponent(path);
-  }
-  return path;
-}
-
-// ===== Material Symbols icon helper =====
-function icon(name, extraClass = '') {
-  const cls = extraClass ? `ms-icon ${extraClass}` : 'ms-icon';
-  return `<span class="${cls}" aria-hidden="true">${name}</span>`;
-}

@@ -132,7 +132,8 @@ class PluginReadmeWebViewPanel extends StatefulWidget {
   });
 
   @override
-  State<PluginReadmeWebViewPanel> createState() => _PluginReadmeWebViewPanelState();
+  State<PluginReadmeWebViewPanel> createState() =>
+      _PluginReadmeWebViewPanelState();
 }
 
 class _PluginReadmeWebViewPanelState extends State<PluginReadmeWebViewPanel> {
@@ -143,12 +144,13 @@ class _PluginReadmeWebViewPanelState extends State<PluginReadmeWebViewPanel> {
   @override
   void initState() {
     super.initState();
-    _controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..addJavaScriptChannel(
-        'FlutterBridge',
-        onMessageReceived: _handleJsMessage,
-      );
+    _controller =
+        WebViewController()
+          ..setJavaScriptMode(JavaScriptMode.unrestricted)
+          ..addJavaScriptChannel(
+            'FlutterBridge',
+            onMessageReceived: _handleJsMessage,
+          );
     _ReadmeLocalImageServer.instance.start();
   }
 
@@ -178,17 +180,31 @@ class _PluginReadmeWebViewPanelState extends State<PluginReadmeWebViewPanel> {
   Future<void> _loadHtmlFromAssets() async {
     await _ReadmeLocalImageServer.instance.start();
 
-    final html = await rootBundle.loadString('assets/readme_webview/index.html');
-    final readmeJs =
-        await rootBundle.loadString('assets/readme_webview/readme.js');
+    final html = await rootBundle.loadString(
+      'assets/readme_webview/index.html',
+    );
+    final readmeJs = await rootBundle.loadString(
+      'assets/readme_webview/readme.js',
+    );
     // README 样式复用聊天页面样式，保证视觉一致。
     final chatCss = await rootBundle.loadString('assets/chat_webview/style.css');
-    final bridgeJs = await rootBundle.loadString('assets/chat_webview/bridge.js');
+    final bridgeJs = await rootBundle.loadString(
+      'assets/chat_webview/bridge.js',
+    );
 
     final inlinedHtml = html
-        .replaceFirst('<link rel="stylesheet" href="style.css">', '<style>$chatCss</style>')
-        .replaceFirst('<script src="bridge.js"></script>', '<script>$bridgeJs</script>')
-        .replaceFirst('<script src="readme.js"></script>', '<script>$readmeJs</script>');
+        .replaceFirst(
+          '<link rel="stylesheet" href="style.css">',
+          '<style>$chatCss</style>',
+        )
+        .replaceFirst(
+          '<script src="bridge.js"></script>',
+          '<script>$bridgeJs</script>',
+        )
+        .replaceFirst(
+          '<script src="readme.js"></script>',
+          '<script>$readmeJs</script>',
+        );
 
     await _controller.loadHtmlString(inlinedHtml);
   }
@@ -255,7 +271,8 @@ class _PluginReadmeWebViewPanelState extends State<PluginReadmeWebViewPanel> {
     final server = _ReadmeLocalImageServer.instance;
     final localDir = _resolveLocalReadmeDir(widget.localReadmePath);
     final repoRawBase = _resolveRepoRawBase(widget.repoUrl);
-    final imageProxyBase = server.isRunning ? 'http://127.0.0.1:${server.port}' : '';
+    final imageProxyBase =
+        server.isRunning ? 'http://127.0.0.1:${server.port}' : '';
 
     _evalJs(
       "ReadmeBridge.setContext('${_escJs(localDir)}','${_escJs(repoRawBase)}','${_escJs(imageProxyBase)}')",
@@ -277,7 +294,8 @@ class _PluginReadmeWebViewPanelState extends State<PluginReadmeWebViewPanel> {
     if (normalized.isEmpty) return '';
     final uri = Uri.tryParse(normalized);
     if (uri == null) return '';
-    final segments = uri.pathSegments.where((item) => item.trim().isNotEmpty).toList();
+    final segments =
+        uri.pathSegments.where((item) => item.trim().isNotEmpty).toList();
     if (segments.length < 2) return '';
     final owner = segments[0];
     final repo = segments[1].replaceAll('.git', '');

@@ -58,7 +58,10 @@ class _LocalImageServer {
           ..close();
         return;
       }
-      final ext = p.extension(normalizedPath).toLowerCase().replaceFirst('.', '');
+      final ext = p
+          .extension(normalizedPath)
+          .toLowerCase()
+          .replaceFirst('.', '');
       const mimeMap = {
         'png': 'image/png',
         'jpg': 'image/jpeg',
@@ -192,6 +195,7 @@ class _ChatWebViewPanelState extends State<ChatWebViewPanel> {
 
   /// 上一次同步到 WebView 的消息快照，用于增量更新。
   List<int> _syncedMessageIds = [];
+
   /// 上一次同步的消息内容长度，用于检测流式更新。
   final Map<int, int> _syncedContentLengths = {};
   final Map<int, int> _syncedReasoningLengths = {};
@@ -200,12 +204,13 @@ class _ChatWebViewPanelState extends State<ChatWebViewPanel> {
   @override
   void initState() {
     super.initState();
-    _controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..addJavaScriptChannel(
-        'FlutterBridge',
-        onMessageReceived: _handleJsMessage,
-      );
+    _controller =
+        WebViewController()
+          ..setJavaScriptMode(JavaScriptMode.unrestricted)
+          ..addJavaScriptChannel(
+            'FlutterBridge',
+            onMessageReceived: _handleJsMessage,
+          );
     // 启动本地图片代理服务器
     _LocalImageServer.instance.start();
   }
@@ -221,32 +226,49 @@ class _ChatWebViewPanelState extends State<ChatWebViewPanel> {
   }
 
   Future<void> _loadHtmlFromAssets() async {
-    // 确保图片代理服务器已启动
-    await _LocalImageServer.instance.start();
+    try {
+      // 确保图片代理服务器已启动
+      await _LocalImageServer.instance.start();
 
-    final html = await rootBundle.loadString('assets/chat_webview/index.html');
-    final css = await rootBundle.loadString('assets/chat_webview/style.css');
-    final bridgeJs =
-        await rootBundle.loadString('assets/chat_webview/bridge.js');
-    final chatJs =
-        await rootBundle.loadString('assets/chat_webview/chat.js');
+      final html = await rootBundle.loadString('assets/chat_webview/index.html');
+      final css = await rootBundle.loadString('assets/chat_webview/style.css');
+      final bridgeJs = await rootBundle.loadString(
+        'assets/chat_webview/bridge.js',
+      );
+      final chatJs = await rootBundle.loadString('assets/chat_webview/chat.js');
 
-    // 内联所有资源到单个 HTML，避免 WebView 相对路径问题
-    final inlinedHtml = html
-        .replaceFirst(
-          '<link rel="stylesheet" href="style.css">',
-          '<style>$css</style>',
-        )
-        .replaceFirst(
-          '<script src="bridge.js"></script>',
-          '<script>$bridgeJs</script>',
-        )
-        .replaceFirst(
-          '<script src="chat.js"></script>',
-          '<script>$chatJs</script>',
-        );
+      // 内联所有资源到单个 HTML，避免 WebView 相对路径问题
+      final inlinedHtml = html
+          .replaceFirst(
+            '<link rel="stylesheet" href="style.css">',
+            '<style>$css</style>',
+          )
+          .replaceFirst(
+            '<script src="bridge.js"></script>',
+            '<script>$bridgeJs</script>',
+          )
+          .replaceFirst(
+            '<script src="chat.js"></script>',
+            '<script>$chatJs</script>',
+          );
 
-    await _controller.loadHtmlString(inlinedHtml);
+      await _controller.loadHtmlString(inlinedHtml);
+    } catch (e, st) {
+      debugPrint('ChatWebViewPanel: loadHtmlFromAssets failed: $e\n$st');
+      // 兜底错误页：避免出现“纯白屏”，便于用户与开发定位问题。
+      await _controller.loadHtmlString(
+        '''
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="font-family:sans-serif;padding:16px;color:#333;">
+  <h3 style="margin:0 0 8px 0;">聊天页面加载失败</h3>
+  <p style="margin:0;">WebView 资源初始化异常，请返回重试。</p>
+</body>
+</html>
+''',
+      );
+    }
   }
 
   // ===== JS → Flutter 消息处理 =====
@@ -319,9 +341,7 @@ class _ChatWebViewPanelState extends State<ChatWebViewPanel> {
 
     // 生成状态
     if (widget.isGenerating != oldWidget.isGenerating) {
-      _evalJs(
-        'ChatBridge.setGeneratingState(${widget.isGenerating})',
-      );
+      _evalJs('ChatBridge.setGeneratingState(${widget.isGenerating})');
     }
 
     // 模型信息
@@ -351,16 +371,12 @@ class _ChatWebViewPanelState extends State<ChatWebViewPanel> {
 
     // 系统提示词
     if (widget.systemPrompt != oldWidget.systemPrompt) {
-      _evalJs(
-        "ChatBridge.setSystemPrompt('${_escJs(widget.systemPrompt)}')",
-      );
+      _evalJs("ChatBridge.setSystemPrompt('${_escJs(widget.systemPrompt)}')");
     }
 
     // 加载更多历史
     if (widget.isLoadingMoreHistory != oldWidget.isLoadingMoreHistory) {
-      _evalJs(
-        'ChatBridge.setLoadingMore(${widget.isLoadingMoreHistory})',
-      );
+      _evalJs('ChatBridge.setLoadingMore(${widget.isLoadingMoreHistory})');
     }
   }
 
@@ -380,13 +396,9 @@ class _ChatWebViewPanelState extends State<ChatWebViewPanel> {
     _evalJs(
       'ChatBridge.setStreamingState(${widget.isStreaming}, ${widget.streamingSupported})',
     );
-    _evalJs(
-      'ChatBridge.setGeneratingState(${widget.isGenerating})',
-    );
+    _evalJs('ChatBridge.setGeneratingState(${widget.isGenerating})');
     if (widget.systemPrompt.isNotEmpty) {
-      _evalJs(
-        "ChatBridge.setSystemPrompt('${_escJs(widget.systemPrompt)}')",
-      );
+      _evalJs("ChatBridge.setSystemPrompt('${_escJs(widget.systemPrompt)}')");
     }
     if (widget.attachments.isNotEmpty) {
       _evalJs(
@@ -421,12 +433,16 @@ class _ChatWebViewPanelState extends State<ChatWebViewPanel> {
     // 检测是否是历史消息前插（prepend）
     if (currentIds.length > _syncedMessageIds.length &&
         _syncedMessageIds.isNotEmpty) {
-      final firstOldId = _syncedMessageIds.isNotEmpty ? _syncedMessageIds.first : -1;
+      final firstOldId =
+          _syncedMessageIds.isNotEmpty ? _syncedMessageIds.first : -1;
       final idxInNew = currentIds.indexOf(firstOldId);
       if (idxInNew > 0) {
         // 前面插入了历史消息
         final prependMsgs =
-            widget.messages.sublist(0, idxInNew).map((m) => _messageToJson(m)).toList();
+            widget.messages
+                .sublist(0, idxInNew)
+                .map((m) => _messageToJson(m))
+                .toList();
         final encoded = jsonEncode(prependMsgs);
         _evalJs("ChatBridge.loadMessages('${_escJs(encoded)}', true)");
         _syncedMessageIds = currentIds;
@@ -493,9 +509,7 @@ class _ChatWebViewPanelState extends State<ChatWebViewPanel> {
       if (newToolCount > oldToolCount) {
         for (int i = oldToolCount; i < newToolCount; i++) {
           final logJson = jsonEncode(toolLogs[i].toJson());
-          _evalJs(
-            "ChatBridge.addToolLog(${m.isarId}, '${_escJs(logJson)}')",
-          );
+          _evalJs("ChatBridge.addToolLog(${m.isarId}, '${_escJs(logJson)}')");
         }
         _syncedToolLogCounts[m.isarId] = newToolCount;
       }
@@ -503,9 +517,7 @@ class _ChatWebViewPanelState extends State<ChatWebViewPanel> {
       // 更精确：如果之前在流式中，现在不在了
       if (!widget.isMessageStreaming(m.isarId) && m.role == 'assistant') {
         final canContinue = widget.canContinueAssistantMessage(m.isarId);
-        _evalJs(
-          'ChatBridge.endStreaming(${m.isarId}, $canContinue)',
-        );
+        _evalJs('ChatBridge.endStreaming(${m.isarId}, $canContinue)');
       }
     }
 
@@ -550,17 +562,18 @@ class _ChatWebViewPanelState extends State<ChatWebViewPanel> {
 
   /// 将 Message 转为 JS 侧需要的 JSON 结构。
   Map<String, dynamic> _messageToJson(Message m) {
-    final isLast = widget.messages.isNotEmpty &&
-        widget.messages.last.isarId == m.isarId;
+    final isLast =
+        widget.messages.isNotEmpty && widget.messages.last.isarId == m.isarId;
     final toolLogs = widget.toolLogsForMessage(m.isarId);
     final server = _LocalImageServer.instance;
     final rewrittenContent = _rewriteLocalImageUrlsInContent(m.content, server);
 
     // 附件中的本地图片路径统一转为代理 URL，避免 WebView 直接访问 file 路径失败。
     final rawPaths = m.imagePaths ?? [];
-    final resolvedPaths = rawPaths.map((path) {
-      return _toProxyImageUrl(path, server);
-    }).toList();
+    final resolvedPaths =
+        rawPaths.map((path) {
+          return _toProxyImageUrl(path, server);
+        }).toList();
 
     return {
       'id': m.isarId,
@@ -572,17 +585,27 @@ class _ChatWebViewPanelState extends State<ChatWebViewPanel> {
       'imagePaths': resolvedPaths,
       'isStreaming': widget.isMessageStreaming(m.isarId),
       'isLast': isLast,
-      'canContinue': isLast && m.role == 'assistant'
-          ? widget.canContinueAssistantMessage(m.isarId)
-          : false,
+      'canContinue':
+          isLast && m.role == 'assistant'
+              ? widget.canContinueAssistantMessage(m.isarId)
+              : false,
       'toolLogs': toolLogs.map((l) => l.toJson()).toList(),
     };
   }
 
   static bool _isImageFile(String path) {
-    final ext = p.extension(path.split('?').first.split('#').first).toLowerCase();
-    return {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.heic', '.heif'}
-        .contains(ext);
+    final ext =
+        p.extension(path.split('?').first.split('#').first).toLowerCase();
+    return {
+      '.png',
+      '.jpg',
+      '.jpeg',
+      '.gif',
+      '.webp',
+      '.bmp',
+      '.heic',
+      '.heif',
+    }.contains(ext);
   }
 
   /// 匹配 Markdown 图片语法：![alt](url "title")
@@ -621,9 +644,10 @@ class _ChatWebViewPanelState extends State<ChatWebViewPanel> {
       if (proxied == rawUrl) {
         return match.group(0) ?? '';
       }
-      final wrappedUrl = urlToken.trim().startsWith('<') && urlToken.trim().endsWith('>')
-          ? '<$proxied>'
-          : proxied;
+      final wrappedUrl =
+          urlToken.trim().startsWith('<') && urlToken.trim().endsWith('>')
+              ? '<$proxied>'
+              : proxied;
       return '![$alt]($wrappedUrl$tail)';
     });
 
@@ -687,7 +711,8 @@ class _ChatWebViewPanelState extends State<ChatWebViewPanel> {
   /// 判断路径是否为“本地绝对图片路径”。
   static bool _isLocalImagePath(String path) {
     final normalized = path.split('?').first.split('#').first;
-    final isAndroidAbs = normalized.startsWith('/data/') ||
+    final isAndroidAbs =
+        normalized.startsWith('/data/') ||
         normalized.startsWith('/storage/') ||
         normalized.startsWith('/sdcard/');
     final isWindowsAbs = RegExp(r'^[a-zA-Z]:[\\/]').hasMatch(normalized);

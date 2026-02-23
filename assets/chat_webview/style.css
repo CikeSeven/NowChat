@@ -1,3 +1,9 @@
+﻿/**
+ * style.css - 运行时 bundle 入口
+ *
+ * 该文件由 assets/chat_webview/css/*.css 按顺序拼接生成，
+ * 供 Flutter WebView 稳定内联加载。
+ */
 /* ===== Reset & Base ===== */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -24,7 +30,8 @@
 }
 
 html, body {
-  height: 100%; width: 100%;
+  height: 100%;
+  width: 100%;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 15px;
   line-height: 1.6;
@@ -69,6 +76,7 @@ html, body {
   -webkit-overflow-scrolling: touch;
   scroll-behavior: smooth;
 }
+
 
 /* ===== Messages ===== */
 .msg {
@@ -140,26 +148,6 @@ html, body {
   contain: layout paint style;
 }
 
-/* Loading spinner */
-.msg-loading {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  color: var(--on-surface-variant);
-  font-size: 13px;
-}
-
-.spinner {
-  width: 16px; height: 16px;
-  border: 2px solid var(--outline-variant);
-  border-top-color: var(--primary);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin { to { transform: rotate(360deg); } }
-
 /* ===== Reasoning / Thinking block ===== */
 .reasoning-block {
   margin-bottom: 8px;
@@ -203,6 +191,121 @@ html, body {
 .reasoning-content.open {
   display: block;
 }
+
+/* ===== Tool logs ===== */
+.tool-logs {
+  margin-top: 6px;
+}
+
+.tool-log-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  font-size: 12px;
+  color: var(--on-surface-variant);
+}
+
+.tool-log-icon {
+  width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tool-log-icon.success { color: #2e7d32; }
+.tool-log-icon.error { color: var(--error); }
+
+/* ===== Message actions ===== */
+.msg-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  padding-top: 0;
+  position: relative;
+  z-index: 2;
+}
+
+.msg-actions button {
+  background: none;
+  border: none;
+  color: var(--on-surface-variant);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  position: relative;
+  overflow: hidden;
+}
+
+.msg-actions button .ms-icon {
+  font-size: 28px;
+}
+
+.msg-actions button:active {
+  background: var(--surface-container-high);
+}
+
+.msg-actions button:disabled,
+.msg-actions button.is-disabled {
+  opacity: 0.45;
+  cursor: default;
+  pointer-events: none;
+}
+
+.msg-actions .spacer {
+  flex: 1;
+}
+
+/* ===== System prompt card ===== */
+.system-prompt-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 540px;
+  margin: 8px auto;
+  padding: 10px 14px;
+  background: var(--surface-container-highest);
+  opacity: 0.75;
+  border-radius: 12px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.system-prompt-card .sp-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--on-surface-variant);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.system-prompt-card .sp-header .ms-icon {
+  flex-shrink: 0;
+  font-size: 18px;
+}
+
+.system-prompt-card .sp-text {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--on-surface);
+  text-align: center;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.system-prompt-card .sp-text.sp-placeholder {
+  color: var(--on-surface-variant);
+  font-style: italic;
+}
+
 
 /* ===== Markdown content styles ===== */
 .msg-content h1 { font-size: 1.4em; font-weight: 700; margin: 12px 0 6px; }
@@ -341,117 +444,6 @@ html, body {
   padding: 4px 0;
 }
 
-/* ===== Tool logs ===== */
-.tool-logs {
-  margin-top: 6px;
-}
-
-.tool-log-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 0;
-  font-size: 12px;
-  color: var(--on-surface-variant);
-}
-
-.tool-log-icon {
-  width: 14px;
-  height: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.tool-log-icon.success { color: #2e7d32; }
-.tool-log-icon.error { color: var(--error); }
-
-/* ===== Message actions ===== */
-.msg-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 2px;
-  padding-top: 0;
-  position: relative;
-  z-index: 2;
-}
-
-.msg-actions button {
-  background: none;
-  border: none;
-  color: var(--on-surface-variant);
-  cursor: pointer;
-  font-size: 12px;
-  padding: 4px 8px;
-  border-radius: 8px;
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-}
-
-.msg-actions button .ms-icon {
-  font-size: 28px;
-}
-
-.msg-actions button:active {
-  background: var(--surface-container-high);
-}
-
-.msg-actions button:disabled,
-.msg-actions button.is-disabled {
-  opacity: 0.45;
-  cursor: default;
-  pointer-events: none;
-}
-
-.msg-actions .spacer {
-  flex: 1;
-}
-
-/* ===== System prompt card ===== */
-.system-prompt-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  max-width: 540px;
-  margin: 8px auto;
-  padding: 10px 14px;
-  background: var(--surface-container-highest);
-  opacity: 0.75;
-  border-radius: 12px;
-  cursor: pointer;
-  position: relative;
-  overflow: hidden;
-}
-
-.system-prompt-card .sp-header {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  color: var(--on-surface-variant);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.system-prompt-card .sp-header .ms-icon {
-  flex-shrink: 0;
-  font-size: 18px;
-}
-
-.system-prompt-card .sp-text {
-  margin-top: 6px;
-  font-size: 13px;
-  color: var(--on-surface);
-  text-align: center;
-  line-height: 1.4;
-  word-break: break-word;
-}
-
-.system-prompt-card .sp-text.sp-placeholder {
-  color: var(--on-surface-variant);
-  font-style: italic;
-}
 
 /* ===== Input area ===== */
 #input-area {
@@ -512,7 +504,7 @@ html, body {
   right: 2px;
   width: 18px;
   height: 18px;
-  background: rgba(0,0,0,0.55);
+  background: rgba(0, 0, 0, 0.55);
   color: #fff;
   border: none;
   border-radius: 50%;
@@ -652,6 +644,28 @@ html, body {
 #send-btn.can-send .ms-icon { color: var(--primary); }
 #send-btn.disabled .ms-icon { color: var(--on-surface-variant); opacity: 0.4; }
 
+
+/* ===== Loading spinner ===== */
+.msg-loading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  color: var(--on-surface-variant);
+  font-size: 13px;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--outline-variant);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
 /* ===== Scroll to bottom FAB ===== */
 #scroll-to-bottom {
   position: fixed;
@@ -667,7 +681,7 @@ html, body {
   display: none;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   z-index: 10;
 }
 
@@ -727,11 +741,6 @@ html, body {
   transition: width 0.4s ease-out, height 0.4s ease-out, opacity 0.4s ease-out;
 }
 
-.msg-actions button {
-  position: relative;
-  overflow: hidden;
-}
-
 .msg-actions button::after {
   content: '';
   position: absolute;
@@ -756,3 +765,4 @@ html, body {
 .msg-actions button:not(:active)::after {
   transition: width 0.3s ease-out, height 0.3s ease-out, opacity 0.3s ease-out;
 }
+
