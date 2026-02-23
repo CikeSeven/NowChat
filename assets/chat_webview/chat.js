@@ -322,7 +322,13 @@ window.ChatBridge = {
     state.messages.push(msg);
     // 移除空状态提示
     const emptyEl = $list.querySelector('.empty-state');
-    if (emptyEl) emptyEl.remove();
+    if (emptyEl) {
+      emptyEl.remove();
+      // 从空状态过渡到有消息：如果有 system prompt，在顶部插入卡片
+      if (state.systemPrompt) {
+        $list.insertAdjacentHTML('afterbegin', renderSystemPromptCard());
+      }
+    }
     const wasAtBottom = isNearBottom();
     $list.insertAdjacentHTML('beforeend', renderMessage(msg));
     if (wasAtBottom) scrollToBottom(false);
