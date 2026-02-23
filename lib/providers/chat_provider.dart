@@ -73,12 +73,15 @@ class ChatProvider with ChangeNotifier {
   bool _hasMoreHistory = false;
   bool _isLoadingMoreHistory = false;
   bool _initialized = false;
+  bool _isLocalDataReady = false;
+  Future<void>? _initializationTask;
 
   List<ChatSession> get chatList => List.unmodifiable(_chatList);
   List<AIProviderConfig> get providers => List.unmodifiable(_providers);
   List<Message> get currentMessages => _currentMessages;
   bool get hasMoreHistory => _hasMoreHistory;
   bool get isLoadingMoreHistory => _isLoadingMoreHistory;
+  bool get isLocalDataReady => _isLocalDataReady;
   Set<int> get streamingMessageIds => Set.unmodifiable(_streamingMessageIds);
   List<ToolExecutionLog> toolLogsForMessage(int messageId) {
     final logs = _toolLogsByMessageId[messageId];
@@ -86,9 +89,10 @@ class ChatProvider with ChangeNotifier {
     return List<ToolExecutionLog>.unmodifiable(logs);
   }
 
-  /// Provider 创建后立即从本地恢复状态，保证离线可用。
+  /// Provider 构造时仅完成实例化；数据加载由启动页显式触发。
   ChatProvider(this.isar) {
-    _loadFromLocal();
+    // 启动页会按“插件 -> 应用数据”顺序显式触发初始化，
+    // 这里不自动加载，避免绕过启动流程控制。
   }
 
   /// 强制从本地存储重载会话与提供方数据。
@@ -96,7 +100,17 @@ class ChatProvider with ChangeNotifier {
   /// 用于导入备份后立即刷新 UI，避免重启应用才能看到新数据。
   Future<void> reloadFromStorage() async {
     _initialized = false;
-    await _loadFromLocal();
+    _isLocalDataReady = false;
+    _initializationTask = null;
+    await ensureInitialized();
+  }
+
+  /// 确保会话与 API 配置已从本地加载完成。
+  ///
+  /// 启动页会显式等待该方法，保证加载时序可控。
+  Future<void> ensureInitialized() async {
+    _initializationTask ??= _loadFromLocal();
+    await _initializationTask;
   }
 
   @override
@@ -109,6 +123,18 @@ class ChatProvider with ChangeNotifier {
   /// 统一封装状态变更通知，便于在 `part` 文件中安全调用。
   void _notifyStateChanged() {
     notifyListeners();
+  }
+
+  /// 更新会话最近活跃时间，并在内存列表中置顶该会话。
+  ///
+  /// 该方法只负责会话元信息维护，不触碰消息发送/重发主流程逻辑。
+  Future<void> _touchChatLastUpdated(ChatSession chat) async {
+    chat.lastUpdated = DateTime.now();
+    await isar.writeTxn(() async {
+      await isar.chatSessions.put(chat);
+    });
+    _chatList.removeWhere((item) => item.id == chat.id);
+    _chatList.insert(0, chat);
   }
 
   /// 判断一条消息当前是否处于流式生成状态。
@@ -259,6 +285,7 @@ class ChatProvider with ChangeNotifier {
   Future<void> _loadFromLocal() async {
     if (_initialized) return;
     _initialized = true;
+    AppLogger.i('开始加载应用数据: 会话与 API 配置');
     _abortControllers.clear();
     _pendingContinuations.clear();
     _streamingMessageIds.clear();
@@ -269,24 +296,34 @@ class ChatProvider with ChangeNotifier {
     _hasMoreHistory = false;
     _isLoadingMoreHistory = false;
 
-    final chats =
-        await isar.chatSessions.where().sortByLastUpdatedDesc().findAll();
-    await isar.writeTxn(() async {
-      for (final chat in chats) {
-        if (!chat.isGenerating) continue;
-        chat.isGenerating = false;
-        await isar.chatSessions.put(chat);
-      }
-    });
-    _chatList
-      ..clear()
-      ..addAll(chats);
+    try {
+      final chats =
+          await isar.chatSessions.where().sortByLastUpdatedDesc().findAll();
+      await isar.writeTxn(() async {
+        for (final chat in chats) {
+          if (!chat.isGenerating) continue;
+          chat.isGenerating = false;
+          await isar.chatSessions.put(chat);
+        }
+      });
+      _chatList
+        ..clear()
+        ..addAll(chats);
 
-    final loadedProviders = await Storage.loadProviders();
-    _providers
-      ..clear()
-      ..addAll(loadedProviders);
-
-    notifyListeners();
+      final loadedProviders = await Storage.loadProviders();
+      _providers
+        ..clear()
+        ..addAll(loadedProviders);
+      _isLocalDataReady = true;
+      AppLogger.i('应用数据加载完成: chats=${_chatList.length}, providers=${_providers.length}');
+    } catch (e, st) {
+      _initialized = false;
+      _isLocalDataReady = false;
+      AppLogger.e('加载应用数据失败', e, st);
+      rethrow;
+    } finally {
+      _initializationTask = null;
+      notifyListeners();
+    }
   }
 }

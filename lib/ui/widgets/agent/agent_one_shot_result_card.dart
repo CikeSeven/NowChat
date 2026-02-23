@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:now_chat/providers/agent_provider.dart';
-import 'package:now_chat/ui/widgets/markdown_message_widget.dart';
 
 /// 智能体一次性对话结果面板。
 class AgentOneShotResultCard extends StatelessWidget {
@@ -23,7 +22,8 @@ class AgentOneShotResultCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = Theme.of(context).colorScheme;
     // 生成中展示流式缓存，结束后展示结果快照。
-    final activeContent = isGenerating ? streamingContent : (result?.content ?? '');
+    final activeContent =
+        isGenerating ? streamingContent : (result?.content ?? '');
     final activeReasoning =
         isGenerating ? streamingReasoning : (result?.reasoning ?? '');
     final hasContent = activeContent.trim().isNotEmpty;
@@ -52,7 +52,10 @@ class AgentOneShotResultCard extends StatelessWidget {
                   IconButton(
                     tooltip: '清空',
                     onPressed: onClear,
-                    icon: const Icon(Icons.cleaning_services_outlined, size: 18),
+                    icon: const Icon(
+                      Icons.cleaning_services_outlined,
+                      size: 18,
+                    ),
                   ),
               ],
             ),
@@ -69,7 +72,10 @@ class AgentOneShotResultCard extends StatelessWidget {
                     const SizedBox(width: 10),
                     Text(
                       '正在生成...',
-                      style: TextStyle(fontSize: 13, color: color.onSurfaceVariant),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: color.onSurfaceVariant,
+                      ),
                     ),
                   ],
                 ),
@@ -94,7 +100,10 @@ class AgentOneShotResultCard extends StatelessWidget {
               const SizedBox(height: 8),
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: color.secondaryContainer.withAlpha(90),
                   borderRadius: BorderRadius.circular(10),
@@ -110,7 +119,16 @@ class AgentOneShotResultCard extends StatelessWidget {
             ],
             if (hasContent) ...[
               const SizedBox(height: 10),
-              MarkdownMessageWidget(data: activeContent),
+              SelectionArea(
+                child: Text(
+                  activeContent,
+                  style: TextStyle(
+                    fontSize: 14.5,
+                    height: 1.5,
+                    color: color.onSurface,
+                  ),
+                ),
+              ),
             ],
           ],
         ),

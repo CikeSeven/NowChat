@@ -3,15 +3,16 @@ import 'package:flutter/services.dart';
 import 'package:now_chat/app/router.dart';
 import 'package:now_chat/core/models/message.dart';
 import 'package:now_chat/core/models/tool_execution_log.dart';
-import 'package:now_chat/ui/widgets/markdown_message_widget.dart';
 import 'message_bottom_sheet_menu.dart';
 
 /// 助手消息气泡组件，负责渲染正文、思考区、操作按钮与工具调用日志。
 class AssistantMessageWidget extends StatefulWidget {
   /// 流式渲染阈值：新增行数达到阈值就刷新 Markdown 快照。
   static const int streamingSnapshotLineThreshold = 1;
+
   /// 流式渲染阈值：新增字符达到阈值就刷新 Markdown 快照。
   static const int streamingSnapshotCharThreshold = 120;
+
   /// 流式渲染阈值：即使增量较小，超过时间也强制刷新一次。
   static const Duration streamingMarkdownMaxInterval = Duration(
     milliseconds: 450,
@@ -358,7 +359,16 @@ class _AssistantMessageWidgetState extends State<AssistantMessageWidget>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (snapshot.isNotEmpty)
-            MarkdownMessageWidget(data: snapshot),
+            SelectionArea(
+              child: Text(
+                snapshot,
+                style: TextStyle(
+                  fontSize: 16,
+                  color: color.onSurface,
+                  height: 1.58,
+                ),
+              ),
+            ),
           if (tail.isNotEmpty)
             SelectableText(
               tail,
@@ -371,7 +381,12 @@ class _AssistantMessageWidgetState extends State<AssistantMessageWidget>
         ],
       );
     }
-    return MarkdownMessageWidget(data: message.content);
+    return SelectionArea(
+      child: Text(
+        message.content,
+        style: TextStyle(fontSize: 16, color: color.onSurface, height: 1.58),
+      ),
+    );
   }
 
   /// 渲染工具调用日志摘要，帮助用户快速定位模型的工具执行过程。
@@ -401,9 +416,7 @@ class _AssistantMessageWidgetState extends State<AssistantMessageWidget>
             final statusColor =
                 log.isSuccess
                     ? Colors.green.shade600
-                    : (log.isError
-                        ? colors.error
-                        : colors.onSurfaceVariant);
+                    : (log.isError ? colors.error : colors.onSurfaceVariant);
             final statusIcon =
                 log.isSuccess
                     ? Icons.check_circle_outline

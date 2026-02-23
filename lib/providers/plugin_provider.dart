@@ -63,16 +63,19 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
 
   /// 生命周期状态位：用于控制初始化、下载、执行等互斥行为。
   bool _isInitialized = false;
+  bool _isInitializingLocalPlugins = false;
   bool _isRefreshingManifest = false;
   bool _isInstalling = false;
   bool _isExecuting = false;
   bool _isProbingMirrors = false;
+  bool _hasScheduledBackgroundManifestRefresh = false;
   double _downloadProgress = 0;
   String? _activePluginId;
   String? _lastError;
   PythonExecutionResult? _lastExecutionResult;
   String? _lastExecutionPluginId;
   Map<String, int?> _mirrorProbeLatenciesMs = <String, int?>{};
+  Future<void>? _initializationTask;
 
   Directory? _pluginRootDir;
   Directory? _runtimeWorkDir;
@@ -83,10 +86,10 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
   }) : _pluginService = pluginService ?? PluginService(),
        _pythonService = pythonService ?? PythonPluginService() {
     WidgetsBinding.instance.addObserver(this);
-    unawaited(_initialize());
   }
 
   bool get isInitialized => _isInitialized;
+  bool get isInitializingLocalPlugins => _isInitializingLocalPlugins;
   bool get isRefreshingManifest => _isRefreshingManifest;
   bool get isInstalling => _isInstalling;
   bool get isExecuting => _isExecuting;
@@ -102,6 +105,26 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
   String get githubMirrorCustomBaseUrl => _githubMirrorCustomBaseUrl;
   Map<String, int?> get mirrorProbeLatenciesMs => _mirrorProbeLatenciesMs;
   List<PluginGithubMirrorPreset> get githubMirrorPresets => PluginService.githubMirrorPresets;
+  int get localPluginCount => _localPluginsById.length;
+  int get installedPluginCount => _installedRecords.length;
+
+  /// 显式触发插件系统初始化（仅首次有效）。
+  ///
+  /// 启动页会在“应用数据加载完成”后调用，确保插件加载处于第二阶段。
+  Future<void> ensureInitialized() async {
+    if (_isInitialized) return;
+    _initializationTask ??= _initialize();
+    await _initializationTask;
+  }
+
+  /// 启动完成后在后台拉取插件市场清单（仅触发一次）。
+  ///
+  /// 该方法不会阻塞首屏，且会忽略重复调用。
+  void startBackgroundManifestRefresh() {
+    if (_hasScheduledBackgroundManifestRefresh) return;
+    _hasScheduledBackgroundManifestRefresh = true;
+    unawaited(_refreshManifestInBackground());
+  }
 
   /// 读取指定插件当前 UI 页面快照。
   PluginUiPageState? pluginUiPage(String pluginId) => _pluginUiPages[pluginId];
@@ -742,6 +765,9 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
   }
 
   Future<void> _initialize() async {
+    if (_isInitialized || _isInitializingLocalPlugins) return;
+    _isInitializingLocalPlugins = true;
+    AppLogger.i('开始初始化插件系统（本地插件阶段）');
     try {
       final supportDir = await getApplicationSupportDirectory();
       _pluginRootDir = Directory(
@@ -762,7 +788,7 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
 
       await _loadBasicState();
       await _loadInstalledRecords();
-      await _reloadLocalPluginsFromDisk();
+      await _reloadLocalPluginsFromDisk(logEachPlugin: true);
       _syncRegistry();
       await PluginHookBus.emit('app_start');
       AppLogger.i('插件系统初始化完成');
@@ -771,11 +797,14 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
       // 避免首页加载被网络请求阻塞。
       _isInitialized = true;
       notifyListeners();
-      unawaited(_refreshManifestInBackground());
     } catch (e, st) {
       _lastError = '插件初始化失败: $e';
       AppLogger.e('初始化插件系统失败', e, st);
       _isInitialized = true;
+      notifyListeners();
+    } finally {
+      _isInitializingLocalPlugins = false;
+      _initializationTask = null;
       notifyListeners();
     }
   }
@@ -783,8 +812,10 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
   /// 在应用进入主页后后台刷新远端清单，不阻塞启动流程。
   Future<void> _refreshManifestInBackground() async {
     try {
+      AppLogger.i('开始后台刷新插件市场清单');
       await Future<void>.delayed(const Duration(milliseconds: 300));
       await refreshManifest();
+      AppLogger.i('后台刷新插件市场清单完成');
     } catch (e, st) {
       AppLogger.e('后台刷新插件清单失败', e, st);
     }
@@ -855,7 +886,7 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
   }
 
   /// 扫描插件目录，恢复本地可解析的 plugin.json。
-  Future<void> _reloadLocalPluginsFromDisk() async {
+  Future<void> _reloadLocalPluginsFromDisk({bool logEachPlugin = false}) async {
     _localPluginsById.clear();
     final root = _pluginRootDir;
     if (root == null) return;
@@ -899,10 +930,21 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
             id: installedPluginId,
             repoUrl: manifestRepoUrl,
           );
+          if (logEachPlugin) {
+            final loadedPlugin = _localPluginsById[installedPluginId]!;
+            AppLogger.i(
+              '加载本地插件: id=${loadedPlugin.id}, name=${loadedPlugin.name}, tools=${loadedPlugin.tools.length}, hooks=${loadedPlugin.hooks.length}',
+            );
+          }
           continue;
         }
 
         _localPluginsById[plugin.id] = plugin;
+        if (logEachPlugin) {
+          AppLogger.i(
+            '加载本地插件: id=${plugin.id}, name=${plugin.name}, tools=${plugin.tools.length}, hooks=${plugin.hooks.length}',
+          );
+        }
       } catch (e, st) {
         AppLogger.w('忽略无效本地插件定义(${entity.path}): $e');
         AppLogger.e('解析本地插件失败', e, st);

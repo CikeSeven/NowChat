@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>NowChat</title>
+
+  <!-- highlight.js -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github.min.css">
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+
+  <!-- marked.js -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@14.1.4/marked.min.js"></script>
+
+  <!-- KaTeX -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+
+  <!-- Material Symbols（聊天页统一图标库） -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:FILL@0&display=swap">
+
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- 消息列表 -->
+    <div id="message-list"></div>
+
+    <!-- 滚动到底部按钮 -->
+    <button id="scroll-to-bottom">↓</button>
+
+    <!-- 输入区域 -->
+    <div id="input-area">
+      <textarea id="msg-input" rows="1" placeholder="输入消息..."></textarea>
+      <div id="attachment-preview"></div>
+      <div id="input-toolbar">
+        <button id="add-btn" title="添加附件">
+          <span class="ms-icon">add</span>
+        </button>
+        <label id="streaming-toggle">
+          <span>流式输出</span>
+          <input type="checkbox" id="stream-check" checked>
+        </label>
+        <span class="toolbar-spacer"></span>
+        <span id="model-selector">
+          <span class="model-name" id="model-name">选择模型</span>
+          <span class="model-caps" id="model-caps"></span>
+          <span class="ms-icon">unfold_more</span>
+        </span>
+        <button id="send-btn" class="disabled" title="发送消息">
+          <span class="ms-icon">send</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="bridge.js"></script>
+  <script src="chat.js"></script>
+</body>
+</html>

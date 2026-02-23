@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:now_chat/app/router.dart';
 import 'package:now_chat/core/models/agent_profile.dart';
@@ -6,9 +6,10 @@ import 'package:now_chat/core/models/ai_provider_config.dart';
 import 'package:now_chat/providers/agent_provider.dart';
 import 'package:now_chat/providers/chat_provider.dart';
 import 'package:now_chat/providers/settings_provider.dart';
-import 'package:now_chat/ui/widgets/markdown_message_widget.dart';
 import 'package:now_chat/ui/widgets/model_selector_bottom_sheet.dart.dart';
+import 'package:now_chat/ui/widgets/plugin_readme_webview_panel.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// 单个工具详情页，负责一次性对话。
 class AgentDetailPage extends StatefulWidget {
@@ -23,6 +24,7 @@ class AgentDetailPage extends StatefulWidget {
 /// _AgentDetailPageState 视图状态。
 class _AgentDetailPageState extends State<AgentDetailPage> {
   final TextEditingController _inputController = TextEditingController();
+
   /// 渲染开关：Markdown 与纯文本展示模式。
   bool _renderMarkdown = true;
   bool _isSummaryExpanded = false;
@@ -104,7 +106,8 @@ class _AgentDetailPageState extends State<AgentDetailPage> {
     final maxTokens = agent.maxTokens ?? settings.defaultMaxTokens;
     final toolCallingEnabled = settings.defaultToolCallingEnabled;
     final maxToolCalls = settings.defaultMaxToolCalls;
-    final streaming = (agent.isStreaming ?? settings.defaultStreaming) &&
+    final streaming =
+        (agent.isStreaming ?? settings.defaultStreaming) &&
         provider.requestMode.supportsStreaming;
 
     return _ResolvedAgentRuntime(
@@ -129,7 +132,9 @@ class _AgentDetailPageState extends State<AgentDetailPage> {
             ? agent.providerId
             : settings.defaultProviderId;
     final initialModel =
-        (agent.model ?? '').trim().isNotEmpty ? agent.model : settings.defaultModel;
+        (agent.model ?? '').trim().isNotEmpty
+            ? agent.model
+            : settings.defaultModel;
     final result = await showModalBottomSheet<Map<String, String>>(
       context: context,
       isScrollControlled: true,
@@ -143,10 +148,9 @@ class _AgentDetailPageState extends State<AgentDetailPage> {
           providerId: initialProviderId,
           model: initialModel,
           onModelSelected: (providerId, model) {
-            Navigator.of(sheetContext).pop({
-              'providerId': providerId,
-              'model': model,
-            });
+            Navigator.of(
+              sheetContext,
+            ).pop({'providerId': providerId, 'model': model});
           },
         );
       },
@@ -223,9 +227,8 @@ class _AgentDetailPageState extends State<AgentDetailPage> {
         body: const Center(child: Text('工具不存在或已删除')),
       );
     }
-    final summary = agent.summary.trim().isEmpty
-        ? '该工具无说明'
-        : agent.summary.trim();
+    final summary =
+        agent.summary.trim().isEmpty ? '该工具无说明' : agent.summary.trim();
     final runtime = _resolveRuntime(
       agent: agent,
       chatProvider: chatProvider,
@@ -241,11 +244,7 @@ class _AgentDetailPageState extends State<AgentDetailPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          agent.name,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
+        title: Text(agent.name, maxLines: 1, overflow: TextOverflow.ellipsis),
         actions: [
           IconButton(
             tooltip: '编辑',
@@ -322,9 +321,10 @@ class _AgentDetailPageState extends State<AgentDetailPage> {
               child: Text(
                 summary,
                 maxLines: _isSummaryExpanded ? null : 2,
-                overflow: _isSummaryExpanded
-                    ? TextOverflow.visible
-                    : TextOverflow.ellipsis,
+                overflow:
+                    _isSummaryExpanded
+                        ? TextOverflow.visible
+                        : TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 14,
                   height: 1.45,
@@ -360,9 +360,9 @@ class _AgentDetailPageState extends State<AgentDetailPage> {
                       agentProvider.isGenerating
                           ? null
                           : () => _showModelSelector(
-                                agent: agent,
-                                settings: settings,
-                              ),
+                            agent: agent,
+                            settings: settings,
+                          ),
                   icon: const Icon(Icons.tune_rounded, size: 18),
                   label: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 140),
@@ -380,10 +380,8 @@ class _AgentDetailPageState extends State<AgentDetailPage> {
                           ? null
                           : agentProvider.isGenerating
                           ? agentProvider.interruptOneShot
-                          : () => _submitOneShot(
-                                agent: agent,
-                                runtime: runtime,
-                              ),
+                          : () =>
+                              _submitOneShot(agent: agent, runtime: runtime),
                   icon: Icon(
                     agentProvider.isGenerating
                         ? Icons.stop_circle_outlined
@@ -413,9 +411,10 @@ class _AgentDetailPageState extends State<AgentDetailPage> {
                         ),
                         const Spacer(),
                         IconButton(
-                          tooltip: _renderMarkdown
-                              ? '已开启 Markdown 渲染，点击切换为纯文本'
-                              : '已关闭 Markdown 渲染，点击切换为 Markdown',
+                          tooltip:
+                              _renderMarkdown
+                                  ? '已开启 Markdown 渲染，点击切换为纯文本'
+                                  : '已关闭 Markdown 渲染，点击切换为 Markdown',
                           onPressed: () {
                             setState(() {
                               _renderMarkdown = !_renderMarkdown;
@@ -426,23 +425,25 @@ class _AgentDetailPageState extends State<AgentDetailPage> {
                                 ? Icons.text_snippet_outlined
                                 : Icons.notes_outlined,
                             size: 18,
-                            color: _renderMarkdown
-                                ? color.primary
-                                : color.onSurfaceVariant,
+                            color:
+                                _renderMarkdown
+                                    ? color.primary
+                                    : color.onSurfaceVariant,
                           ),
                         ),
                         IconButton(
                           tooltip: '复制',
-                          onPressed: canCopy
-                              ? () {
-                                  Clipboard.setData(
-                                    ClipboardData(text: responseText),
-                                  );
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('已复制')),
-                                  );
-                                }
-                              : null,
+                          onPressed:
+                              canCopy
+                                  ? () {
+                                    Clipboard.setData(
+                                      ClipboardData(text: responseText),
+                                    );
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('已复制')),
+                                    );
+                                  }
+                                  : null,
                           icon: const Icon(Icons.copy_rounded, size: 18),
                         ),
                       ],
@@ -463,9 +464,31 @@ class _AgentDetailPageState extends State<AgentDetailPage> {
                           );
                         }
                         if (_renderMarkdown) {
-                          return MarkdownMessageWidget(
-                            data: responseText,
-                            selectable: true,
+                          // Agent 返回内容改为 WebView Markdown 渲染，统一渲染链路。
+                          // WebView 需要明确高度约束，避免在 ListView 中出现布局溢出。
+                          return SizedBox(
+                            height: 320,
+                            child: PluginReadmeWebViewPanel(
+                              content: responseText,
+                              repoUrl: null,
+                              localReadmePath: null,
+                              onLinkTap: (url) {
+                                final uri = Uri.tryParse(url);
+                                if (uri == null) return;
+                                launchUrl(
+                                  uri,
+                                  mode: LaunchMode.externalApplication,
+                                );
+                              },
+                              onImageTap: (url) {
+                                final uri = Uri.tryParse(url);
+                                if (uri == null) return;
+                                launchUrl(
+                                  uri,
+                                  mode: LaunchMode.externalApplication,
+                                );
+                              },
+                            ),
                           );
                         }
                         return SelectionArea(

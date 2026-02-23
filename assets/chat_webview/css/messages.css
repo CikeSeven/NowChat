@@ -1,0 +1,243 @@
+/* ===== Messages ===== */
+.msg {
+  padding: 6px 12px;
+  max-width: 100%;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  position: relative;
+  isolation: isolate;
+}
+
+.msg-user {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 8px;
+}
+
+.msg-user .msg-bubble {
+  background: var(--secondary-container);
+  color: var(--on-secondary-container);
+  /* 用户气泡：整体圆角缩小，并让右上角更小形成方向感。 */
+  border-radius: 12px 6px 12px 12px;
+  padding: 10px 14px;
+  max-width: 85%;
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.msg-user .msg-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.msg-user .msg-attachments img {
+  width: 100px;
+  height: 100px;
+  object-fit: cover;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.msg-user .msg-attachments .file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: var(--surface-container-highest);
+  border-radius: 12px;
+  font-size: 12px;
+  color: var(--on-surface-variant);
+}
+
+/* ===== Assistant message ===== */
+.msg-assistant {
+  padding: 6px 10px;
+  margin-bottom: 10px;
+}
+
+/* Assistant 正文 Host：消息正文在 Shadow DOM 中渲染，防止样式外溢。 */
+.msg-assistant .msg-content-host {
+  position: relative;
+  z-index: 1;
+  max-width: 100%;
+  overflow: hidden;
+  contain: layout paint style;
+}
+
+/* ===== Reasoning / Thinking block ===== */
+.reasoning-block {
+  margin-bottom: 8px;
+}
+
+.reasoning-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--on-surface-variant);
+  user-select: none;
+  padding: 4px 0;
+}
+
+.reasoning-toggle .arrow {
+  display: inline-block;
+  transition: transform 0.2s;
+  font-size: 12px;
+}
+
+.reasoning-toggle .arrow.open {
+  transform: rotate(90deg);
+}
+
+.reasoning-content {
+  display: none;
+  margin-top: 4px;
+  padding: 8px 12px;
+  background: var(--surface-container);
+  border-radius: 10px;
+  font-size: 13px;
+  color: var(--on-surface-variant);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.reasoning-content.open {
+  display: block;
+}
+
+/* ===== Tool logs ===== */
+.tool-logs {
+  margin-top: 6px;
+}
+
+.tool-log-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  font-size: 12px;
+  color: var(--on-surface-variant);
+}
+
+.tool-log-icon {
+  width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tool-log-icon.success { color: #2e7d32; }
+.tool-log-icon.error { color: var(--error); }
+
+/* ===== Message actions ===== */
+.msg-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  padding-top: 0;
+  position: relative;
+  z-index: 2;
+}
+
+.msg-actions button {
+  background: none;
+  border: none;
+  color: var(--on-surface-variant);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  position: relative;
+  overflow: hidden;
+}
+
+.msg-actions button .ms-icon {
+  font-size: 28px;
+}
+
+/* “继续”按钮使用浅色卡片风格，不使用阴影。 */
+.msg-actions .continue-btn {
+  background: var(--md-inline-code-bg, var(--primary-container));
+  color: var(--md-inline-code-color, var(--on-primary-container));
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 2px 8px;
+  gap: 3px;
+}
+
+.msg-actions .continue-btn .continue-text {
+  font-size: 12px;
+  line-height: 1;
+  color: inherit;
+}
+
+.msg-actions button:active {
+  background: var(--surface-container-high);
+}
+
+.msg-actions button:disabled,
+.msg-actions button.is-disabled {
+  opacity: 0.45;
+  cursor: default;
+  pointer-events: none;
+}
+
+.msg-actions .spacer {
+  flex: 1;
+}
+
+/* ===== System prompt card ===== */
+.system-prompt-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 540px;
+  margin: 8px auto;
+  padding: 10px 14px;
+  background: var(--surface-container-highest);
+  opacity: 0.75;
+  border-radius: 12px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.system-prompt-card .sp-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--on-surface-variant);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.system-prompt-card .sp-header .ms-icon {
+  flex-shrink: 0;
+  font-size: 18px;
+}
+
+.system-prompt-card .sp-text {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--on-surface);
+  text-align: center;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.system-prompt-card .sp-text.sp-placeholder {
+  color: var(--on-surface-variant);
+  font-style: italic;
+}

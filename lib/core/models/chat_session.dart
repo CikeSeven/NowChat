@@ -49,8 +49,8 @@ class ChatSession {
   /// 会话创建时间。
   late final DateTime createdAt;
 
-  /// 会话最后更新时间。
-  late final DateTime lastUpdated;
+  /// 会话最后更新时间（会在发送/重发时更新，因此不能是 final）。
+  late DateTime lastUpdated;
 
   ChatSession({
     required this.title,

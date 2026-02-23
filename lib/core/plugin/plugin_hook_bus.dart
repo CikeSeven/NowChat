@@ -67,6 +67,8 @@ class PluginHookBus {
   static const Set<String> _whitelistEvents = <String>{
     'app_start',
     'app_resume',
+    'app_data_before_load',
+    'app_data_after_load',
     'page_enter',
     'page_leave',
     'chat_before_send',

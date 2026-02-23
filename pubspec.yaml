@@ -4,7 +4,7 @@ description: "A new Flutter project."
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 
 
-version: 0.5.5+11
+version: 0.7.0+13
 
 environment:
   sdk: ^3.7.0
@@ -26,12 +26,7 @@ dependencies:
   uuid: ^4.5.2
   flutter_slidable: ^4.0.3
   logger: ^2.6.2
-  flutter_markdown: ^0.7.7+1
-  flutter_math_fork: 0.7.3
   url_launcher: ^6.3.2
-  markdown: ^7.3.0
-  highlight: ^0.7.0
-  flutter_highlight: ^0.7.0
   isar: ^3.1.0+1
   isar_flutter_libs: ^3.1.0+1
   path_provider: ^2.1.5
@@ -42,6 +37,7 @@ dependencies:
   archive: ^3.6.1
   crypto: ^3.0.6
   path: ^1.9.1
+  webview_flutter: ^4.10.0
 
 dev_dependencies:
   flutter_test:
@@ -57,6 +53,8 @@ flutter:
   uses-material-design: true
   assets:
     - assets/icon/app_icon.png
+    - assets/chat_webview/
+    - assets/readme_webview/
 
 flutter_launcher_icons:
   android: true

@@ -1,0 +1,221 @@
+/* ===== Markdown content styles ===== */
+.msg-content h1 { font-size: 1.4em; font-weight: 700; margin: 12px 0 6px; }
+.msg-content h2 { font-size: 1.25em; font-weight: 700; margin: 10px 0 5px; }
+.msg-content h3 { font-size: 1.1em; font-weight: 600; margin: 8px 0 4px; }
+.msg-content h4, .msg-content h5, .msg-content h6 { font-size: 1em; font-weight: 600; margin: 6px 0 3px; }
+
+.msg-content p { margin: 4px 0; }
+.msg-content ul, .msg-content ol { padding-left: 20px; margin: 4px 0; }
+.msg-content li { margin: 2px 0; }
+
+.msg-content blockquote {
+  border-left: 3px solid var(--md-blockquote-border, var(--blockquote-border));
+  padding: 4px 12px;
+  margin: 6px 0;
+  color: var(--on-surface-variant);
+  background: var(--md-blockquote-bg, var(--surface-container));
+  border-radius: 0 8px 8px 0;
+}
+
+.msg-content hr {
+  border: none;
+  height: 1px;
+  background: linear-gradient(to right, transparent, var(--md-hr, var(--outline-variant)), transparent);
+  margin: 10px 0;
+}
+
+.msg-content a {
+  color: var(--md-link, var(--primary));
+  text-decoration: underline;
+  text-decoration-color: var(--md-link-underline, var(--primary));
+  text-decoration-thickness: 1.4px;
+  text-underline-offset: 2px;
+}
+
+.msg-content a:hover {
+  text-decoration: underline;
+}
+
+.msg-content img {
+  max-width: 100%;
+  border-radius: 8px;
+  cursor: pointer;
+  margin: 4px 0;
+}
+
+/* Inline code */
+.msg-content code:not(pre code) {
+  background: var(--md-inline-code-bg, var(--primary-container));
+  color: var(--md-inline-code-color, var(--on-primary-container));
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 0.9em;
+  font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+}
+
+/* Code blocks */
+.code-block-wrapper {
+  position: relative;
+  margin: 8px 0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--md-codeblock-bg, var(--code-bg));
+  border: 1px solid var(--md-codeblock-border, var(--outline-variant));
+}
+
+.code-block-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 12px;
+  background: var(--md-code-header-bg, var(--surface-container-high));
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--on-surface-variant);
+}
+
+.code-block-header .code-block-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.code-block-header .preview-btn,
+.code-block-header .copy-btn {
+  background: none;
+  border: none;
+  color: var(--on-surface-variant);
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.code-block-header .preview-btn .ms-icon,
+.code-block-header .copy-btn .ms-icon {
+  font-size: 20px;
+}
+
+.code-block-header .preview-btn:active,
+.code-block-header .copy-btn:active {
+  background: var(--outline-variant);
+}
+
+/* 代码预览弹层：预览内容放在 iframe 内，隔离代码样式和脚本副作用。 */
+.code-preview-modal {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.28);
+  z-index: 1000;
+}
+
+.code-preview-modal.visible {
+  display: flex;
+}
+
+.code-preview-card {
+  width: min(920px, 100%);
+  height: min(76vh, 720px);
+  border-radius: 12px;
+  border: 1px solid var(--outline-variant);
+  background: var(--surface-container-highest);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.code-preview-header {
+  height: 44px;
+  padding: 0 10px 0 12px;
+  border-bottom: 1px solid var(--outline-variant);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--on-surface-variant);
+  background: var(--surface-container-high);
+}
+
+.code-preview-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.code-preview-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.code-preview-actions button {
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--on-surface-variant);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.code-preview-actions button .ms-icon {
+  font-size: 20px;
+}
+
+.code-preview-actions button:active {
+  background: var(--surface-container);
+}
+
+.code-preview-frame {
+  flex: 1;
+  width: 100%;
+  border: none;
+  background: #fff;
+}
+
+.code-block-wrapper pre {
+  margin: 0;
+  padding: 12px;
+  overflow-x: auto;
+  font-size: 13px;
+  line-height: 1.45;
+  font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+}
+
+.code-block-wrapper pre code {
+  font-family: inherit;
+}
+
+/* Tables */
+.msg-content table {
+  border-collapse: collapse;
+  margin: 8px 0;
+  width: 100%;
+  font-size: 14px;
+}
+
+.msg-content th, .msg-content td {
+  border: 1px solid var(--md-table-border, var(--outline-variant));
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.msg-content th {
+  background: var(--surface-container-high);
+  font-weight: 600;
+}
+
+/* KaTeX overrides */
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px 0;
+}
