@@ -163,18 +163,21 @@ function renderAllMessages() {
   const wasAtBottom = isNearBottom();
   let html = '';
 
-  if (state.systemPrompt) {
-    html += `<div class="system-prompt-item">
-      <span class="prompt-chip ripple" onclick="Bridge.onMessageAction(0,'editSystemPrompt')">${escHtml(truncate(state.systemPrompt, 60))}</span>
-    </div>`;
-  }
-
   if (state.isLoadingMore) {
     html += '<div class="loading-more"><div class="spinner"></div></div>';
   }
 
+  // 新会话空状态：显示 system prompt 卡片 + 提示文字
   if (state.messages.length === 0 && !state.isLoadingMore) {
-    html += '<div class="empty-state"><span>发送消息以开始新的会话</span></div>';
+    html += '<div class="empty-state">';
+    html += renderSystemPromptCard();
+    html += '<span>发送消息以开始新的会话</span>';
+    html += '</div>';
+  } else {
+    // 有消息时，在顶部显示 system prompt 卡片（仅当有内容时）
+    if (state.systemPrompt) {
+      html += renderSystemPromptCard();
+    }
   }
 
   for (const msg of state.messages) {
@@ -183,6 +186,19 @@ function renderAllMessages() {
 
   $list.innerHTML = html;
   if (wasAtBottom) scrollToBottom(false);
+}
+
+/** 渲染 System Prompt 卡片 */
+function renderSystemPromptCard() {
+  const hasContent = state.systemPrompt && state.systemPrompt.trim().length > 0;
+  const displayText = hasContent
+    ? escHtml(truncate(state.systemPrompt.trim(), 120))
+    : '点击设置 System Prompt（可选）';
+  const textClass = hasContent ? 'sp-text' : 'sp-text sp-placeholder';
+  return `<div class="system-prompt-card ripple" onclick="Bridge.onMessageAction(0,'editSystemPrompt')">
+    <div class="sp-header">${SVG_TUNE}<span>System Prompt</span></div>
+    <div class="${textClass}">${displayText}</div>
+  </div>`;
 }
 
 /** 渲染单条消息 HTML */
@@ -640,3 +656,4 @@ const SVG_EDIT = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" st
 const SVG_COPY = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
 const SVG_ADD_CIRCLE = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>`;
 const SVG_MORE = `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>`;
+const SVG_TUNE = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>`;

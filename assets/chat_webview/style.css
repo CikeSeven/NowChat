@@ -355,28 +355,47 @@ html, body {
   flex: 1;
 }
 
-/* ===== System prompt ===== */
-.system-prompt-item {
-  text-align: center;
-  padding: 8px 16px;
-  margin: 4px 0;
+/* ===== System prompt card ===== */
+.system-prompt-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 540px;
+  margin: 8px auto;
+  padding: 10px 14px;
+  background: var(--surface-container-highest);
+  opacity: 0.75;
+  border-radius: 12px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
 }
 
-.system-prompt-item .prompt-chip {
-  display: inline-flex;
+.system-prompt-card .sp-header {
+  display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 14px;
-  background: var(--surface-container);
-  border-radius: 16px;
-  font-size: 13px;
+  gap: 5px;
   color: var(--on-surface-variant);
-  cursor: pointer;
-  max-width: 80%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  position: relative;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.system-prompt-card .sp-header svg {
+  flex-shrink: 0;
+}
+
+.system-prompt-card .sp-text {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--on-surface);
+  text-align: center;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.system-prompt-card .sp-text.sp-placeholder {
+  color: var(--on-surface-variant);
+  font-style: italic;
 }
 
 /* ===== Input area ===== */
@@ -577,7 +596,8 @@ html, body {
   height: 100%;
   color: var(--on-surface-variant);
   font-size: 14px;
-  gap: 8px;
+  gap: 12px;
+  padding: 16px;
 }
 
 /* ===== Loading more history ===== */
