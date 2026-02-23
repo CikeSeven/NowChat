@@ -59,6 +59,7 @@ flutter:
   assets:
     - assets/icon/app_icon.png
     - assets/chat_webview/
+    - assets/readme_webview/
 
 flutter_launcher_icons:
   android: true
