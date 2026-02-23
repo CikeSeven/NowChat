@@ -586,6 +586,11 @@ html, body {
   max-width: 180px;
 }
 
+#model-selector .ms-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
 #model-selector:active {
   background: var(--surface-container-high);
 }
@@ -597,14 +602,14 @@ html, body {
 }
 
 #send-btn {
-  width: 36px;
-  height: 30px;
+  width: 44px;
+  height: 38px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-#send-btn .ms-icon { font-size: 24px; }
+#send-btn .ms-icon { font-size: 28px; }
 #send-btn.generating .ms-icon { color: var(--error); }
 #send-btn.can-send .ms-icon { color: var(--primary); }
 #send-btn.disabled .ms-icon { color: var(--on-surface-variant); opacity: 0.4; }
