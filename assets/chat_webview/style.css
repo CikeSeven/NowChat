@@ -89,7 +89,8 @@ html, body {
 .msg-user .msg-bubble {
   background: var(--secondary-container);
   color: var(--on-secondary-container);
-  border-radius: var(--msg-radius);
+  /* 用户气泡：整体圆角缩小，并让右上角更小形成方向感。 */
+  border-radius: 12px 6px 12px 12px;
   padding: 10px 14px;
   max-width: 85%;
   white-space: pre-wrap;
@@ -442,24 +443,24 @@ html, body {
 #input-area {
   border-top: 1px solid var(--outline-variant);
   background: var(--bg);
-  padding: 12px 12px 8px;
+  padding: 13px 12px 5px;
   border-radius: 28px 28px 0 0;
 }
 
 #input-area textarea {
   width: 100%;
-  min-height: 36px;
+  min-height: 44px;
   max-height: 120px;
   resize: none;
   border: none;
   outline: none;
   background: var(--surface-container-highest);
   border-radius: var(--input-radius);
-  padding: 8px 14px;
+  padding: 12px 16px;
   font-size: 15px;
   font-family: inherit;
   color: var(--on-surface);
-  line-height: 1.4;
+  line-height: 1.45;
 }
 
 #input-area textarea::placeholder {
@@ -471,7 +472,7 @@ html, body {
   display: flex;
   gap: 6px;
   overflow-x: auto;
-  padding: 6px 0;
+  padding: 3px 0;
 }
 
 #attachment-preview:empty {
@@ -523,7 +524,7 @@ html, body {
 #input-toolbar {
   display: flex;
   align-items: center;
-  padding-top: 4px;
+  padding-top: 0;
   gap: 4px;
 }
 
@@ -544,8 +545,8 @@ html, body {
 }
 
 #add-btn {
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -553,7 +554,7 @@ html, body {
 }
 
 #add-btn .ms-icon {
-  font-size: 28px;
+  font-size: 30px;
 }
 
 .toolbar-spacer { flex: 1; }
@@ -586,6 +587,34 @@ html, body {
   max-width: 180px;
 }
 
+#model-selector .model-caps {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  margin-left: 4px;
+  margin-right: 2px;
+}
+
+#model-selector .model-cap {
+  width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--on-secondary-container);
+  background: var(--secondary-container);
+  opacity: 0.95;
+}
+
+#model-selector > .ms-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
 #model-selector:active {
   background: var(--surface-container-high);
 }
@@ -597,14 +626,14 @@ html, body {
 }
 
 #send-btn {
-  width: 36px;
-  height: 30px;
+  width: 52px;
+  height: 42px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-#send-btn .ms-icon { font-size: 24px; }
+#send-btn .ms-icon { font-size: 30px; }
 #send-btn.generating .ms-icon { color: var(--error); }
 #send-btn.can-send .ms-icon { color: var(--primary); }
 #send-btn.disabled .ms-icon { color: var(--on-surface-variant); opacity: 0.4; }

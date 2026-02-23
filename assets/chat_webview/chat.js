@@ -22,7 +22,7 @@ const state = {
 };
 
 // ===== DOM refs =====
-let $list, $input, $sendBtn, $attachPreview, $scrollFab, $streamCheck, $modelName;
+let $list, $input, $sendBtn, $attachPreview, $scrollFab, $streamCheck, $modelName, $modelCaps;
 
 // ===== Init =====
 document.addEventListener('DOMContentLoaded', () => {
@@ -33,6 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $scrollFab = document.getElementById('scroll-to-bottom');
   $streamCheck = document.getElementById('stream-check');
   $modelName = document.getElementById('model-name');
+  $modelCaps = document.getElementById('model-caps');
 
   // 自动增高 textarea
   $input.addEventListener('input', autoResize);
@@ -66,6 +67,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 配置 marked
   setupMarked();
+  if ($modelCaps) {
+    $modelCaps.innerHTML = '';
+  }
 
   Bridge.onReady();
 });
@@ -633,10 +637,19 @@ window.ChatBridge = {
 
   /** 设置模型信息 */
   setModelInfo(name, supportsVision, supportsTools) {
-    state.model = name || '';
-    state.modelSupportsVision = supportsVision;
-    state.modelSupportsTools = supportsTools;
-    $modelName.textContent = name || '选择模型';
+    const normalizedName = (name || '').trim();
+    const hasModel = normalizedName.length > 0;
+    state.model = normalizedName;
+    state.modelSupportsVision = !!supportsVision;
+    state.modelSupportsTools = !!supportsTools;
+    $modelName.textContent = hasModel ? normalizedName : '选择模型';
+    if ($modelCaps) {
+      $modelCaps.innerHTML = renderModelCapabilityBadges(
+        state.modelSupportsVision,
+        state.modelSupportsTools,
+        hasModel,
+      );
+    }
     updateSendButton();
   },
 
@@ -813,6 +826,23 @@ function handleContextMenu(event, id, role) {
 
 function copyMessageContent(id) {
   Bridge.onMessageAction(id, 'copy');
+}
+
+/** 渲染模型能力图标（视觉/工具）。 */
+function renderModelCapabilityBadges(supportsVision, supportsTools, hasModel) {
+  if (!hasModel) return '';
+  const caps = [];
+  if (supportsVision) {
+    caps.push(
+      `<span class="ms-icon model-cap" title="支持视觉">visibility</span>`,
+    );
+  }
+  if (supportsTools) {
+    caps.push(
+      `<span class="ms-icon model-cap" title="支持工具">build</span>`,
+    );
+  }
+  return caps.join('');
 }
 
 function escHtml(str) {
