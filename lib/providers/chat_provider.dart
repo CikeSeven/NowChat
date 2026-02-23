@@ -111,6 +111,20 @@ class ChatProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  /// 标记会话为“最近活跃”，并将其置顶到会话列表首位。
+  ///
+  /// 用于发送消息、重发消息、继续生成等用户可感知操作，
+  /// 确保会话列表按最近交互时间排序。
+  Future<void> _touchChatLastUpdatedAndPinTop(ChatSession chat) async {
+    chat.lastUpdated = DateTime.now();
+    await isar.writeTxn(() async {
+      await isar.chatSessions.put(chat);
+    });
+    _chatList.removeWhere((item) => item.id == chat.id);
+    _chatList.insert(0, chat);
+    _notifyStateChanged();
+  }
+
   /// 判断一条消息当前是否处于流式生成状态。
   bool _isMessageStreaming(int messageId) {
     return _streamingMessageIds.contains(messageId);
