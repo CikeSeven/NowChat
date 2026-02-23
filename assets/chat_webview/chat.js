@@ -156,6 +156,183 @@ function renderMarkdown(text) {
   return html;
 }
 
+/**
+ * Assistant 消息正文的 Shadow DOM 样式。
+ *
+ * 说明：
+ * - 将正文渲染在独立 ShadowRoot 中，阻断消息内 style 对全局按钮的污染。
+ * - 只保留正文相关样式，消息操作按钮仍由主文档样式控制。
+ */
+const ASSISTANT_SHADOW_STYLE = `
+:host {
+  display: block;
+  max-width: 100%;
+  contain: layout paint style;
+}
+*, *::before, *::after { box-sizing: border-box; }
+
+.md-root {
+  line-height: 1.65;
+  color: var(--on-surface);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.md-root h1 { font-size: 1.4em; font-weight: 700; margin: 12px 0 6px; }
+.md-root h2 { font-size: 1.25em; font-weight: 700; margin: 10px 0 5px; }
+.md-root h3 { font-size: 1.1em; font-weight: 600; margin: 8px 0 4px; }
+.md-root h4, .md-root h5, .md-root h6 { font-size: 1em; font-weight: 600; margin: 6px 0 3px; }
+
+.md-root p { margin: 4px 0; }
+.md-root ul, .md-root ol { padding-left: 20px; margin: 4px 0; }
+.md-root li { margin: 2px 0; }
+
+.md-root blockquote {
+  border-left: 3px solid var(--blockquote-border);
+  padding: 4px 12px;
+  margin: 6px 0;
+  color: var(--on-surface-variant);
+  background: var(--surface-container);
+  border-radius: 0 8px 8px 0;
+}
+
+.md-root hr {
+  border: none;
+  height: 1px;
+  background: linear-gradient(to right, transparent, var(--outline-variant), transparent);
+  margin: 10px 0;
+}
+
+.md-root a {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.md-root a:hover {
+  text-decoration: underline;
+}
+
+.md-root img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  cursor: pointer;
+  margin: 4px 0;
+}
+
+.md-root code:not(pre code) {
+  background: var(--code-bg);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 0.9em;
+  font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+}
+
+.code-block-wrapper {
+  position: relative;
+  margin: 8px 0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--code-bg);
+  border: 1px solid var(--outline-variant);
+  max-width: 100%;
+}
+
+.code-block-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 12px;
+  background: var(--surface-container-high);
+  font-size: 12px;
+  color: var(--on-surface-variant);
+}
+
+.code-block-header .copy-btn {
+  background: none;
+  border: none;
+  color: var(--on-surface-variant);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.code-block-header .copy-btn:active {
+  background: var(--outline-variant);
+}
+
+.code-block-wrapper pre {
+  margin: 0;
+  padding: 12px;
+  overflow-x: auto;
+  font-size: 13px;
+  line-height: 1.45;
+  font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+}
+
+.code-block-wrapper pre code {
+  font-family: inherit;
+}
+
+.md-root table {
+  border-collapse: collapse;
+  margin: 8px 0;
+  width: 100%;
+  display: block;
+  overflow-x: auto;
+  font-size: 14px;
+}
+
+.md-root th, .md-root td {
+  border: 1px solid var(--outline-variant);
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.md-root th {
+  background: var(--surface-container-high);
+  font-weight: 600;
+}
+
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px 0;
+}
+`;
+
+/** 返回指定消息的 assistant 正文 host 选择器。 */
+function shadowHostSelector(messageId) {
+  return `.msg-content-host[data-shadow-msg-id="${messageId}"]`;
+}
+
+/** 在消息正文 host 上挂载 Shadow DOM 内容。 */
+function mountAssistantShadowContent(messageId, root = document) {
+  const msg = state.messages.find(m => m.id === messageId);
+  if (!msg || msg.role !== 'assistant') return;
+  const host = root.querySelector ? root.querySelector(shadowHostSelector(messageId)) : null;
+  if (!host) return;
+
+  const html = renderMarkdown(msg.content || '');
+  if (!host.shadowRoot) {
+    host.attachShadow({ mode: 'open' });
+  }
+  host.shadowRoot.innerHTML = `<style>${ASSISTANT_SHADOW_STYLE}</style><div class="md-root">${html}</div>`;
+}
+
+/** 批量挂载当前容器中的 assistant 正文 Shadow DOM。 */
+function mountAllAssistantShadowContents(root = document) {
+  if (!root || !root.querySelectorAll) return;
+  const hosts = root.querySelectorAll('.msg-content-host[data-shadow-msg-id]');
+  for (const host of hosts) {
+    const rawId = host.getAttribute('data-shadow-msg-id') || '';
+    const id = parseInt(rawId, 10);
+    if (!Number.isFinite(id)) continue;
+    mountAssistantShadowContent(id, root);
+  }
+}
+
 // ===== DOM 渲染 =====
 
 /** 完整重绘消息列表 */
@@ -185,6 +362,7 @@ function renderAllMessages() {
   }
 
   $list.innerHTML = html;
+  mountAllAssistantShadowContents($list);
   if (wasAtBottom) scrollToBottom(false);
 }
 
@@ -254,7 +432,8 @@ function renderAssistantMessage(msg) {
 
   // Message content
   if (hasContent) {
-    html += `<div class="msg-content">${renderMarkdown(msg.content)}</div>`;
+    // 正文放入独立 Shadow DOM 容器，避免消息内 style 污染操作按钮与全局 UI。
+    html += `<div class="msg-content-host" data-shadow-msg-id="${msg.id}"></div>`;
   }
 
   // Tool logs
@@ -298,6 +477,7 @@ function updateMessageDOM(msg) {
     // 消息不在 DOM 中，追加
     const wasAtBottom = isNearBottom();
     $list.insertAdjacentHTML('beforeend', renderMessage(msg));
+    mountAssistantShadowContent(msg.id, $list);
     if (wasAtBottom) scrollToBottom(false);
     return;
   }
@@ -308,6 +488,7 @@ function updateMessageDOM(msg) {
   temp.innerHTML = renderMessage(msg);
   const newEl = temp.firstElementChild;
   el.replaceWith(newEl);
+  mountAssistantShadowContent(msg.id, newEl);
   // 恢复 reasoning 展开状态
   if (reasoningOpen) {
     const arrow = newEl.querySelector('.reasoning-toggle .arrow');
@@ -334,6 +515,7 @@ window.ChatBridge = {
     }
     const wasAtBottom = isNearBottom();
     $list.insertAdjacentHTML('beforeend', renderMessage(msg));
+    mountAssistantShadowContent(msg.id, $list);
     if (wasAtBottom) scrollToBottom(false);
   },
 

@@ -76,6 +76,8 @@ html, body {
   max-width: 100%;
   word-wrap: break-word;
   overflow-wrap: break-word;
+  position: relative;
+  isolation: isolate;
 }
 
 .msg-user {
@@ -127,8 +129,13 @@ html, body {
   padding: 6px 10px;
 }
 
-.msg-assistant .msg-content {
-  line-height: 1.65;
+/* Assistant 正文 Host：消息正文在 Shadow DOM 中渲染，防止样式外溢。 */
+.msg-assistant .msg-content-host {
+  position: relative;
+  z-index: 1;
+  max-width: 100%;
+  overflow: hidden;
+  contain: layout paint style;
 }
 
 /* Loading spinner */
@@ -351,6 +358,8 @@ html, body {
   gap: 4px;
   margin-top: 6px;
   padding-top: 4px;
+  position: relative;
+  z-index: 2;
 }
 
 .msg-actions button {
