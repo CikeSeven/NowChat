@@ -212,8 +212,8 @@ function renderUserMessage(msg) {
   let attachHtml = '';
   if (msg.imagePaths && msg.imagePaths.length > 0) {
     const items = msg.imagePaths.map(p => {
-      if (isRenderableImageAttachment(p)) {
-        const src = proxyImageUrl(p);
+      const src = proxyImageUrl(p);
+      if (isImagePath(p) || /^(data:image\/|http)/i.test(src)) {
         return `<img src="${escHtml(src)}" onclick="Bridge.onImageTap('${escJs(p)}')" />`;
       }
       return `<span class="file-chip">${escHtml(fileName(p))}</span>`;
@@ -655,28 +655,8 @@ function fileName(path) {
 }
 
 function isImagePath(path) {
-  if (!path) return false;
   const lower = path.toLowerCase();
-  const pure = lower.split('?')[0].split('#')[0];
-  return /\.(png|jpg|jpeg|webp|gif|bmp|heic|heif)$/.test(pure);
-}
-
-/** 判断附件是否应按图片渲染，避免把普通文件误当成图片。 */
-function isRenderableImageAttachment(path) {
-  if (!path) return false;
-  const lower = path.toLowerCase();
-  if (/^data:image\//i.test(lower)) return true;
-  if (isImagePath(path)) return true;
-  if (!/^https?:\/\//i.test(path)) return false;
-  try {
-    const url = new URL(path);
-    if (url.pathname === '/local-image') {
-      return true;
-    }
-    return isImagePath(url.pathname);
-  } catch (_) {
-    return false;
-  }
+  return /\.(png|jpg|jpeg|webp|gif|bmp|heic|heif)$/.test(lower);
 }
 
 /** 将本地文件路径转为代理 URL（如果代理服务器可用） */
@@ -684,11 +664,8 @@ function proxyImageUrl(path) {
   if (!path) return path;
   // 已经是 http/https/data URI，不处理
   if (/^(https?:|data:)/i.test(path)) return path;
-  // 仅图片文件走图片代理，避免非图片文件被错误渲染为 <img>。
-  if (!isImagePath(path)) return path;
   // 本地路径（以 / 开头或包含盘符如 C:\）走代理
-  if (state.imageProxyBase &&
-      (path.startsWith('/') || path.startsWith('file://') || /^[a-zA-Z]:/.test(path))) {
+  if (state.imageProxyBase && (path.startsWith('/') || /^[a-zA-Z]:/.test(path))) {
     return state.imageProxyBase + '/local-image?path=' + encodeURIComponent(path);
   }
   return path;
