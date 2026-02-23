@@ -1,4 +1,5 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:now_chat/app/router.dart';
@@ -6,9 +7,11 @@ import 'package:now_chat/core/models/chat_session.dart';
 import 'package:now_chat/core/models/ai_provider_config.dart';
 import 'package:now_chat/providers/chat_provider.dart';
 import 'package:now_chat/providers/settings_provider.dart';
-import 'package:now_chat/ui/widgets/chat_message_list_panel.dart';
-import 'package:now_chat/ui/widgets/message_input.dart';
+import 'package:now_chat/ui/widgets/chat_webview_panel.dart';
+import 'package:now_chat/ui/pages/image_preview_page.dart';
+import 'package:now_chat/ui/widgets/message_bottom_sheet_menu.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../widgets/model_selector_bottom_sheet.dart.dart';
 
 /// ChatDetailPage 页面。
@@ -23,10 +26,6 @@ class ChatDetailPage extends StatefulWidget {
 
 /// _ChatDetailPageState 视图状态。
 class _ChatDetailPageState extends State<ChatDetailPage> {
-  final ScrollController _scrollController = ScrollController();
-  /// 与底部距离超过阈值时显示“滚动到底部”按钮。
-  static const double _scrollBottomButtonThreshold = 420;
-
   ChatSession? _chat;
 
   String? _model;
@@ -34,24 +33,19 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   bool _isStreaming = true;
   String _pendingSystemPrompt = '';
   List<String> _pendingAttachmentPaths = <String>[];
-  bool _isRequestingMoreHistory = false;
   bool _defaultsInitialized = false;
 
   @override
   void initState() {
     super.initState();
-    _scrollController.addListener(_handleScroll);
     final chatProvider = context.read<ChatProvider>();
-    // 如果有传入 chatId，则按“打开已有会话”流程初始化。
+    // 如果有传入 chatId，则按”打开已有会话”流程初始化。
     if (widget.chatId != null) {
-      _chat = chatProvider.getChatById(widget.chatId!); // 加载当前会话的消息
+      _chat = chatProvider.getChatById(widget.chatId!);
       _pendingSystemPrompt = _chat?.systemPrompt ?? '';
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        context.read<ChatProvider>().loadInitialMessages(widget.chatId!).then((_) {
-          if (!mounted) return;
-          _scrollToLatestOnEnter();
-        });
+        context.read<ChatProvider>().loadInitialMessages(widget.chatId!);
       });
     } else {
       // 新建会话入口：先清空当前消息缓存，避免沿用上一会话内容。
@@ -76,104 +70,6 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     } catch (_) {
       // 忽略默认设置读取失败，保持新会话可用。
     }
-  }
-
-  @override
-  void dispose() {
-    _scrollController.removeListener(_handleScroll);
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  void _handleScroll() {
-    if (!_scrollController.hasClients) return;
-    // 靠近顶部时触发历史分页加载（上拉查看更多）。
-    if (_scrollController.position.pixels > 120) return;
-    _tryLoadMoreHistory();
-  }
-
-  Future<void> _tryLoadMoreHistory() async {
-    if (_isRequestingMoreHistory) return;
-    if (!_scrollController.hasClients) return;
-    final chatProvider = context.read<ChatProvider>();
-    if (!chatProvider.hasMoreHistory || chatProvider.isLoadingMoreHistory) {
-      return;
-    }
-
-    _isRequestingMoreHistory = true;
-    // 记录加载前滚动参数，加载后修正 offset，保持阅读位置不跳动。
-    final oldMaxExtent = _scrollController.position.maxScrollExtent;
-    final oldOffset = _scrollController.position.pixels;
-    try {
-      await chatProvider.loadMoreHistory();
-      if (!mounted) return;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !_scrollController.hasClients) {
-          _isRequestingMoreHistory = false;
-          return;
-        }
-        final newMaxExtent = _scrollController.position.maxScrollExtent;
-        final delta = newMaxExtent - oldMaxExtent;
-        final targetOffset = (oldOffset + delta).clamp(0.0, newMaxExtent);
-        _scrollController.jumpTo(targetOffset);
-        _isRequestingMoreHistory = false;
-      });
-    } finally {
-      if (!_scrollController.hasClients) {
-        _isRequestingMoreHistory = false;
-      }
-    }
-  }
-
-  /// 滚动到消息列表底部（最新消息）。
-  void _scrollToLatest({bool animated = false}) {
-    if (!mounted) return;
-    if (!_scrollController.hasClients) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _scrollToLatest(animated: animated);
-      });
-      return;
-    }
-    final target = _scrollController.position.maxScrollExtent;
-    if (animated) {
-      _scrollController.animateTo(
-        target,
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOut,
-      );
-    } else {
-      _scrollController.jumpTo(target);
-    }
-  }
-
-  /// 进入页面时多次兜底滚到底部，兼容异步布局高度变化。
-  void _scrollToLatestOnEnter() {
-    _scrollToLatest();
-    Future<void>.delayed(const Duration(milliseconds: 120), () {
-      if (!mounted) return;
-      _scrollToLatest();
-    });
-    Future<void>.delayed(const Duration(milliseconds: 320), () {
-      if (!mounted) return;
-      _scrollToLatest();
-    });
-    Future<void>.delayed(const Duration(milliseconds: 650), () {
-      if (!mounted) return;
-      _scrollToLatest();
-    });
-  }
-
-  /// 点击发送后滚到底部，确保用户能看到新回复起始位置。
-  void _scrollToLatestAfterSend() {
-    _scrollToLatest(animated: true);
-    Future<void>.delayed(const Duration(milliseconds: 120), () {
-      if (!mounted) return;
-      _scrollToLatest(animated: true);
-    });
-    Future<void>.delayed(const Duration(milliseconds: 320), () {
-      if (!mounted) return;
-      _scrollToLatest(animated: true);
-    });
   }
 
   @override
@@ -203,14 +99,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             : const ModelFeatureOptions();
     final streamingSupported =
         selectedProvider?.requestMode.supportsStreaming ?? true;
-    final shouldShowScrollToBottomButton =
-        _scrollController.hasClients &&
-        (_scrollController.position.maxScrollExtent -
-                _scrollController.position.pixels >
-            _scrollBottomButtonThreshold);
     final activeSystemPrompt =
         (chat?.systemPrompt ?? _pendingSystemPrompt).trim();
-    final hasSystemPrompt = activeSystemPrompt.isNotEmpty;
     return Scaffold(
       appBar: AppBar(
         title: Text(chat?.title ?? "新会话"),
@@ -244,177 +134,238 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             ),
         ],
       ),
-      body: Column(
-        children: [
-          // 聊天内容区
-          Expanded(
-            child: ChatMessageListPanel(
-              chat: chat,
-              scrollController: _scrollController,
-              messages: messages,
-              hasSystemPrompt: hasSystemPrompt,
-              activeSystemPrompt: activeSystemPrompt,
-              isLoadingMoreHistory: chatProvider.isLoadingMoreHistory,
-              shouldShowScrollToBottomButton: shouldShowScrollToBottomButton,
-              onTapSystemPrompt: () => _showSystemPromptEditor(chat: chat),
-              onScrollToBottom: () => _scrollToLatest(animated: true),
-              onResendLastAssistant:
-                  () => chatProvider.regenerateMessage(
-                    chat!.id,
-                    chat.isStreaming,
-                  ),
-              onContinueLastAssistant:
-                  () => chatProvider.continueGeneratingAssistantMessage(
-                    chat!.id,
-                    chat.isStreaming,
-                  ),
-              onDeleteMessage: (messageIsarId) async {
-                await chatProvider.deleteMessage(messageIsarId);
-              },
-              isMessageStreaming: chatProvider.isMessageStreaming,
-              canContinueAssistantMessage:
-                  (messageIsarId) =>
-                      chat == null
-                          ? false
-                          : chatProvider.canContinueAssistantMessage(
-                            chat.id,
-                            messageIsarId,
-                          ),
-              toolLogsForMessage: chatProvider.toolLogsForMessage,
+      body: ChatWebViewPanel(
+        chat: chat,
+        messages: messages,
+        model: selectedModelDisplay,
+        isGenerating: chat?.isGenerating ?? false,
+        modelSupportsVision: selectedModelFeatures.supportsVision,
+        modelSupportsTools: selectedModelFeatures.supportsTools,
+        isStreaming: _chat?.isStreaming ?? _isStreaming,
+        streamingSupported: streamingSupported,
+        systemPrompt: activeSystemPrompt,
+        attachments: _pendingAttachmentPaths,
+        isLoadingMoreHistory: chatProvider.isLoadingMoreHistory,
+        onSendMessage: (text) async {
+          final settings = context.read<SettingsProvider>();
+          final attachmentsToSend = List<String>.from(_pendingAttachmentPaths);
+          // 如果还没有会话，则新建并落默认参数。
+          if (chat == null) {
+            final newChat = await chatProvider.createNewChat();
+            await chatProvider.loadInitialMessages(newChat.id);
+            final fallbackTitle =
+                attachmentsToSend.isNotEmpty
+                    ? '附件: ${_attachmentName(attachmentsToSend.first)}'
+                    : '新会话';
+            final rawTitle = text.isEmpty ? fallbackTitle : text;
+            final title =
+                rawTitle.length > 20 ? rawTitle.substring(0, 20) : rawTitle;
+            chatProvider.renameChat(newChat.id, title);
+            String? candidateProviderId = _providerId?.trim();
+            if (candidateProviderId == null || candidateProviderId.isEmpty) {
+              candidateProviderId = settings.defaultProviderId?.trim();
+            }
+            if (candidateProviderId != null &&
+                candidateProviderId.isEmpty) {
+              candidateProviderId = null;
+            }
+
+            String? candidateModel = _model?.trim();
+            if (candidateModel == null || candidateModel.isEmpty) {
+              candidateModel = settings.defaultModel?.trim();
+            }
+            if (candidateModel != null && candidateModel.isEmpty) {
+              candidateModel = null;
+            }
+
+            final providerForNewChat =
+                candidateProviderId == null
+                    ? null
+                    : chatProvider.getProviderById(candidateProviderId);
+            if (providerForNewChat == null) {
+              candidateModel = null;
+            } else if (candidateModel != null &&
+                !providerForNewChat.models.contains(candidateModel)) {
+              candidateModel = null;
+            }
+            final supportsStreaming =
+                providerForNewChat?.requestMode.supportsStreaming ?? true;
+            final isStreamingForNewChat =
+                supportsStreaming
+                    ? (_chat?.isStreaming ?? _isStreaming)
+                    : false;
+
+            chatProvider.updateChat(
+              newChat,
+              model: candidateModel,
+              providerId: providerForNewChat?.id,
+              systemPrompt: _pendingSystemPrompt.trim(),
+              temperature: settings.defaultTemperature,
+              topP: settings.defaultTopP,
+              maxTokens: settings.defaultMaxTokens,
+              maxConversationTurns: settings.defaultMaxConversationTurns,
+              toolCallingEnabled: settings.defaultToolCallingEnabled,
+              maxToolCalls: settings.defaultMaxToolCalls,
+              isStreaming: isStreamingForNewChat,
+            );
+            setState(() {
+              _chat = newChat;
+            });
+          }
+          await chatProvider.sendMessage(
+            _chat!.id,
+            text,
+            _chat!.isStreaming,
+            attachmentsToSend,
+          );
+          if (mounted) {
+            setState(() {
+              _pendingAttachmentPaths = <String>[];
+            });
+          }
+        },
+        onStopGenerating: () {
+          if (chat != null) {
+            chatProvider.interruptGeneration(chat.id);
+          }
+        },
+        onPickImage:
+            () => _pickImages(
+              selectedProvider: selectedProvider,
+              selectedModelRaw: selectedModelRaw,
+              features: selectedModelFeatures,
             ),
-          ),
-
-          // 输入框
-          MessageInput(
-            chat: chat,
-            model: selectedModelDisplay,
-            isGenerating: chat?.isGenerating ?? false,
-            modelSupportsVision: selectedModelFeatures.supportsVision,
-            modelSupportsTools: selectedModelFeatures.supportsTools,
-            attachments: _pendingAttachmentPaths,
-            onSend: (text, attachments) async {
-              final settings = context.read<SettingsProvider>();
-              final attachmentsToSend = List<String>.from(attachments);
-              // 如果还没有会话，则新建并落默认参数。
-              if (chat == null) {
-                final newChat = await chatProvider.createNewChat();
-                // 新建会话后先绑定当前消息上下文，避免后台会话流式内容串入新会话页面。
-                await chatProvider.loadInitialMessages(newChat.id);
-                // 标题默认取用户输入前 20 字；附件场景给出兜底标题。
-                final fallbackTitle =
-                    attachmentsToSend.isNotEmpty
-                        ? '附件: ${_attachmentName(attachmentsToSend.first)}'
-                        : '新会话';
-                final rawTitle = text.isEmpty ? fallbackTitle : text;
-                final title =
-                    rawTitle.length > 20 ? rawTitle.substring(0, 20) : rawTitle;
-                chatProvider.renameChat(newChat.id, title);
-                String? candidateProviderId = _providerId?.trim();
-                if (candidateProviderId == null || candidateProviderId.isEmpty) {
-                  candidateProviderId = settings.defaultProviderId?.trim();
-                }
-                if (candidateProviderId != null &&
-                    candidateProviderId.isEmpty) {
-                  candidateProviderId = null;
-                }
-
-                String? candidateModel = _model?.trim();
-                if (candidateModel == null || candidateModel.isEmpty) {
-                  candidateModel = settings.defaultModel?.trim();
-                }
-                if (candidateModel != null && candidateModel.isEmpty) {
-                  candidateModel = null;
-                }
-
-                final providerForNewChat =
-                    candidateProviderId == null
-                        ? null
-                        : chatProvider.getProviderById(candidateProviderId);
-                if (providerForNewChat == null) {
-                  candidateModel = null;
-                } else if (candidateModel != null &&
-                    !providerForNewChat.models.contains(candidateModel)) {
-                  candidateModel = null;
-                }
-                final supportsStreaming =
-                    providerForNewChat?.requestMode.supportsStreaming ?? true;
-                final isStreamingForNewChat =
-                    supportsStreaming
-                        ? (_chat?.isStreaming ?? _isStreaming)
-                        : false;
-
-                // 新会话继承全局默认参数（温度/top_p/maxTokens 等）。
-                chatProvider.updateChat(
-                  newChat,
-                  model: candidateModel,
-                  providerId: providerForNewChat?.id,
-                  systemPrompt: _pendingSystemPrompt.trim(),
-                  temperature: settings.defaultTemperature,
-                  topP: settings.defaultTopP,
-                  maxTokens: settings.defaultMaxTokens,
-                  maxConversationTurns: settings.defaultMaxConversationTurns,
-                  toolCallingEnabled: settings.defaultToolCallingEnabled,
-                  maxToolCalls: settings.defaultMaxToolCalls,
-                  isStreaming: isStreamingForNewChat,
-                );
-                setState(() {
-                  _chat = newChat;
-                });
-              }
-              _scrollToLatestAfterSend();
-              await chatProvider.sendMessage(
-                _chat!.id,
-                text,
-                _chat!.isStreaming,
-                attachmentsToSend,
-              );
-              if (mounted) {
-                setState(() {
-                  _pendingAttachmentPaths = <String>[];
-                });
-              }
-            },
-            onModelSelected: () async {
-              _showModelSelector(context);
-            },
-            onStopGenerating: () {
-              if (chat != null) {
-                chatProvider.interruptGeneration(chat.id);
-              }
-            },
-            onPickImage:
-                () => _pickImages(
-                  selectedProvider: selectedProvider,
-                  selectedModelRaw: selectedModelRaw,
-                  features: selectedModelFeatures,
-                ),
-            onPickFile:
-                () => _pickFiles(
-                  selectedProvider: selectedProvider,
-                  selectedModelRaw: selectedModelRaw,
-                  features: selectedModelFeatures,
-                ),
-            onRemoveAttachment: (path) {
-              setState(() {
-                _pendingAttachmentPaths.remove(path);
-              });
-            },
-            isStreaming: _chat?.isStreaming ?? _isStreaming,
-            streamingSupported: streamingSupported,
-            streamingChanged: (bool? value) {
-              if (!streamingSupported) return;
-              if (chat != null) {
-                chatProvider.updateChat(chat, isStreaming: value!);
-              } else {
-                setState(() {
-                  _isStreaming = value!;
-                });
-              }
-            },
-          ),
-        ],
+        onPickFile:
+            () => _pickFiles(
+              selectedProvider: selectedProvider,
+              selectedModelRaw: selectedModelRaw,
+              features: selectedModelFeatures,
+            ),
+        onRemoveAttachment: (path) {
+          setState(() {
+            _pendingAttachmentPaths.remove(path);
+          });
+        },
+        onSelectModel: () => _showModelSelector(context),
+        onStreamingChanged: (value) {
+          if (!streamingSupported) return;
+          if (chat != null) {
+            chatProvider.updateChat(chat, isStreaming: value);
+          } else {
+            setState(() {
+              _isStreaming = value;
+            });
+          }
+        },
+        onScrollNearTop: () {
+          _tryLoadMoreHistory();
+        },
+        onMessageAction: (id, action) {
+          _handleMessageAction(chatProvider, chat, id, action);
+        },
+        onShowAttachmentMenu: () {
+          _showAttachmentMenu(
+            selectedProvider: selectedProvider,
+            selectedModelRaw: selectedModelRaw,
+            features: selectedModelFeatures,
+          );
+        },
+        onUserMessageLongPress: (id) {
+          _showUserMessageMenu(chatProvider, id);
+        },
+        onLinkTap: (url) {
+          final uri = Uri.tryParse(url);
+          if (uri != null) launchUrl(uri, mode: LaunchMode.externalApplication);
+        },
+        onImageTap: (url) {
+          final uri = Uri.tryParse(url);
+          if (uri != null) {
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => ImagePreviewPage(imageUri: uri),
+              ),
+            );
+          }
+        },
+        isMessageStreaming: chatProvider.isMessageStreaming,
+        canContinueAssistantMessage:
+            (messageIsarId) =>
+                chat == null
+                    ? false
+                    : chatProvider.canContinueAssistantMessage(
+                      chat.id,
+                      messageIsarId,
+                    ),
+        toolLogsForMessage: chatProvider.toolLogsForMessage,
       ),
     );
+  }
+
+  /// 处理 WebView 侧消息操作回调。
+  void _handleMessageAction(
+    ChatProvider chatProvider,
+    ChatSession? chat,
+    int messageId,
+    String action,
+  ) {
+    switch (action) {
+      case 'resend':
+        if (chat != null) {
+          chatProvider.regenerateMessage(chat.id, chat.isStreaming);
+        }
+        break;
+      case 'continue':
+        if (chat != null) {
+          chatProvider.continueGeneratingAssistantMessage(
+            chat.id,
+            chat.isStreaming,
+          );
+        }
+        break;
+      case 'delete':
+        chatProvider.deleteMessage(messageId);
+        break;
+      case 'edit':
+        final msg = chatProvider.currentMessages
+            .where((m) => m.isarId == messageId)
+            .firstOrNull;
+        if (msg != null) {
+          Navigator.pushNamed(
+            context,
+            AppRoutes.editMessage,
+            arguments: msg,
+          );
+        }
+        break;
+      case 'editSystemPrompt':
+        _showSystemPromptEditor(chat: chat);
+        break;
+      case 'copy':
+        final msg = chatProvider.currentMessages
+            .where((m) => m.isarId == messageId)
+            .firstOrNull;
+        if (msg != null) {
+          Clipboard.setData(ClipboardData(text: msg.content));
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('已复制'), duration: Duration(seconds: 1)),
+            );
+          }
+        }
+        break;
+      case 'longpress':
+        _showAssistantMessageMenu(chatProvider, chat, messageId);
+        break;
+    }
+  }
+
+  /// 加载更多历史消息。
+  Future<void> _tryLoadMoreHistory() async {
+    final chatProvider = context.read<ChatProvider>();
+    if (!chatProvider.hasMoreHistory || chatProvider.isLoadingMoreHistory) {
+      return;
+    }
+    await chatProvider.loadMoreHistory();
   }
 
   Future<void> _showSystemPromptEditor({required ChatSession? chat}) async {
@@ -539,6 +490,130 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             .where((p) => p.isNotEmpty)
             .toList();
     _appendPendingAttachments(paths);
+  }
+
+  /// 弹出附件选择菜单（上传图片/上传文件）。
+  Future<void> _showAttachmentMenu({
+    required AIProviderConfig? selectedProvider,
+    required String? selectedModelRaw,
+    required ModelFeatureOptions features,
+  }) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.image_outlined),
+                title: const Text('上传图片'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickImages(
+                    selectedProvider: selectedProvider,
+                    selectedModelRaw: selectedModelRaw,
+                    features: features,
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.attach_file_outlined),
+                title: const Text('上传文件'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickFiles(
+                    selectedProvider: selectedProvider,
+                    selectedModelRaw: selectedModelRaw,
+                    features: features,
+                  );
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// 用户消息长按菜单。
+  void _showUserMessageMenu(ChatProvider chatProvider, int messageId) {
+    final msg = chatProvider.currentMessages
+        .where((m) => m.isarId == messageId)
+        .firstOrNull;
+    if (msg == null) return;
+    showModalBottomSheetMenu(
+      context: context,
+      message: msg,
+      items: [
+        SheetMenuItem(
+          icon: const Icon(Icons.edit_outlined),
+          label: '编辑',
+          onTap: () {
+            Navigator.pushNamed(context, AppRoutes.editMessage, arguments: msg);
+          },
+        ),
+        SheetMenuItem(
+          icon: const Icon(Icons.copy_outlined),
+          label: '复制',
+          onTap: () {
+            Clipboard.setData(ClipboardData(text: msg.content));
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('已复制'), duration: Duration(seconds: 1)),
+            );
+          },
+        ),
+        SheetMenuItem(
+          icon: const Icon(Icons.delete_outline),
+          label: '删除',
+          onTap: () {
+            chatProvider.deleteMessage(messageId);
+          },
+        ),
+      ],
+    );
+  }
+
+  /// AI 消息长按菜单。
+  void _showAssistantMessageMenu(
+    ChatProvider chatProvider,
+    ChatSession? chat,
+    int messageId,
+  ) {
+    final msg = chatProvider.currentMessages
+        .where((m) => m.isarId == messageId)
+        .firstOrNull;
+    if (msg == null) return;
+    showModalBottomSheetMenu(
+      context: context,
+      message: msg,
+      items: [
+        SheetMenuItem(
+          icon: const Icon(Icons.edit_outlined),
+          label: '编辑',
+          onTap: () {
+            Navigator.pushNamed(context, AppRoutes.editMessage, arguments: msg);
+          },
+        ),
+        SheetMenuItem(
+          icon: const Icon(Icons.copy_outlined),
+          label: '复制',
+          onTap: () {
+            Clipboard.setData(ClipboardData(text: msg.content));
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('已复制'), duration: Duration(seconds: 1)),
+            );
+          },
+        ),
+        SheetMenuItem(
+          icon: const Icon(Icons.delete_outline),
+          label: '删除',
+          onTap: () {
+            chatProvider.deleteMessage(messageId);
+          },
+        ),
+      ],
+    );
   }
 
   /// 选择模型弹窗：支持新会话临时选择和已有会话持久化更新。

@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd D:/Work/FlutterProjects/now_chat && flutter pub get 2>&1)",
+      "Bash(cd:*)"
+    ]
+  }
+}

@@ -45,6 +45,7 @@ app.*.map.json
 /android/app/release
 
 AGENTS.md
+SKILL.md
 
 plugin_examples
 .VSCodeCounter
