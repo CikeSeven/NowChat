@@ -354,6 +354,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         }
         break;
       case 'longpress':
+      case 'more':
         _showAssistantMessageMenu(chatProvider, chat, messageId);
         break;
     }

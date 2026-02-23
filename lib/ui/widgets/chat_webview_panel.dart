@@ -9,6 +9,77 @@ import 'package:now_chat/core/models/tool_execution_log.dart';
 import 'package:path/path.dart' as p;
 import 'package:webview_flutter/webview_flutter.dart';
 
+/// 本地图片代理服务器（单例），为 WebView 提供本地文件访问能力。
+class _LocalImageServer {
+  static _LocalImageServer? _instance;
+  HttpServer? _server;
+  int get port => _server?.port ?? 0;
+  bool get isRunning => _server != null;
+
+  _LocalImageServer._();
+
+  static _LocalImageServer get instance {
+    _instance ??= _LocalImageServer._();
+    return _instance!;
+  }
+
+  Future<void> start() async {
+    if (_server != null) return;
+    _server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    _server!.listen(_handleRequest);
+  }
+
+  void _handleRequest(HttpRequest request) async {
+    try {
+      final filePath = request.uri.queryParameters['path'];
+      if (filePath == null || filePath.isEmpty) {
+        request.response
+          ..statusCode = HttpStatus.badRequest
+          ..write('Missing path parameter')
+          ..close();
+        return;
+      }
+      final file = File(filePath);
+      if (!await file.exists()) {
+        request.response
+          ..statusCode = HttpStatus.notFound
+          ..write('File not found')
+          ..close();
+        return;
+      }
+      final ext = p.extension(filePath).toLowerCase().replaceFirst('.', '');
+      const mimeMap = {
+        'png': 'image/png',
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'gif': 'image/gif',
+        'webp': 'image/webp',
+        'bmp': 'image/bmp',
+        'heic': 'image/heic',
+        'heif': 'image/heif',
+      };
+      final mime = mimeMap[ext] ?? 'application/octet-stream';
+      request.response
+        ..statusCode = HttpStatus.ok
+        ..headers.contentType = ContentType.parse(mime)
+        ..headers.set('Access-Control-Allow-Origin', '*');
+      await request.response.addStream(file.openRead());
+      await request.response.close();
+    } catch (e) {
+      request.response
+        ..statusCode = HttpStatus.internalServerError
+        ..write('Error: $e')
+        ..close();
+    }
+  }
+
+  /// 将本地文件路径转为代理 URL。
+  String proxyUrl(String localPath) {
+    final encoded = Uri.encodeQueryComponent(localPath);
+    return 'http://127.0.0.1:$port/local-image?path=$encoded';
+  }
+}
+
 /// WebView 聊天面板，承载消息列表 + 输入框。
 ///
 /// 通过 JavaScriptChannel 与 JS 侧双向通信，
@@ -102,6 +173,8 @@ class _ChatWebViewPanelState extends State<ChatWebViewPanel> {
         'FlutterBridge',
         onMessageReceived: _handleJsMessage,
       );
+    // 启动本地图片代理服务器
+    _LocalImageServer.instance.start();
   }
 
   @override
@@ -115,6 +188,9 @@ class _ChatWebViewPanelState extends State<ChatWebViewPanel> {
   }
 
   Future<void> _loadHtmlFromAssets() async {
+    // 确保图片代理服务器已启动
+    await _LocalImageServer.instance.start();
+
     final html = await rootBundle.loadString('assets/chat_webview/index.html');
     final css = await rootBundle.loadString('assets/chat_webview/style.css');
     final bridgeJs =
@@ -182,7 +258,7 @@ class _ChatWebViewPanelState extends State<ChatWebViewPanel> {
           break;
         case 'onMessageAction':
           final id = data['id'] as int? ?? 0;
-          final act = data['action'] as String? ?? '';
+          final act = data['msgAction'] as String? ?? '';
           widget.onMessageAction(id, act);
           break;
         case 'onShowAttachmentMenu':
@@ -257,6 +333,13 @@ class _ChatWebViewPanelState extends State<ChatWebViewPanel> {
   /// 首次 WebView 就绪时，全量同步状态。
   void _syncFullState() {
     _syncTheme();
+    // 传递本地图片代理服务器地址
+    final server = _LocalImageServer.instance;
+    if (server.isRunning) {
+      _evalJs(
+        "ChatBridge.setImageProxyBase('http://127.0.0.1:${server.port}')",
+      );
+    }
     _evalJs(
       "ChatBridge.setModelInfo('${_escJs(widget.model ?? '')}', ${widget.modelSupportsVision}, ${widget.modelSupportsTools})",
     );
@@ -281,10 +364,8 @@ class _ChatWebViewPanelState extends State<ChatWebViewPanel> {
   }
 
   /// 全量加载消息到 WebView。
-  Future<void> _syncMessagesFullLoad() async {
-    final jsonList = await Future.wait(
-      widget.messages.map((m) => _messageToJson(m)),
-    );
+  void _syncMessagesFullLoad() {
+    final jsonList = widget.messages.map((m) => _messageToJson(m)).toList();
     final encoded = jsonEncode(jsonList);
     _evalJs("ChatBridge.loadMessages('${_escJs(encoded)}', false)");
     _syncedMessageIds = widget.messages.map((m) => m.isarId).toList();
@@ -300,7 +381,7 @@ class _ChatWebViewPanelState extends State<ChatWebViewPanel> {
   }
 
   /// 增量同步消息变化。
-  Future<void> _syncMessages() async {
+  void _syncMessages() {
     final currentIds = widget.messages.map((m) => m.isarId).toList();
 
     // 检测是否是历史消息前插（prepend）
@@ -310,9 +391,8 @@ class _ChatWebViewPanelState extends State<ChatWebViewPanel> {
       final idxInNew = currentIds.indexOf(firstOldId);
       if (idxInNew > 0) {
         // 前面插入了历史消息
-        final prependMsgs = await Future.wait(
-          widget.messages.sublist(0, idxInNew).map((m) => _messageToJson(m)),
-        );
+        final prependMsgs =
+            widget.messages.sublist(0, idxInNew).map((m) => _messageToJson(m)).toList();
         final encoded = jsonEncode(prependMsgs);
         _evalJs("ChatBridge.loadMessages('${_escJs(encoded)}', true)");
         _syncedMessageIds = currentIds;
@@ -329,8 +409,7 @@ class _ChatWebViewPanelState extends State<ChatWebViewPanel> {
     // 检测新增消息（append）
     for (final m in widget.messages) {
       if (!_syncedMessageIds.contains(m.isarId)) {
-        final msgJson = await _messageToJson(m);
-        final json = jsonEncode(msgJson);
+        final json = jsonEncode(_messageToJson(m));
         _evalJs("ChatBridge.addMessage('${_escJs(json)}')");
         _syncedContentLengths[m.isarId] = m.content.length;
         _syncedReasoningLengths[m.isarId] = (m.reasoning ?? '').length;
@@ -424,18 +503,20 @@ class _ChatWebViewPanelState extends State<ChatWebViewPanel> {
   }
 
   /// 将 Message 转为 JS 侧需要的 JSON 结构。
-  Future<Map<String, dynamic>> _messageToJson(Message m) async {
+  Map<String, dynamic> _messageToJson(Message m) {
     final isLast = widget.messages.isNotEmpty &&
         widget.messages.last.isarId == m.isarId;
     final toolLogs = widget.toolLogsForMessage(m.isarId);
 
-    // 将本地图片路径转为 base64 data URI
+    // 将本地图片路径转为代理 URL
     final rawPaths = m.imagePaths ?? [];
-    final resolvedPaths = <String>[];
-    for (final path in rawPaths) {
-      final dataUri = await _imagePathToDataUri(path);
-      resolvedPaths.add(dataUri ?? path);
-    }
+    final server = _LocalImageServer.instance;
+    final resolvedPaths = rawPaths.map((path) {
+      if (_isImageFile(path) && server.isRunning) {
+        return server.proxyUrl(path);
+      }
+      return path;
+    }).toList();
 
     return {
       'id': m.isarId,
@@ -453,29 +534,10 @@ class _ChatWebViewPanelState extends State<ChatWebViewPanel> {
     };
   }
 
-  /// 将本地图片文件路径转为 base64 data URI。
-  Future<String?> _imagePathToDataUri(String path) async {
-    try {
-      final file = File(path);
-      if (!await file.exists()) return null;
-      final bytes = await file.readAsBytes();
-      final ext = p.extension(path).toLowerCase().replaceFirst('.', '');
-      final mimeMap = {
-        'png': 'image/png',
-        'jpg': 'image/jpeg',
-        'jpeg': 'image/jpeg',
-        'gif': 'image/gif',
-        'webp': 'image/webp',
-        'bmp': 'image/bmp',
-        'heic': 'image/heic',
-        'heif': 'image/heif',
-      };
-      final mime = mimeMap[ext] ?? 'image/png';
-      return 'data:$mime;base64,${base64Encode(bytes)}';
-    } catch (e) {
-      debugPrint('ChatWebViewPanel: _imagePathToDataUri error: $e');
-      return null;
-    }
+  static bool _isImageFile(String path) {
+    final ext = p.extension(path).toLowerCase();
+    return {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.heic', '.heif'}
+        .contains(ext);
   }
 
   // ===== 工具方法 =====

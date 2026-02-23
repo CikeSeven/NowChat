@@ -30,7 +30,7 @@ const Bridge = {
   onScrollNearTop() { this._post('onScrollNearTop', {}); },
   onToggleStreaming(value) { this._post('onToggleStreaming', { value }); },
   onSelectModel() { this._post('onSelectModel', {}); },
-  onMessageAction(id, action) { this._post('onMessageAction', { id, action }); },
+  onMessageAction(id, action) { this._post('onMessageAction', { id, msgAction: action }); },
   onShowAttachmentMenu() { this._post('onShowAttachmentMenu', {}); },
   onUserMessageLongPress(id) { this._post('onUserMessageLongPress', { id }); },
 };

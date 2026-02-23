@@ -376,6 +376,7 @@ html, body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  position: relative;
 }
 
 /* ===== Input area ===== */
@@ -585,4 +586,65 @@ html, body {
   padding: 12px;
   color: var(--on-surface-variant);
   font-size: 13px;
+}
+
+/* ===== Ripple effect ===== */
+.ripple {
+  position: relative;
+  overflow: hidden;
+}
+
+.ripple::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ripple:active::after {
+  width: 200%;
+  height: 200%;
+  opacity: 1;
+  transition: width 0s, height 0s, opacity 0s;
+}
+
+.ripple:not(:active)::after {
+  transition: width 0.4s ease-out, height 0.4s ease-out, opacity 0.4s ease-out;
+}
+
+.msg-actions button {
+  position: relative;
+  overflow: hidden;
+}
+
+.msg-actions button::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.msg-actions button:active::after {
+  width: 150%;
+  height: 150%;
+  opacity: 1;
+  transition: width 0s, height 0s, opacity 0s;
+}
+
+.msg-actions button:not(:active)::after {
+  transition: width 0.3s ease-out, height 0.3s ease-out, opacity 0.3s ease-out;
 }

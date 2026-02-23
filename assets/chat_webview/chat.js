@@ -18,6 +18,7 @@ const state = {
   streamingSupported: true,
   isLoadingMore: false,
   _scrollLock: false,     // 防止滚动事件重入
+  imageProxyBase: '',     // 本地图片代理服务器 base URL
 };
 
 // ===== DOM refs =====
@@ -38,12 +39,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 发送
   $sendBtn.addEventListener('click', handleSend);
-  $input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
-      e.preventDefault();
-      handleSend();
-    }
-  });
 
   // 滚动监听
   $list.addEventListener('scroll', handleScroll);
@@ -100,10 +95,11 @@ function setupMarked() {
     </div>`;
   };
 
-  // 图片点击
+  // 图片点击 — 本地路径自动走代理
   renderer.image = function(href, title, text) {
     if (typeof href === 'object') { title = href.title; text = href.text; href = href.href; }
-    return `<img src="${escHtml(href)}" alt="${escHtml(text || '')}" title="${escHtml(title || '')}" onclick="Bridge.onImageTap('${escJs(href)}')" />`;
+    const src = proxyImageUrl(href);
+    return `<img src="${escHtml(src)}" alt="${escHtml(text || '')}" title="${escHtml(title || '')}" onclick="Bridge.onImageTap('${escJs(href)}')" />`;
   };
 
   // 链接拦截
@@ -169,7 +165,7 @@ function renderAllMessages() {
 
   if (state.systemPrompt) {
     html += `<div class="system-prompt-item">
-      <span class="prompt-chip" onclick="Bridge.onMessageAction(0,'editSystemPrompt')">${escHtml(truncate(state.systemPrompt, 60))}</span>
+      <span class="prompt-chip ripple" onclick="Bridge.onMessageAction(0,'editSystemPrompt')">${escHtml(truncate(state.systemPrompt, 60))}</span>
     </div>`;
   }
 
@@ -200,15 +196,16 @@ function renderUserMessage(msg) {
   let attachHtml = '';
   if (msg.imagePaths && msg.imagePaths.length > 0) {
     const items = msg.imagePaths.map(p => {
-      if (isImagePath(p) || p.startsWith('data:image/')) {
-        return `<img src="${escHtml(p)}" onclick="Bridge.onImageTap('${escJs(p)}')" />`;
+      const src = proxyImageUrl(p);
+      if (isImagePath(p) || /^(data:image\/|http)/i.test(src)) {
+        return `<img src="${escHtml(src)}" onclick="Bridge.onImageTap('${escJs(p)}')" />`;
       }
       return `<span class="file-chip">${escHtml(fileName(p))}</span>`;
     }).join('');
     attachHtml = `<div class="msg-attachments">${items}</div>`;
   }
   return `<div class="msg msg-user" data-id="${msg.id}">
-    <div class="msg-bubble" ontouchstart="startLongPress(event, ${msg.id})" ontouchend="cancelLongPress()" ontouchcancel="cancelLongPress()" oncontextmenu="handleContextMenu(event, ${msg.id})">${escHtml(msg.content)}${attachHtml}</div>
+    <div class="msg-bubble ripple" ontouchstart="startLongPress(event, ${msg.id})" ontouchend="cancelLongPress()" ontouchcancel="cancelLongPress()" oncontextmenu="handleContextMenu(event, ${msg.id})">${escHtml(msg.content)}${attachHtml}</div>
   </div>`;
 }
 
@@ -217,7 +214,7 @@ function renderAssistantMessage(msg) {
   const hasContent = (msg.content || '').trim().length > 0;
   const hasReasoning = (msg.reasoning || '').trim().length > 0;
 
-  let html = `<div class="msg msg-assistant" data-id="${msg.id}" ontouchstart="startLongPress(event, ${msg.id}, 'assistant')" ontouchend="cancelLongPress()" ontouchcancel="cancelLongPress()" oncontextmenu="handleContextMenu(event, ${msg.id}, 'assistant')">`;
+  let html = `<div class="msg msg-assistant" data-id="${msg.id}">`;
 
   // Loading spinner
   if (isStreaming && !hasContent && !hasReasoning) {
@@ -267,6 +264,7 @@ function renderAssistantMessage(msg) {
     html += `<span class="spacer"></span>`;
     html += `<button onclick="Bridge.onMessageAction(${msg.id},'edit')" title="编辑">${SVG_EDIT}</button>`;
     html += `<button onclick="Bridge.onMessageAction(${msg.id},'copy')" title="复制">${SVG_COPY}</button>`;
+    html += `<button onclick="Bridge.onMessageAction(${msg.id},'more')" title="更多">${SVG_MORE}</button>`;
     html += `</div>`;
   }
 
@@ -280,15 +278,24 @@ function updateMessageDOM(msg) {
   if (!el) {
     // 消息不在 DOM 中，追加
     const wasAtBottom = isNearBottom();
-    el || $list.insertAdjacentHTML('beforeend', renderMessage(msg));
+    $list.insertAdjacentHTML('beforeend', renderMessage(msg));
     if (wasAtBottom) scrollToBottom(false);
     return;
   }
+  // 保存 reasoning 展开状态
+  const reasoningOpen = !!el.querySelector('.reasoning-content.open');
   // 替换整个消息节点内容
   const temp = document.createElement('div');
   temp.innerHTML = renderMessage(msg);
   const newEl = temp.firstElementChild;
   el.replaceWith(newEl);
+  // 恢复 reasoning 展开状态
+  if (reasoningOpen) {
+    const arrow = newEl.querySelector('.reasoning-toggle .arrow');
+    const content = newEl.querySelector('.reasoning-content');
+    if (arrow) arrow.classList.add('open');
+    if (content) content.classList.add('open');
+  }
 }
 
 // ===== Flutter → JS API (window.ChatBridge) =====
@@ -297,6 +304,9 @@ window.ChatBridge = {
   addMessage(jsonStr) {
     const msg = JSON.parse(jsonStr);
     state.messages.push(msg);
+    // 移除空状态提示
+    const emptyEl = $list.querySelector('.empty-state');
+    if (emptyEl) emptyEl.remove();
     const wasAtBottom = isNearBottom();
     $list.insertAdjacentHTML('beforeend', renderMessage(msg));
     if (wasAtBottom) scrollToBottom(false);
@@ -435,6 +445,11 @@ window.ChatBridge = {
     state.isLoadingMore = loading;
   },
 
+  /** 设置本地图片代理服务器 base URL */
+  setImageProxyBase(base) {
+    state.imageProxyBase = base || '';
+  },
+
   /** 滚动到底部 */
   scrollToBottom(animated) {
     scrollToBottom(animated);
@@ -489,8 +504,9 @@ function renderAttachments() {
   }
   $attachPreview.innerHTML = state.attachments.map(p => {
     if (isImagePath(p)) {
+      const src = proxyImageUrl(p);
       return `<div class="att-item">
-        <img class="att-img" src="${escHtml(p)}" />
+        <img class="att-img" src="${escHtml(src)}" />
         <button class="att-remove" onclick="Bridge.onRemoveAttachment('${escJs(p)}')">×</button>
       </div>`;
     }
@@ -557,11 +573,7 @@ function startLongPress(event, id, role) {
   cancelLongPress();
   _longPressTimer = setTimeout(() => {
     _longPressTimer = null;
-    if (role === 'assistant') {
-      Bridge.onMessageAction(id, 'longpress');
-    } else {
-      Bridge.onUserMessageLongPress(id);
-    }
+    Bridge.onUserMessageLongPress(id);
   }, 500);
 }
 
@@ -574,11 +586,7 @@ function cancelLongPress() {
 
 function handleContextMenu(event, id, role) {
   event.preventDefault();
-  if (role === 'assistant') {
-    Bridge.onMessageAction(id, 'longpress');
-  } else {
-    Bridge.onUserMessageLongPress(id);
-  }
+  Bridge.onUserMessageLongPress(id);
 }
 
 function copyMessageContent(id) {
@@ -611,11 +619,24 @@ function isImagePath(path) {
   return /\.(png|jpg|jpeg|webp|gif|bmp|heic|heif)$/.test(lower);
 }
 
+/** 将本地文件路径转为代理 URL（如果代理服务器可用） */
+function proxyImageUrl(path) {
+  if (!path) return path;
+  // 已经是 http/https/data URI，不处理
+  if (/^(https?:|data:)/i.test(path)) return path;
+  // 本地路径（以 / 开头或包含盘符如 C:\）走代理
+  if (state.imageProxyBase && (path.startsWith('/') || /^[a-zA-Z]:/.test(path))) {
+    return state.imageProxyBase + '/local-image?path=' + encodeURIComponent(path);
+  }
+  return path;
+}
+
 // ===== SVG Icons =====
 const SVG_SEND = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>`;
 const SVG_STOP = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>`;
-const SVG_REFRESH = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.65 6.35A7.958 7.958 0 0 0 12 4C7.58 4 4.01 7.58 4.01 12S7.58 20 12 20c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>`;
+const SVG_REFRESH = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>`;
 const SVG_PLAY = `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
 const SVG_EDIT = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
 const SVG_COPY = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
 const SVG_ADD_CIRCLE = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>`;
+const SVG_MORE = `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>`;
