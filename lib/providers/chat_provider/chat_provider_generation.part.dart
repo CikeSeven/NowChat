@@ -27,7 +27,7 @@ extension ChatProviderGeneration on ChatProvider {
     bool isStreaming,
   ) async {
     final chat = getChatById(chatId);
-    if (chat == null || chat.isGenerating) return;
+    if (chat == null || isChatRequestRunning(chatId)) return;
     await _touchChatLastUpdatedAndPinTop(chat);
     final provider = getProviderById(chat.providerId ?? '');
     if (provider == null) return;
@@ -178,7 +178,7 @@ extension ChatProviderGeneration on ChatProvider {
   /// 语义：仅重生“最后一轮助手回复”，用户历史不变。
   Future<void> regenerateMessage(int chatId, bool isStreaming) async {
     final chat = getChatById(chatId);
-    if (chat == null || chat.isGenerating) return;
+    if (chat == null || isChatRequestRunning(chatId)) return;
     await _touchChatLastUpdatedAndPinTop(chat);
     final provider = getProviderById(chat.providerId ?? '');
     if (provider == null) return;
@@ -392,7 +392,7 @@ extension ChatProviderGeneration on ChatProvider {
   ) async {
     AppLogger.i('发送消息');
     final chat = getChatById(chatId);
-    if (chat == null) return;
+    if (chat == null || isChatRequestRunning(chatId)) return;
     await _touchChatLastUpdatedAndPinTop(chat);
     final provider = getProviderById(chat.providerId ?? '');
     if (provider == null) {

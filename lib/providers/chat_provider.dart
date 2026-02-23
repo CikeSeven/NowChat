@@ -137,6 +137,14 @@ class ChatProvider with ChangeNotifier {
     return _isMessageStreaming(messageId);
   }
 
+  /// 判断指定会话当前是否存在进行中的网络请求。
+  ///
+  /// 与持久化字段 `chat.isGenerating` 相比，运行时控制器状态更可靠，
+  /// 可避免历史脏数据导致发送/重发入口被误拦截。
+  bool isChatRequestRunning(int chatId) {
+    return _abortControllers.containsKey(chatId);
+  }
+
   /// 追加一条消息对应的工具调用日志。
   void _appendToolLogForMessage(int messageId, ToolExecutionLog log) {
     final logs =
