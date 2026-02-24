@@ -142,7 +142,11 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
     for (final plugin in _manifest?.plugins ?? const <PluginDefinition>[]) {
       byId[plugin.id] = plugin;
     }
-    byId.addAll(_localPluginsById);
+    // 对“同 ID 的远端插件”优先使用清单版本，避免本地残留旧 plugin.json 覆盖最新定义。
+    // 本地插件仅在清单中不存在该 ID 时才补入列表（典型场景：纯本地导入插件）。
+    for (final localPlugin in _localPluginsById.values) {
+      byId.putIfAbsent(localPlugin.id, () => localPlugin);
+    }
     final result = byId.values.toList();
     result.sort((a, b) => a.name.compareTo(b.name));
     return result;
@@ -484,6 +488,9 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
     if (normalizedRequirements.isEmpty) {
       return null;
     }
+    AppLogger.i(
+      '插件 requirements 清单: plugin=$pluginId, version=${plugin.version}, requirements=${normalizedRequirements.join(', ')}',
+    );
     final pluginRootDir = _pluginRootDir;
     if (pluginRootDir == null) {
       throw Exception('插件目录尚未初始化，无法安装 requirements');

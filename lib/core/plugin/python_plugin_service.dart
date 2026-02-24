@@ -551,41 +551,39 @@ class PythonPluginService {
     required List<String> mirrorIds,
     required String customMirrorBaseUrl,
   }) async {
+    final packageNameCandidates = _buildPackageNameCandidates(spec.packageName);
     for (final mirrorId in mirrorIds) {
-      final indexUrl = PythonPackageMirrorConfig.buildSimpleIndexUrl(
-        packageName: spec.packageName,
-        mirrorId: mirrorId,
-        customMirrorBaseUrl: customMirrorBaseUrl,
-      );
-      try {
-        final response = await _dio.getUri<String>(
-          Uri.parse(indexUrl),
-          options: Options(
-            responseType: ResponseType.plain,
-            validateStatus:
-                (status) => status != null && status >= 200 && status < 500,
-          ),
-        );
-        if (response.statusCode != 200) {
-          AppLogger.w(
-            '依赖索引请求失败: package=${spec.packageName}, mirror=$mirrorId, status=${response.statusCode}',
-          );
-          continue;
-        }
-        final candidates = _extractRequirementCandidatesFromSimpleIndex(
-          spec: spec,
-          indexUrl: indexUrl,
-          simpleHtml: response.data ?? '',
+      for (final packageNameCandidate in packageNameCandidates) {
+        final indexUrls = PythonPackageMirrorConfig.buildSimpleIndexUrls(
+          packageName: packageNameCandidate,
           mirrorId: mirrorId,
+          customMirrorBaseUrl: customMirrorBaseUrl,
         );
-        if (candidates.isNotEmpty) {
-          return candidates;
+        for (final indexUrl in indexUrls) {
+          try {
+            final response = await _fetchSimpleIndexWithRetry(indexUrl);
+            if (response.statusCode != 200) {
+              AppLogger.w(
+                '依赖索引请求失败: package=${spec.packageName}, mirror=$mirrorId, url=$indexUrl, status=${response.statusCode}',
+              );
+              continue;
+            }
+            final candidates = _extractRequirementCandidatesFromSimpleIndex(
+              spec: spec,
+              indexUrl: indexUrl,
+              simpleHtml: response.data ?? '',
+              mirrorId: mirrorId,
+            );
+            if (candidates.isNotEmpty) {
+              return candidates;
+            }
+          } catch (e, st) {
+            AppLogger.w(
+              '依赖索引解析失败: package=${spec.packageName}, mirror=$mirrorId, url=$indexUrl, error=$e',
+            );
+            AppLogger.e('依赖索引解析异常', e, st);
+          }
         }
-      } catch (e, st) {
-        AppLogger.w(
-          '依赖索引解析失败: package=${spec.packageName}, mirror=$mirrorId, error=$e',
-        );
-        AppLogger.e('依赖索引解析异常', e, st);
       }
     }
     return const <_ResolvedRequirementCandidate>[];
@@ -692,6 +690,85 @@ class PythonPluginService {
       return segments[1].trim().toLowerCase();
     }
     return '';
+  }
+
+  /// 构建包名候选，兼容不同仓库对 `-/_/.` 的目录命名差异。
+  List<String> _buildPackageNameCandidates(String packageName) {
+    final raw = packageName.trim().toLowerCase();
+    if (raw.isEmpty) return const <String>[];
+    final candidates = <String>[
+      raw,
+      raw.replaceAll('-', '_'),
+      raw.replaceAll('_', '-'),
+      raw.replaceAll('.', '-'),
+      raw.replaceAll('.', '_'),
+      raw.replaceAll(RegExp(r'[-_.]+'), '-'),
+      raw.replaceAll(RegExp(r'[-_.]+'), '_'),
+    ];
+    return candidates.toSet().where((item) => item.trim().isNotEmpty).toList();
+  }
+
+  /// 请求 simple index，并在可重试网络异常时自动重试。
+  ///
+  /// 背景：
+  /// - 某些移动网络下会出现 `Connection closed before full header was received`。
+  /// - 这种错误通常是链路抖动，重试后可恢复。
+  Future<Response<String>> _fetchSimpleIndexWithRetry(
+    String indexUrl, {
+    int maxAttempts = 3,
+  }) async {
+    Object? lastError;
+    for (var attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        final response = await _dio.getUri<String>(
+          Uri.parse(indexUrl),
+          options: Options(
+            responseType: ResponseType.plain,
+            validateStatus:
+                (status) => status != null && status >= 200 && status < 500,
+            headers: const <String, dynamic>{
+              // 显式关闭长连接，降低某些代理链路下的半连接问题。
+              'Connection': 'close',
+            },
+            sendTimeout: const Duration(seconds: 20),
+            receiveTimeout: const Duration(seconds: 20),
+          ),
+        );
+        return response;
+      } catch (e) {
+        lastError = e;
+        final shouldRetry = _isRetriableSimpleIndexError(e);
+        if (!shouldRetry || attempt >= maxAttempts) {
+          rethrow;
+        }
+        AppLogger.w(
+          '依赖索引请求重试: url=$indexUrl, attempt=$attempt/$maxAttempts, error=$e',
+        );
+        await Future<void>.delayed(Duration(milliseconds: 350 * attempt));
+      }
+    }
+    throw Exception('依赖索引请求失败: $lastError');
+  }
+
+  /// 判断 simple index 请求异常是否可重试。
+  bool _isRetriableSimpleIndexError(Object error) {
+    if (error is DioException) {
+      final type = error.type;
+      if (type == DioExceptionType.connectionError ||
+          type == DioExceptionType.connectionTimeout ||
+          type == DioExceptionType.receiveTimeout ||
+          type == DioExceptionType.sendTimeout ||
+          type == DioExceptionType.unknown) {
+        return true;
+      }
+      final raw = (error.error?.toString() ?? '').toLowerCase();
+      if (raw.contains('connection closed before full header') ||
+          raw.contains('connection reset') ||
+          raw.contains('socketexception')) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /// 根据 wheel 文件名判断是否适配当前运行时，并计算候选优先级。

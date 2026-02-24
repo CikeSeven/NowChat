@@ -93,7 +93,7 @@ plugin_runtime/
 
 策略说明：
 
-1. 解析入口使用 simple index：`/simple/<package>/`。
+1. 解析入口优先使用 Chaquopy 索引：`/<package>/`，并兼容尝试 `/simple/<package>/`。
 2. 从索引页直接筛选 wheel 文件，不使用 PyPI JSON 接口。
 3. 单镜像失败后自动切换到下一个镜像，不要求用户手动干预。
 4. 支持自定义镜像地址，作为扩展入口（运维/企业内网环境）。

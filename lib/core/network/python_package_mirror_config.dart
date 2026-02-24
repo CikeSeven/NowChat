@@ -99,8 +99,12 @@ class PythonPackageMirrorConfig {
     return preset?.baseUrl ?? '';
   }
 
-  /// 构造指定包的 simple index 地址。
-  static String buildSimpleIndexUrl({
+  /// 构造指定包的 simple index 候选地址。
+  ///
+  /// 兼容：
+  /// 1. `<base>/<package>/`（Chaquopy 常见形式）
+  /// 2. `<base>/simple/<package>/`（标准 PyPI simple 形式）
+  static List<String> buildSimpleIndexUrls({
     required String packageName,
     required String mirrorId,
     String customMirrorBaseUrl = '',
@@ -109,9 +113,12 @@ class PythonPackageMirrorConfig {
       mirrorId: mirrorId,
       customMirrorBaseUrl: customMirrorBaseUrl,
     );
-    if (baseUrl.trim().isEmpty) {
-      return 'https://chaquo.com/pypi-13.1/simple/$packageName/';
-    }
-    return '$baseUrl/simple/$packageName/';
+    final normalizedPackage = packageName.trim().toLowerCase();
+    final effectiveBase =
+        baseUrl.trim().isEmpty ? 'https://chaquo.com/pypi-13.1' : baseUrl;
+    return <String>[
+      '$effectiveBase/$normalizedPackage/',
+      '$effectiveBase/simple/$normalizedPackage/',
+    ];
   }
 }
