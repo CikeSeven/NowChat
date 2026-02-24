@@ -7,9 +7,11 @@ import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/services.dart';
+import 'package:now_chat/core/network/python_package_mirror_config.dart';
 import 'package:now_chat/core/models/python_execution_result.dart';
 import 'package:now_chat/core/models/python_plugin_manifest.dart';
 import 'package:now_chat/util/app_logger.dart';
+import 'package:path/path.dart' as p;
 
 /// 插件包 SHA256 校验失败时抛出的异常，包含期望值与实际值。
 class PythonPackageChecksumException implements Exception {
@@ -158,6 +160,143 @@ class PythonPluginService {
     if (targetDir.existsSync()) {
       await targetDir.delete(recursive: true);
     }
+  }
+
+  /// 按 requirements 安装插件 Python 依赖（插件隔离环境）。
+  ///
+  /// 设计要点：
+  /// 1. 每个插件独立安装目录，允许同库不同版本并存。
+  /// 2. 自动尝试多镜像，解决部分网络环境访问官方源失败的问题。
+  /// 3. 对“未指定版本”按候选降序尝试，失败自动回退次新版本。
+  Future<void> installRequirements({
+    required String pluginId,
+    required Directory pluginRootDir,
+    required List<String> requirements,
+    required String targetRelativeDir,
+    void Function(double progress)? onProgress,
+    String mirrorId = PythonPackageMirrorConfig.directId,
+    String customMirrorBaseUrl = '',
+  }) async {
+    final normalizedRequirements =
+        requirements
+            .map((item) => item.trim())
+            .where((item) => item.isNotEmpty)
+            .toList();
+    if (normalizedRequirements.isEmpty) {
+      return;
+    }
+    final normalizedTargetDir = _normalizeRelativePath(targetRelativeDir);
+    if (normalizedTargetDir.isEmpty) {
+      throw const FormatException('requirements 安装目录不能为空');
+    }
+
+    final installDir = Directory(
+      p.join(pluginRootDir.path, normalizedTargetDir),
+    );
+    final cacheDir = Directory(
+      p.join(pluginRootDir.path, '.pkg_cache', 'wheels'),
+    );
+    final lockFile = File(
+      p.join(
+        pluginRootDir.path,
+        p.dirname(normalizedTargetDir),
+        'plugin_requirements_lock.json',
+      ),
+    );
+
+    if (installDir.existsSync()) {
+      await installDir.delete(recursive: true);
+    }
+    await installDir.create(recursive: true);
+    if (!cacheDir.existsSync()) {
+      await cacheDir.create(recursive: true);
+    }
+
+    final preferredMirrorId = mirrorId.trim().isEmpty ? PythonPackageMirrorConfig.directId : mirrorId.trim();
+    final mirrorIds = <String>[
+      preferredMirrorId,
+      ...PythonPackageMirrorConfig.automaticFallbackMirrorIds,
+    ].toSet().toList();
+    final lockPackages = <Map<String, dynamic>>[];
+    final total = normalizedRequirements.length;
+
+    AppLogger.i(
+      '开始安装插件 requirements: plugin=$pluginId, count=$total, mirrorChain=$mirrorIds',
+    );
+    for (var index = 0; index < normalizedRequirements.length; index += 1) {
+      final rawRequirement = normalizedRequirements[index];
+      final spec = _RequirementSpec.parse(rawRequirement);
+      onProgress?.call(index / total);
+      AppLogger.i(
+        '解析依赖: plugin=$pluginId, requirement=${spec.raw}, package=${spec.packageName}',
+      );
+
+      final candidates = await _resolveRequirementCandidates(
+        spec: spec,
+        mirrorIds: mirrorIds,
+        customMirrorBaseUrl: customMirrorBaseUrl,
+      );
+      if (candidates.isEmpty) {
+        throw Exception('未找到可安装依赖: ${spec.raw}');
+      }
+
+      _ResolvedRequirementCandidate? selectedCandidate;
+      final fallbackTried = <Map<String, dynamic>>[];
+      Object? lastError;
+      for (final candidate in candidates) {
+        try {
+          final wheelFile = await _downloadWheelToCache(
+            candidate: candidate,
+            cacheDir: cacheDir,
+          );
+          await _extractZip(wheelFile, installDir);
+          selectedCandidate = candidate;
+          AppLogger.i(
+            '依赖安装成功: plugin=$pluginId, package=${spec.packageName}, version=${candidate.version}, mirror=${candidate.mirrorId}',
+          );
+          break;
+        } catch (e, st) {
+          lastError = e;
+          fallbackTried.add(<String, dynamic>{
+            'version': candidate.version,
+            'mirrorId': candidate.mirrorId,
+            'error': e.toString(),
+          });
+          AppLogger.w(
+            '依赖候选安装失败，尝试回退: plugin=$pluginId, package=${spec.packageName}, version=${candidate.version}, mirror=${candidate.mirrorId}, error=$e',
+          );
+          AppLogger.e('依赖候选安装异常', e, st);
+        }
+      }
+      if (selectedCandidate == null) {
+        throw Exception('依赖安装失败(${spec.raw}): ${lastError ?? "无可用候选"}');
+      }
+
+      lockPackages.add(<String, dynamic>{
+        'requirement': spec.raw,
+        'package': spec.packageName,
+        'version': selectedCandidate.version,
+        'mirrorId': selectedCandidate.mirrorId,
+        'downloadUrl': selectedCandidate.downloadUrl,
+        'sha256': selectedCandidate.sha256,
+        'fallbackTried': fallbackTried,
+      });
+      onProgress?.call((index + 1) / total);
+    }
+
+    await lockFile.parent.create(recursive: true);
+    final lockPayload = <String, dynamic>{
+      'pluginId': pluginId,
+      'resolvedAt': DateTime.now().toUtc().toIso8601String(),
+      'targetDir': normalizedTargetDir,
+      'requirements': normalizedRequirements,
+      'packages': lockPackages,
+    };
+    await lockFile.writeAsString(jsonEncode(lockPayload));
+    AppLogger.i(
+      'requirements 安装完成: plugin=$pluginId, installed=${lockPackages.length}, lock=${lockFile.path}',
+    );
+    onProgress?.call(1);
   }
 
   /// 执行 Python 代码。
@@ -401,6 +540,306 @@ class PythonPluginService {
     }
     return output;
   }
+
+  /// 解析 requirements 候选版本列表，按“版本新 -> 旧”排序返回。
+  ///
+  /// 策略：
+  /// 1. 按镜像优先级逐个解析。
+  /// 2. 某镜像拿到可用候选后直接返回，降低跨镜像版本漂移。
+  Future<List<_ResolvedRequirementCandidate>> _resolveRequirementCandidates({
+    required _RequirementSpec spec,
+    required List<String> mirrorIds,
+    required String customMirrorBaseUrl,
+  }) async {
+    for (final mirrorId in mirrorIds) {
+      final metadataUrl = PythonPackageMirrorConfig.buildPackageJsonUrl(
+        packageName: spec.packageName,
+        mirrorId: mirrorId,
+        customMirrorBaseUrl: customMirrorBaseUrl,
+      );
+      try {
+        final response = await _dio.getUri<dynamic>(Uri.parse(metadataUrl));
+        if (response.statusCode != 200) {
+          AppLogger.w(
+            '依赖元数据请求失败: package=${spec.packageName}, mirror=$mirrorId, status=${response.statusCode}',
+          );
+          continue;
+        }
+        final data = response.data;
+        Map<String, dynamic> metadata;
+        if (data is Map<String, dynamic>) {
+          metadata = data;
+        } else if (data is Map) {
+          metadata = Map<String, dynamic>.from(data);
+        } else if (data is String) {
+          final decoded = jsonDecode(data);
+          if (decoded is! Map<String, dynamic>) {
+            continue;
+          }
+          metadata = decoded;
+        } else {
+          continue;
+        }
+        final candidates = _extractRequirementCandidatesFromMetadata(
+          spec: spec,
+          metadata: metadata,
+          mirrorId: mirrorId,
+          customMirrorBaseUrl: customMirrorBaseUrl,
+        );
+        if (candidates.isNotEmpty) {
+          return candidates;
+        }
+      } catch (e, st) {
+        AppLogger.w(
+          '依赖元数据解析失败: package=${spec.packageName}, mirror=$mirrorId, error=$e',
+        );
+        AppLogger.e('依赖元数据解析异常', e, st);
+      }
+    }
+    return const <_ResolvedRequirementCandidate>[];
+  }
+
+  /// 从 `pypi/<name>/json` 元数据中提取可安装候选版本。
+  List<_ResolvedRequirementCandidate> _extractRequirementCandidatesFromMetadata({
+    required _RequirementSpec spec,
+    required Map<String, dynamic> metadata,
+    required String mirrorId,
+    required String customMirrorBaseUrl,
+  }) {
+    final rawReleases = metadata['releases'];
+    if (rawReleases is! Map) {
+      return const <_ResolvedRequirementCandidate>[];
+    }
+    final candidates = <_ResolvedRequirementCandidate>[];
+    for (final entry in rawReleases.entries) {
+      final version = entry.key.toString().trim();
+      if (version.isEmpty) continue;
+      if (!spec.matches(version)) continue;
+      final filesRaw = entry.value;
+      if (filesRaw is! List) continue;
+      final wheel = _pickBestWheelForRelease(
+        releaseFiles: filesRaw,
+        mirrorId: mirrorId,
+        customMirrorBaseUrl: customMirrorBaseUrl,
+      );
+      if (wheel == null) continue;
+      candidates.add(
+        _ResolvedRequirementCandidate(
+          packageName: spec.packageName,
+          requested: spec.raw,
+          version: version,
+          downloadUrl: wheel.downloadUrl,
+          sha256: wheel.sha256,
+          mirrorId: mirrorId,
+          wheelScore: wheel.score,
+          uploadedAt: wheel.uploadedAt,
+        ),
+      );
+    }
+
+    // 默认按“版本新 -> 旧”排序；同版本优先 wheel 兼容分更高的候选。
+    candidates.sort((a, b) {
+      final byVersion = _compareVersionsLoose(b.version, a.version);
+      if (byVersion != 0) return byVersion;
+      final byScore = b.wheelScore.compareTo(a.wheelScore);
+      if (byScore != 0) return byScore;
+      final aTime = a.uploadedAt;
+      final bTime = b.uploadedAt;
+      if (aTime == null && bTime == null) return 0;
+      if (aTime == null) return 1;
+      if (bTime == null) return -1;
+      return bTime.compareTo(aTime);
+    });
+    return candidates;
+  }
+
+  /// 选择单个 release 下最适合当前 Android 运行时的 wheel 文件。
+  _WheelDownloadCandidate? _pickBestWheelForRelease({
+    required List releaseFiles,
+    required String mirrorId,
+    required String customMirrorBaseUrl,
+  }) {
+    _WheelDownloadCandidate? best;
+    for (final item in releaseFiles) {
+      if (item is! Map) continue;
+      final map = Map<String, dynamic>.from(item);
+      final filename = (map['filename'] ?? '').toString().trim();
+      if (filename.isEmpty || !filename.toLowerCase().endsWith('.whl')) {
+        continue;
+      }
+      if ((map['yanked'] ?? false) == true) continue;
+
+      final score = _scoreWheelFilename(filename);
+      if (score < 0) continue;
+
+      final rawUrl = (map['url'] ?? '').toString().trim();
+      if (rawUrl.isEmpty) continue;
+      final digestMap =
+          map['digests'] is Map
+              ? Map<String, dynamic>.from(map['digests'] as Map)
+              : const <String, dynamic>{};
+      final sha256 = (digestMap['sha256'] ?? '').toString().trim().toLowerCase();
+      final uploadRaw = (map['upload_time_iso_8601'] ?? '').toString().trim();
+      final uploadTime = DateTime.tryParse(uploadRaw);
+      final rewrittenUrl = PythonPackageMirrorConfig.rewritePackageDownloadUrl(
+        rawUrl: rawUrl,
+        mirrorId: mirrorId,
+        customMirrorBaseUrl: customMirrorBaseUrl,
+      );
+      final current = _WheelDownloadCandidate(
+        downloadUrl: rewrittenUrl,
+        sha256: sha256,
+        score: score,
+        uploadedAt: uploadTime,
+      );
+      if (best == null) {
+        best = current;
+        continue;
+      }
+      if (current.score > best.score) {
+        best = current;
+        continue;
+      }
+      if (current.score == best.score) {
+        final currentTime = current.uploadedAt;
+        final bestTime = best.uploadedAt;
+        if (currentTime != null &&
+            (bestTime == null || currentTime.isAfter(bestTime))) {
+          best = current;
+        }
+      }
+    }
+    return best;
+  }
+
+  /// 根据 wheel 文件名判断是否适配当前运行时，并计算候选优先级。
+  int _scoreWheelFilename(String filename) {
+    final lower = filename.toLowerCase();
+    if (!lower.endsWith('.whl')) return -1;
+
+    final wheelName = lower.substring(0, lower.length - 4);
+    final parts = wheelName.split('-');
+    if (parts.length < 5) return -1;
+    final pythonTag = parts[parts.length - 3];
+    final abiTag = parts[parts.length - 2];
+    final platformTag = parts[parts.length - 1];
+
+    final isPlatformAllowed =
+        platformTag.contains('any') || platformTag.contains('android');
+    if (!isPlatformAllowed) return -1;
+
+    final isPythonAllowed =
+        pythonTag.contains('py3') ||
+        pythonTag.contains('py2.py3') ||
+        pythonTag.contains('cp310');
+    if (!isPythonAllowed) return -1;
+
+    final isAbiAllowed =
+        abiTag == 'none' || abiTag.contains('abi3') || abiTag.contains('cp310');
+    if (!isAbiAllowed) return -1;
+
+    var score = 0;
+    if (platformTag.contains('android')) score += 120;
+    if (platformTag.contains('arm64') || platformTag.contains('aarch64')) {
+      score += 40;
+    }
+    if (platformTag.contains('any')) score += 80;
+    if (pythonTag.contains('cp310')) score += 30;
+    if (pythonTag.contains('py3')) score += 20;
+    if (abiTag.contains('abi3')) score += 25;
+    if (abiTag == 'none') score += 10;
+    if (lower.contains('py3-none-any')) score += 120;
+    return score;
+  }
+
+  /// 下载 wheel 到全局缓存目录，并执行 SHA-256 校验。
+  Future<File> _downloadWheelToCache({
+    required _ResolvedRequirementCandidate candidate,
+    required Directory cacheDir,
+  }) async {
+    final uri = Uri.tryParse(candidate.downloadUrl);
+    final fileName =
+        (uri != null && uri.pathSegments.isNotEmpty)
+            ? uri.pathSegments.last
+            : '${candidate.packageName}-${candidate.version}.whl';
+    final cacheFile = File(p.join(cacheDir.path, fileName));
+    if (cacheFile.existsSync()) {
+      if (candidate.sha256.isEmpty) return cacheFile;
+      final localSha = await _calculateSha256(cacheFile);
+      if (localSha.toLowerCase() == candidate.sha256.toLowerCase()) {
+        return cacheFile;
+      }
+      await cacheFile.delete();
+    }
+
+    await _dio.download(candidate.downloadUrl, cacheFile.path);
+    if (candidate.sha256.isNotEmpty) {
+      final actualSha = await _calculateSha256(cacheFile);
+      if (actualSha.toLowerCase() != candidate.sha256.toLowerCase()) {
+        throw PythonPackageChecksumException(
+          packageId: '${candidate.packageName}==${candidate.version}',
+          expectedSha256: candidate.sha256.toLowerCase(),
+          actualSha256: actualSha.toLowerCase(),
+        );
+      }
+    }
+    return cacheFile;
+  }
+
+  /// 宽松版本比较，用于按“新版本优先”排序与区间判断。
+  ///
+  /// 说明：这里不实现完整 PEP 440，仅覆盖常见 `x.y.z[-pre]` 形式。
+  static int _compareVersionsLoose(String a, String b) {
+    final leftTokens = _tokenizeVersion(a);
+    final rightTokens = _tokenizeVersion(b);
+    final maxLen = max(leftTokens.length, rightTokens.length);
+    for (var i = 0; i < maxLen; i += 1) {
+      final left = i < leftTokens.length ? leftTokens[i] : const _VersionToken.numeric(0);
+      final right = i < rightTokens.length ? rightTokens[i] : const _VersionToken.numeric(0);
+      if (left.isNumeric && right.isNumeric) {
+        final cmp = left.numericValue.compareTo(right.numericValue);
+        if (cmp != 0) return cmp;
+        continue;
+      }
+      if (left.isNumeric && !right.isNumeric) return 1;
+      if (!left.isNumeric && right.isNumeric) return -1;
+      final cmp = left.textValue.compareTo(right.textValue);
+      if (cmp != 0) return cmp;
+    }
+    return 0;
+  }
+
+  /// 将版本字符串拆分为“数字/文本”序列，便于宽松比较。
+  static List<_VersionToken> _tokenizeVersion(String version) {
+    final output = <_VersionToken>[];
+    final normalized = version.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return const <_VersionToken>[_VersionToken.numeric(0)];
+    }
+    final parts = normalized.split(RegExp(r'[\.\-_+]'));
+    for (final part in parts) {
+      if (part.trim().isEmpty) continue;
+      final matches = RegExp(r'[0-9]+|[a-z]+').allMatches(part);
+      if (matches.isEmpty) {
+        output.add(_VersionToken.text(part));
+        continue;
+      }
+      for (final match in matches) {
+        final token = match.group(0) ?? '';
+        if (token.isEmpty) continue;
+        final number = int.tryParse(token);
+        if (number != null) {
+          output.add(_VersionToken.numeric(number));
+        } else {
+          output.add(_VersionToken.text(token));
+        }
+      }
+    }
+    if (output.isEmpty) {
+      return const <_VersionToken>[_VersionToken.numeric(0)];
+    }
+    return output;
+  }
 }
 
 /// Python 实时日志事件。
@@ -425,4 +864,156 @@ class _PythonLogEvent {
     if (runId.isEmpty || stream.isEmpty) return null;
     return _PythonLogEvent(runId: runId, stream: stream, line: line);
   }
+}
+
+/// requirements 单条声明解析结果。
+class _RequirementSpec {
+  final String raw;
+  final String packageName;
+  final List<_RequirementConstraint> constraints;
+
+  const _RequirementSpec({
+    required this.raw,
+    required this.packageName,
+    required this.constraints,
+  });
+
+  /// 解析 requirement 文本（支持 `name` / `name==x` / 区间比较组合）。
+  static _RequirementSpec parse(String input) {
+    final raw = input.trim();
+    if (raw.isEmpty) {
+      throw const FormatException('requirements 条目不能为空');
+    }
+    final match = RegExp(r'^([A-Za-z0-9_.-]+)\s*(.*)$').firstMatch(raw);
+    if (match == null) {
+      throw FormatException('requirements 条目格式错误: $raw');
+    }
+    final packageName = (match.group(1) ?? '').trim().toLowerCase();
+    final specRaw = (match.group(2) ?? '').trim();
+    if (packageName.isEmpty) {
+      throw FormatException('requirements 包名为空: $raw');
+    }
+    if (specRaw.isEmpty) {
+      return _RequirementSpec(
+        raw: raw,
+        packageName: packageName,
+        constraints: const <_RequirementConstraint>[],
+      );
+    }
+
+    final constraints = <_RequirementConstraint>[];
+    final tokens = specRaw.split(',');
+    for (final tokenRaw in tokens) {
+      final token = tokenRaw.trim();
+      if (token.isEmpty) continue;
+      final opMatch = RegExp(r'^(==|>=|<=|>|<)\s*([A-Za-z0-9_.+\-]+)$').firstMatch(token);
+      if (opMatch == null) {
+        throw FormatException('暂不支持的版本约束: $raw');
+      }
+      constraints.add(
+        _RequirementConstraint(
+          operator: opMatch.group(1)!,
+          version: opMatch.group(2)!.trim(),
+        ),
+      );
+    }
+    return _RequirementSpec(
+      raw: raw,
+      packageName: packageName,
+      constraints: constraints,
+    );
+  }
+
+  /// 判断指定版本是否满足当前 requirements 约束。
+  bool matches(String version) {
+    if (constraints.isEmpty) return true;
+    for (final constraint in constraints) {
+      final cmp = PythonPluginService._compareVersionsLoose(
+        version,
+        constraint.version,
+      );
+      switch (constraint.operator) {
+        case '==':
+          if (cmp != 0) return false;
+          break;
+        case '>=':
+          if (cmp < 0) return false;
+          break;
+        case '<=':
+          if (cmp > 0) return false;
+          break;
+        case '>':
+          if (cmp <= 0) return false;
+          break;
+        case '<':
+          if (cmp >= 0) return false;
+          break;
+      }
+    }
+    return true;
+  }
+}
+
+/// 单个 requirements 约束条件（如 `>=1.2.0`）。
+class _RequirementConstraint {
+  final String operator;
+  final String version;
+
+  const _RequirementConstraint({required this.operator, required this.version});
+}
+
+/// 已解析的依赖安装候选。
+class _ResolvedRequirementCandidate {
+  final String packageName;
+  final String requested;
+  final String version;
+  final String downloadUrl;
+  final String sha256;
+  final String mirrorId;
+  final int wheelScore;
+  final DateTime? uploadedAt;
+
+  const _ResolvedRequirementCandidate({
+    required this.packageName,
+    required this.requested,
+    required this.version,
+    required this.downloadUrl,
+    required this.sha256,
+    required this.mirrorId,
+    required this.wheelScore,
+    required this.uploadedAt,
+  });
+}
+
+/// 单个 release 中 wheel 文件的筛选结果。
+class _WheelDownloadCandidate {
+  final String downloadUrl;
+  final String sha256;
+  final int score;
+  final DateTime? uploadedAt;
+
+  const _WheelDownloadCandidate({
+    required this.downloadUrl,
+    required this.sha256,
+    required this.score,
+    required this.uploadedAt,
+  });
+}
+
+/// 版本比较的 token（数字或文本）。
+class _VersionToken {
+  final int? _number;
+  final String? _text;
+
+  const _VersionToken.numeric(int value)
+    : _number = value,
+      _text = null;
+
+  const _VersionToken.text(String value)
+    : _number = null,
+      _text = value;
+
+  bool get isNumeric => _number != null;
+  int get numericValue => _number ?? 0;
+  String get textValue => _text ?? '';
 }

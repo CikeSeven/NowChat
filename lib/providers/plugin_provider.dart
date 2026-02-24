@@ -223,15 +223,6 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
       notifyListeners();
       return;
     }
-    final missingRequiredPluginIds = _findMissingRequiredPluginIds(plugin);
-    if (missingRequiredPluginIds.isNotEmpty) {
-      final missingText = _buildRequiredPluginDisplayText(missingRequiredPluginIds);
-      _lastError = '请先安装前置插件：$missingText';
-      _pluginStates[pluginId] = PluginInstallState.notInstalled;
-      AppLogger.w('插件安装被拦截，缺少前置插件: plugin=$pluginId, missing=$missingRequiredPluginIds');
-      notifyListeners();
-      return;
-    }
 
     _isInstalling = true;
     _activePluginId = pluginId;
@@ -271,21 +262,30 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
                 .where((item) => item.enabledByDefault)
                 .map((item) => item.name)
                 .toList();
+        final installedPackageRecords = <InstalledPluginPackageRecord>[
+          InstalledPluginPackageRecord(
+            id: firstPackage?.id ?? 'main',
+            version: firstPackage?.version ?? installedPlugin.version,
+            targetDir: targetDir,
+            pythonPathEntries:
+                firstPackage?.pythonPathEntries ?? const <String>['.'],
+            entryPoint: firstPackage?.entryPoint,
+          ),
+        ];
+        final requirementsPackage = await _installRequirementsPackageIfNeeded(
+          pluginId: plugin.id,
+          plugin: installedPlugin,
+          baseTargetDir: targetDir,
+        );
+        if (requirementsPackage != null) {
+          installedPackageRecords.add(requirementsPackage);
+        }
         _installedRecords[plugin.id] = InstalledPluginRecord(
           pluginId: plugin.id,
           pluginVersion: installedPlugin.version,
           enabled: true,
           enabledTools: enabledTools,
-          packages: <InstalledPluginPackageRecord>[
-            InstalledPluginPackageRecord(
-              id: firstPackage?.id ?? 'main',
-              version: firstPackage?.version ?? installedPlugin.version,
-              targetDir: targetDir,
-              pythonPathEntries:
-                  firstPackage?.pythonPathEntries ?? const <String>['.'],
-              entryPoint: firstPackage?.entryPoint,
-            ),
-          ],
+          packages: installedPackageRecords,
           installedAt: DateTime.now(),
           isLocalImport: false,
         );
@@ -331,6 +331,16 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
         for (final package in plugin.packages) {
           await installPackage(package);
         }
+        final requirementsBaseTargetDir =
+            installedPackages.isNotEmpty ? installedPackages.first.targetDir : '';
+        final requirementsPackage = await _installRequirementsPackageIfNeeded(
+          pluginId: pluginId,
+          plugin: plugin,
+          baseTargetDir: requirementsBaseTargetDir,
+        );
+        if (requirementsPackage != null) {
+          installedPackages.add(requirementsPackage);
+        }
 
         final enabledTools =
             plugin.tools
@@ -364,6 +374,13 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
           '期望 SHA256: ${e.expectedSha256}\n'
           '实际 SHA256: ${e.actualSha256}';
       AppLogger.e('插件安装校验失败: $pluginId', e, st);
+    } on PythonPackageChecksumException catch (e, st) {
+      _pluginStates[pluginId] = PluginInstallState.broken;
+      _lastError =
+          '依赖包校验失败（${e.packageId}）\n'
+          '期望 SHA256: ${e.expectedSha256}\n'
+          '实际 SHA256: ${e.actualSha256}';
+      AppLogger.e('插件依赖安装校验失败: $pluginId', e, st);
     } catch (e, st) {
       _pluginStates[pluginId] = PluginInstallState.broken;
       _lastError = '插件安装失败: $e';
@@ -410,20 +427,29 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
               .where((item) => item.enabledByDefault)
               .map((item) => item.name)
               .toList();
+      final installedPackageRecords = <InstalledPluginPackageRecord>[
+        InstalledPluginPackageRecord(
+          id: firstPackage?.id ?? 'main',
+          version: firstPackage?.version ?? plugin.version,
+          targetDir: targetDir,
+          pythonPathEntries: firstPackage?.pythonPathEntries ?? const <String>['.'],
+          entryPoint: firstPackage?.entryPoint,
+        ),
+      ];
+      final requirementsPackage = await _installRequirementsPackageIfNeeded(
+        pluginId: plugin.id,
+        plugin: plugin,
+        baseTargetDir: targetDir,
+      );
+      if (requirementsPackage != null) {
+        installedPackageRecords.add(requirementsPackage);
+      }
       _installedRecords[plugin.id] = InstalledPluginRecord(
         pluginId: plugin.id,
         pluginVersion: plugin.version,
         enabled: true,
         enabledTools: enabledTools,
-        packages: <InstalledPluginPackageRecord>[
-          InstalledPluginPackageRecord(
-            id: firstPackage?.id ?? 'main',
-            version: firstPackage?.version ?? plugin.version,
-            targetDir: targetDir,
-            pythonPathEntries: firstPackage?.pythonPathEntries ?? const <String>['.'],
-            entryPoint: firstPackage?.entryPoint,
-          ),
-        ],
+        packages: installedPackageRecords,
         installedAt: DateTime.now(),
         isLocalImport: true,
       );
@@ -440,6 +466,55 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
       _activePluginId = null;
       notifyListeners();
     }
+  }
+
+  /// 若插件声明了 requirements，则安装到插件独立依赖目录并返回安装记录。
+  ///
+  /// 返回 `null` 代表插件未声明 requirements，或声明为空。
+  Future<InstalledPluginPackageRecord?> _installRequirementsPackageIfNeeded({
+    required String pluginId,
+    required PluginDefinition plugin,
+    required String baseTargetDir,
+  }) async {
+    final normalizedRequirements =
+        plugin.requirements
+            .map((item) => item.trim())
+            .where((item) => item.isNotEmpty)
+            .toList();
+    if (normalizedRequirements.isEmpty) {
+      return null;
+    }
+    final pluginRootDir = _pluginRootDir;
+    if (pluginRootDir == null) {
+      throw Exception('插件目录尚未初始化，无法安装 requirements');
+    }
+    if (baseTargetDir.trim().isEmpty) {
+      throw Exception('插件缺少基础目录，无法安装 requirements: $pluginId');
+    }
+    final requirementsTargetDir = p.join(baseTargetDir, '__requirements__');
+    final progressBase = _downloadProgress.clamp(0, 1).toDouble();
+    AppLogger.i(
+      '开始安装插件 requirements: plugin=$pluginId, count=${normalizedRequirements.length}, target=$requirementsTargetDir',
+    );
+    await _pythonService.installRequirements(
+      pluginId: pluginId,
+      pluginRootDir: pluginRootDir,
+      requirements: normalizedRequirements,
+      targetRelativeDir: requirementsTargetDir,
+      onProgress: (progress) {
+        // 将 requirements 安装阶段映射到当前剩余进度区间，避免进度条倒退。
+        final mapped = progressBase + (1 - progressBase) * progress;
+        _downloadProgress = mapped.clamp(0, 1).toDouble();
+        notifyListeners();
+      },
+    );
+    return InstalledPluginPackageRecord(
+      id: '__requirements__',
+      version: 'dynamic',
+      targetDir: requirementsTargetDir,
+      pythonPathEntries: const <String>['.'],
+      entryPoint: null,
+    );
   }
 
   /// 卸载插件及其安装包。
@@ -1010,45 +1085,4 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
         null;
   }
 
-  /// 查询指定插件缺失的前置插件 ID 列表。
-  ///
-  /// 该方法用于 UI 层在“安装前”做显式提示，避免用户点击后无感失败。
-  List<String> missingRequiredPluginIdsFor(String pluginId) {
-    final plugin = getPluginById(pluginId);
-    if (plugin == null) return const <String>[];
-    return _findMissingRequiredPluginIds(plugin);
-  }
-
-  /// 返回插件展示标签：优先“名称(id)”，回退为 id。
-  String pluginDisplayLabel(String pluginId) {
-    final plugin = getPluginById(pluginId);
-    if (plugin == null) return pluginId;
-    final name = plugin.name.trim();
-    if (name.isEmpty) return pluginId;
-    return '$name($pluginId)';
-  }
-
-  /// 返回当前插件缺失的前置插件 ID 列表。
-  ///
-  /// 仅检查“已安装”状态，不强制要求前置插件处于启用状态。
-  List<String> _findMissingRequiredPluginIds(PluginDefinition plugin) {
-    final requiredIds = plugin.requiredPluginIds.toSet();
-    requiredIds.removeWhere((item) => item == plugin.id);
-    if (requiredIds.isEmpty) return const <String>[];
-    return requiredIds.where((item) => !isInstalled(item)).toList();
-  }
-
-  /// 将前置插件 ID 列表格式化为可读提示文本。
-  ///
-  /// 若能解析到插件名称，则按“名称(id)”展示；否则仅展示 ID。
-  String _buildRequiredPluginDisplayText(List<String> pluginIds) {
-    if (pluginIds.isEmpty) return '';
-    final labels = pluginIds.map((pluginId) {
-      final plugin = getPluginById(pluginId);
-      final name = (plugin?.name ?? '').trim();
-      if (name.isEmpty) return pluginId;
-      return '$name($pluginId)';
-    }).toList();
-    return labels.join('、');
-  }
 }

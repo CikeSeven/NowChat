@@ -123,7 +123,7 @@ NowChat 的插件系统分三层：
 关键字段：
 - 基本信息：`id/name/author/version/description/type`
 - Python UI：`pythonNamespace`（配置页入口 = `${pythonNamespace}/schema.py`）
-- 依赖插件：`requiredPluginIds`
+- Python 依赖：`requirements`
 - 全局路径共享：`providesGlobalPythonPaths`
 - 包声明：`packages[]`（`targetDir/pythonPathEntries`）
 - 工具声明：`tools[]`（`runtime/scriptPath/inlineCode/parameters/timeoutSec`）
@@ -139,8 +139,8 @@ NowChat 的插件系统分三层：
   - 决定执行时注入哪些 `sys.path`。
 - `providesGlobalPythonPaths=true`
   - 该插件路径会被注入到其他插件执行环境，适合“基础库插件”。
-- `requiredPluginIds`
-  - 安装前置检查，不满足则安装被拦截并提示用户。
+- `requirements`
+  - 插件安装阶段自动下载并安装依赖，按插件独立环境隔离。
 - `tools[].enabledByDefault`
   - 安装后自动加入已启用工具列表。
 - `pythonNamespace`
@@ -160,8 +160,8 @@ NowChat 的插件系统分三层：
 
 ### 4.2 安装插件（市场）
 `PluginProvider.installPlugin(pluginId)`：
-1. 检查 `requiredPluginIds` 是否已安装
-2. 优先按 `repoUrl` 安装（下载 repo zip 并扁平解压）
+1. 优先按 `repoUrl` 安装（下载 repo zip 并扁平解压）
+2. 若声明 `requirements`，自动安装插件依赖
 3. 写入 `InstalledPluginRecord`
 4. 默认启用 `enabledByDefault=true` 的工具
 5. 同步到 `PluginRegistry`
@@ -297,7 +297,7 @@ py -3.11 -m pip download matplotlib==3.6.0 --dest .\wheels `
 
 2. 专项能力插件
 - 例如 `python_chart_libs`：只放图表相关库（matplotlib、seaborn、plotly...）。
-- 通过 `requiredPluginIds` 依赖基础库插件，避免重复打包大体积基础依赖。
+- 通过 `requirements` 声明依赖并在安装阶段自动下载，不再依赖前置插件字段。
 
 3. 失败排查思路
 - 先看 `sys.path` 是否包含预期目录。

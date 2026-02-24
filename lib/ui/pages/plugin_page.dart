@@ -218,87 +218,6 @@ class _PluginPageState extends State<PluginPage> {
     customController.dispose();
   }
 
-  /// 安装前置缺失时弹窗提示，并展示当前插件声明的前置插件列表。
-  ///
-  /// 该弹窗只做引导，不会自动安装前置插件。
-  Future<void> _showRequiredPluginsDialog({
-    required BuildContext context,
-    required PluginProvider provider,
-    required PluginDefinition plugin,
-  }) async {
-    final requiredPluginIds =
-        plugin.requiredPluginIds
-            .where((item) => item.trim().isNotEmpty && item != plugin.id)
-            .toList();
-    if (requiredPluginIds.isEmpty) return;
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        final color = Theme.of(dialogContext).colorScheme;
-        return AlertDialog(
-          title: const Text('请先安装前置插件'),
-          content: SizedBox(
-            width: 360,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('安装“${plugin.name}”前，需要先安装以下插件：'),
-                const SizedBox(height: 10),
-                ...requiredPluginIds.map((requiredId) {
-                  final installed = provider.isInstalled(requiredId);
-                  final label = provider.pluginDisplayLabel(requiredId);
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          installed
-                              ? Icons.check_circle_rounded
-                              : Icons.error_outline_rounded,
-                          size: 16,
-                          color: installed ? Colors.green : color.error,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            '$label  ${installed ? "(已安装)" : "(未安装)"}',
-                            style: TextStyle(
-                              fontSize: 12.5,
-                              color:
-                                  installed
-                                      ? color.onSurface
-                                      : color.error,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }),
-                const SizedBox(height: 4),
-                Text(
-                  '请先安装未安装项，再安装当前插件。',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: color.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('知道了'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   /// 构建单个插件卡片。
   ///
   /// 交互规则：
@@ -397,17 +316,6 @@ class _PluginPageState extends State<PluginPage> {
                             ? null
                             : () async {
                               if (!installed) {
-                                // 安装前先显式检查前置插件，缺失时给出可读弹窗。
-                                final missingRequiredPluginIds =
-                                    provider.missingRequiredPluginIdsFor(plugin.id);
-                                if (missingRequiredPluginIds.isNotEmpty) {
-                                  await _showRequiredPluginsDialog(
-                                    context: context,
-                                    provider: provider,
-                                    plugin: plugin,
-                                  );
-                                  return;
-                                }
                                 await provider.installPlugin(plugin.id);
                                 return;
                               }
