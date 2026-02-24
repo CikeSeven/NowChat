@@ -88,15 +88,13 @@ plugin_runtime/
 
 默认镜像链路：
 
-1. PyPI 官方：`https://pypi.org`
-2. 清华镜像：`https://pypi.tuna.tsinghua.edu.cn`
-3. 阿里云镜像：`https://mirrors.aliyun.com/pypi`
-4. 中科大镜像：`https://mirrors.ustc.edu.cn/pypi/web`
+1. Chaquopy 官方 wheel 源：`https://chaquo.com/pypi-13.1`
+2. 自定义 Chaquopy 镜像（可选，由部署侧配置）
 
 策略说明：
 
-1. 元数据解析使用 `/pypi/<package>/json`。
-2. 若 metadata 中下载地址仍为 `files.pythonhosted.org`，客户端需重写到当前镜像域名下载。
+1. 解析入口使用 simple index：`/simple/<package>/`。
+2. 从索引页直接筛选 wheel 文件，不使用 PyPI JSON 接口。
 3. 单镜像失败后自动切换到下一个镜像，不要求用户手动干预。
 4. 支持自定义镜像地址，作为扩展入口（运维/企业内网环境）。
 

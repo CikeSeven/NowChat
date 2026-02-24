@@ -544,7 +544,7 @@ class PythonPluginService {
   /// 解析 requirements 候选版本列表，按“版本新 -> 旧”排序返回。
   ///
   /// 策略：
-  /// 1. 按镜像优先级逐个解析。
+  /// 1. 按镜像优先级逐个请求 simple index。
   /// 2. 某镜像拿到可用候选后直接返回，降低跨镜像版本漂移。
   Future<List<_ResolvedRequirementCandidate>> _resolveRequirementCandidates({
     required _RequirementSpec spec,
@@ -552,90 +552,101 @@ class PythonPluginService {
     required String customMirrorBaseUrl,
   }) async {
     for (final mirrorId in mirrorIds) {
-      final metadataUrl = PythonPackageMirrorConfig.buildPackageJsonUrl(
+      final indexUrl = PythonPackageMirrorConfig.buildSimpleIndexUrl(
         packageName: spec.packageName,
         mirrorId: mirrorId,
         customMirrorBaseUrl: customMirrorBaseUrl,
       );
       try {
-        final response = await _dio.getUri<dynamic>(Uri.parse(metadataUrl));
+        final response = await _dio.getUri<String>(
+          Uri.parse(indexUrl),
+          options: Options(
+            responseType: ResponseType.plain,
+            validateStatus:
+                (status) => status != null && status >= 200 && status < 500,
+          ),
+        );
         if (response.statusCode != 200) {
           AppLogger.w(
-            '依赖元数据请求失败: package=${spec.packageName}, mirror=$mirrorId, status=${response.statusCode}',
+            '依赖索引请求失败: package=${spec.packageName}, mirror=$mirrorId, status=${response.statusCode}',
           );
           continue;
         }
-        final data = response.data;
-        Map<String, dynamic> metadata;
-        if (data is Map<String, dynamic>) {
-          metadata = data;
-        } else if (data is Map) {
-          metadata = Map<String, dynamic>.from(data);
-        } else if (data is String) {
-          final decoded = jsonDecode(data);
-          if (decoded is! Map<String, dynamic>) {
-            continue;
-          }
-          metadata = decoded;
-        } else {
-          continue;
-        }
-        final candidates = _extractRequirementCandidatesFromMetadata(
+        final candidates = _extractRequirementCandidatesFromSimpleIndex(
           spec: spec,
-          metadata: metadata,
+          indexUrl: indexUrl,
+          simpleHtml: response.data ?? '',
           mirrorId: mirrorId,
-          customMirrorBaseUrl: customMirrorBaseUrl,
         );
         if (candidates.isNotEmpty) {
           return candidates;
         }
       } catch (e, st) {
         AppLogger.w(
-          '依赖元数据解析失败: package=${spec.packageName}, mirror=$mirrorId, error=$e',
+          '依赖索引解析失败: package=${spec.packageName}, mirror=$mirrorId, error=$e',
         );
-        AppLogger.e('依赖元数据解析异常', e, st);
+        AppLogger.e('依赖索引解析异常', e, st);
       }
     }
     return const <_ResolvedRequirementCandidate>[];
   }
 
-  /// 从 `pypi/<name>/json` 元数据中提取可安装候选版本。
-  List<_ResolvedRequirementCandidate> _extractRequirementCandidatesFromMetadata({
+  /// 从 simple index 页面提取 wheel 候选。
+  List<_ResolvedRequirementCandidate> _extractRequirementCandidatesFromSimpleIndex({
     required _RequirementSpec spec,
-    required Map<String, dynamic> metadata,
+    required String indexUrl,
+    required String simpleHtml,
     required String mirrorId,
-    required String customMirrorBaseUrl,
   }) {
-    final rawReleases = metadata['releases'];
-    if (rawReleases is! Map) {
+    if (simpleHtml.trim().isEmpty) {
       return const <_ResolvedRequirementCandidate>[];
     }
-    final candidates = <_ResolvedRequirementCandidate>[];
-    for (final entry in rawReleases.entries) {
-      final version = entry.key.toString().trim();
-      if (version.isEmpty) continue;
-      if (!spec.matches(version)) continue;
-      final filesRaw = entry.value;
-      if (filesRaw is! List) continue;
-      final wheel = _pickBestWheelForRelease(
-        releaseFiles: filesRaw,
-        mirrorId: mirrorId,
-        customMirrorBaseUrl: customMirrorBaseUrl,
-      );
-      if (wheel == null) continue;
-      candidates.add(
-        _ResolvedRequirementCandidate(
-          packageName: spec.packageName,
-          requested: spec.raw,
-          version: version,
-          downloadUrl: wheel.downloadUrl,
-          sha256: wheel.sha256,
-          mirrorId: mirrorId,
-          wheelScore: wheel.score,
-          uploadedAt: wheel.uploadedAt,
-        ),
-      );
+    final baseUri = Uri.parse(indexUrl);
+    final links = RegExp(
+      r'''href\s*=\s*["']([^"']+)["']''',
+      caseSensitive: false,
+    ).allMatches(simpleHtml);
+    if (links.isEmpty) {
+      return const <_ResolvedRequirementCandidate>[];
     }
+
+    // 相同版本可能存在多个 wheel（不同 ABI/平台），按分数保留最佳项。
+    final bestByVersion = <String, _ResolvedRequirementCandidate>{};
+    for (final link in links) {
+      final hrefRaw = link.group(1);
+      if (hrefRaw == null || hrefRaw.trim().isEmpty) continue;
+      final href = _decodeSimpleHtmlHref(hrefRaw.trim());
+      final resolvedUri = baseUri.resolve(href);
+      final fileName =
+          resolvedUri.pathSegments.isNotEmpty
+              ? resolvedUri.pathSegments.last
+              : '';
+      if (fileName.isEmpty || !fileName.toLowerCase().endsWith('.whl')) {
+        continue;
+      }
+      final score = _scoreWheelFilename(fileName);
+      if (score < 0) continue;
+      final version = _extractWheelVersionFromFilename(fileName);
+      if (version.isEmpty || !spec.matches(version)) {
+        continue;
+      }
+      final candidate = _ResolvedRequirementCandidate(
+        packageName: spec.packageName,
+        requested: spec.raw,
+        version: version,
+        downloadUrl: resolvedUri.toString(),
+        sha256: _extractSha256FromFragment(resolvedUri.fragment),
+        mirrorId: mirrorId,
+        wheelScore: score,
+        uploadedAt: null,
+      );
+      final existing = bestByVersion[version];
+      if (existing == null || candidate.wheelScore > existing.wheelScore) {
+        bestByVersion[version] = candidate;
+      }
+    }
+
+    final candidates = bestByVersion.values.toList();
 
     // 默认按“版本新 -> 旧”排序；同版本优先 wheel 兼容分更高的候选。
     candidates.sort((a, b) {
@@ -643,73 +654,44 @@ class PythonPluginService {
       if (byVersion != 0) return byVersion;
       final byScore = b.wheelScore.compareTo(a.wheelScore);
       if (byScore != 0) return byScore;
-      final aTime = a.uploadedAt;
-      final bTime = b.uploadedAt;
-      if (aTime == null && bTime == null) return 0;
-      if (aTime == null) return 1;
-      if (bTime == null) return -1;
-      return bTime.compareTo(aTime);
+      return 0;
     });
     return candidates;
   }
 
-  /// 选择单个 release 下最适合当前 Android 运行时的 wheel 文件。
-  _WheelDownloadCandidate? _pickBestWheelForRelease({
-    required List releaseFiles,
-    required String mirrorId,
-    required String customMirrorBaseUrl,
-  }) {
-    _WheelDownloadCandidate? best;
-    for (final item in releaseFiles) {
-      if (item is! Map) continue;
-      final map = Map<String, dynamic>.from(item);
-      final filename = (map['filename'] ?? '').toString().trim();
-      if (filename.isEmpty || !filename.toLowerCase().endsWith('.whl')) {
-        continue;
-      }
-      if ((map['yanked'] ?? false) == true) continue;
+  /// 解码 simple index 中的 HTML 属性文本（主要处理 `&amp;`）。
+  String _decodeSimpleHtmlHref(String value) {
+    return value
+        .replaceAll('&amp;', '&')
+        .replaceAll('&quot;', '"')
+        .replaceAll('&#39;', "'")
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>');
+  }
 
-      final score = _scoreWheelFilename(filename);
-      if (score < 0) continue;
+  /// 从 wheel 文件名解析版本号。
+  ///
+  /// wheel 命名：`{dist}-{version}(-{build})?-{py}-{abi}-{platform}.whl`
+  String _extractWheelVersionFromFilename(String filename) {
+    final lower = filename.toLowerCase();
+    if (!lower.endsWith('.whl')) return '';
+    final wheelName = lower.substring(0, lower.length - 4);
+    final parts = wheelName.split('-');
+    if (parts.length < 5) return '';
+    return parts[1].trim();
+  }
 
-      final rawUrl = (map['url'] ?? '').toString().trim();
-      if (rawUrl.isEmpty) continue;
-      final digestMap =
-          map['digests'] is Map
-              ? Map<String, dynamic>.from(map['digests'] as Map)
-              : const <String, dynamic>{};
-      final sha256 = (digestMap['sha256'] ?? '').toString().trim().toLowerCase();
-      final uploadRaw = (map['upload_time_iso_8601'] ?? '').toString().trim();
-      final uploadTime = DateTime.tryParse(uploadRaw);
-      final rewrittenUrl = PythonPackageMirrorConfig.rewritePackageDownloadUrl(
-        rawUrl: rawUrl,
-        mirrorId: mirrorId,
-        customMirrorBaseUrl: customMirrorBaseUrl,
-      );
-      final current = _WheelDownloadCandidate(
-        downloadUrl: rewrittenUrl,
-        sha256: sha256,
-        score: score,
-        uploadedAt: uploadTime,
-      );
-      if (best == null) {
-        best = current;
-        continue;
-      }
-      if (current.score > best.score) {
-        best = current;
-        continue;
-      }
-      if (current.score == best.score) {
-        final currentTime = current.uploadedAt;
-        final bestTime = best.uploadedAt;
-        if (currentTime != null &&
-            (bestTime == null || currentTime.isAfter(bestTime))) {
-          best = current;
-        }
-      }
+  /// 从 URL fragment 中提取 `sha256` 值（若不存在返回空字符串）。
+  String _extractSha256FromFragment(String fragment) {
+    if (fragment.trim().isEmpty) return '';
+    final pairs = fragment.split('&');
+    for (final pair in pairs) {
+      final segments = pair.split('=');
+      if (segments.length != 2) continue;
+      if (segments[0].trim().toLowerCase() != 'sha256') continue;
+      return segments[1].trim().toLowerCase();
     }
-    return best;
+    return '';
   }
 
   /// 根据 wheel 文件名判断是否适配当前运行时，并计算候选优先级。
@@ -981,21 +963,6 @@ class _ResolvedRequirementCandidate {
     required this.sha256,
     required this.mirrorId,
     required this.wheelScore,
-    required this.uploadedAt,
-  });
-}
-
-/// 单个 release 中 wheel 文件的筛选结果。
-class _WheelDownloadCandidate {
-  final String downloadUrl;
-  final String sha256;
-  final int score;
-  final DateTime? uploadedAt;
-
-  const _WheelDownloadCandidate({
-    required this.downloadUrl,
-    required this.sha256,
-    required this.score,
     required this.uploadedAt,
   });
 }
