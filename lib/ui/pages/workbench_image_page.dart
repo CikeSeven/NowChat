@@ -11,6 +11,7 @@ import 'package:now_chat/providers/chat_provider.dart';
 import 'package:now_chat/providers/image_generation_queue_provider.dart';
 import 'package:now_chat/providers/settings_provider.dart';
 import 'package:now_chat/ui/pages/image_preview_page.dart';
+import 'package:now_chat/util/app_logger.dart';
 import 'package:provider/provider.dart';
 
 enum _ImageWorkbenchMode { generate, edit }
@@ -192,10 +193,8 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
       settings: settings,
       chatProvider: chatProvider,
     );
-    final sizeSummary =
-        _mode == _ImageWorkbenchMode.generate
-            ? settings.defaultImageGenerateSize
-            : settings.defaultImageEditSize;
+    // 尺寸配置统一：生图与编辑共用同一默认尺寸。
+    final sizeSummary = settings.defaultImageGenerateSize;
     final countSummary = settings.defaultImageGenerateCount;
     if (_composerCollapsed) {
       return SafeArea(
@@ -494,6 +493,18 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
       _showSnackBar('当前默认模型不是图片编辑模型，请在设置页调整');
       return;
     }
+    // 尺寸配置唯一来源：生图设置页当前值（SettingsProvider 内存态）。
+    final selectedSize = settings.defaultImageGenerateSize;
+    final selectedCount =
+        _mode == _ImageWorkbenchMode.generate
+            ? settings.defaultImageGenerateCount
+            : 1;
+    AppLogger.i(
+      'WorkbenchImage.enqueue settings: mode=${_mode.name}, '
+      'providerSize=${settings.defaultImageGenerateSize}, '
+      'finalSize=$selectedSize, '
+      'providerCount=${settings.defaultImageGenerateCount}, finalCount=$selectedCount',
+    );
     final task = ImageGenerationTask.createQueued(
       mode:
           _mode == _ImageWorkbenchMode.generate
@@ -504,14 +515,8 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
       requestMode: features.imageRequestMode,
       prompt: prompt,
       sourceImagePath: _sourceImagePath,
-      size:
-          _mode == _ImageWorkbenchMode.generate
-              ? settings.defaultImageGenerateSize
-              : settings.defaultImageEditSize,
-      requestCount:
-          _mode == _ImageWorkbenchMode.generate
-              ? settings.defaultImageGenerateCount
-              : 1,
+      size: selectedSize,
+      requestCount: selectedCount,
     );
     await queueProvider.enqueueTask(task);
     if (!mounted) return;

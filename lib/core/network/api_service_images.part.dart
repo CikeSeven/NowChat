@@ -37,6 +37,21 @@ Future<Map<String, dynamic>> _generateImageInternal({
       if ((quality ?? '').trim().isNotEmpty) 'quality': quality!.trim(),
     };
 
+    // 打印生图请求关键参数，便于排查“尺寸/数量未生效”等问题。
+    AppLogger.i(
+      'ImageAPI.generate params: ${jsonEncode(<String, dynamic>{
+        'uri': uri.toString(),
+        'requestMode': requestMode.name,
+        'providerType': provider.type.name,
+        'model': model.trim(),
+        'prompt': normalizedPrompt,
+        'n': n <= 0 ? 1 : n,
+        'size': (size ?? '').trim(),
+        'quality': (quality ?? '').trim(),
+        'hasAuthorization': (provider.apiKey ?? '').trim().isNotEmpty,
+      })}',
+    );
+
     AppLogger.i('ImageAPI.generate -> $uri, model=${model.trim()}');
     final response = await http.post(
       uri,
@@ -121,6 +136,21 @@ Future<Map<String, dynamic>> _editImageInternal({
     if ((size ?? '').trim().isNotEmpty) {
       request.fields['size'] = size!.trim();
     }
+
+    // 打印图片编辑请求参数（multipart 场景），便于核对 size/path/n 等字段。
+    AppLogger.i(
+      'ImageAPI.edit params: ${jsonEncode(<String, dynamic>{
+        'uri': uri.toString(),
+        'requestMode': requestMode.name,
+        'providerType': provider.type.name,
+        'model': model.trim(),
+        'prompt': normalizedPrompt,
+        'n': n <= 0 ? 1 : n,
+        'size': (size ?? '').trim(),
+        'imagePath': normalizedPath,
+        'hasAuthorization': (provider.apiKey ?? '').trim().isNotEmpty,
+      })}',
+    );
 
     AppLogger.i('ImageAPI.edit -> $uri, model=${model.trim()}');
     final streamed = await request.send();

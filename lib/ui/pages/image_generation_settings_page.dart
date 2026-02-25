@@ -65,33 +65,16 @@ class ImageGenerationSettingsPage extends StatelessWidget {
           const Divider(height: 1),
           ListTile(
             leading: const Icon(Icons.photo_size_select_large_outlined),
-            title: const Text('默认生图尺寸'),
+            title: const Text('默认尺寸'),
             subtitle: Text(_formatSizeWithRatio(settings.defaultImageGenerateSize)),
             trailing: const Icon(Icons.chevron_right_rounded),
             onTap: () {
               _showSizeSelector(
                 context,
-                title: '选择默认生图尺寸',
+                title: '选择默认尺寸',
                 currentValue: settings.defaultImageGenerateSize,
                 onSelected: (size) async {
                   await context.read<SettingsProvider>().setDefaultImageGenerateSize(size);
-                },
-              );
-            },
-          ),
-          const Divider(height: 1),
-          ListTile(
-            leading: const Icon(Icons.crop_outlined),
-            title: const Text('默认编辑尺寸'),
-            subtitle: Text(_formatSizeWithRatio(settings.defaultImageEditSize)),
-            trailing: const Icon(Icons.chevron_right_rounded),
-            onTap: () {
-              _showSizeSelector(
-                context,
-                title: '选择默认编辑尺寸',
-                currentValue: settings.defaultImageEditSize,
-                onSelected: (size) async {
-                  await context.read<SettingsProvider>().setDefaultImageEditSize(size);
                 },
               );
             },

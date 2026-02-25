@@ -248,10 +248,6 @@ class AIToolRuntime {
                 'type': 'string',
                 'description': '生图提示词',
               },
-              'size': <String, dynamic>{
-                'type': 'string',
-                'description': '可选尺寸，例如 1024x1024；不传则使用默认设置',
-              },
             },
             'required': ['prompt'],
           },
@@ -274,10 +270,6 @@ class AIToolRuntime {
               'image_path': <String, dynamic>{
                 'type': 'string',
                 'description': '待编辑图片的本地绝对路径',
-              },
-              'size': <String, dynamic>{
-                'type': 'string',
-                'description': '可选尺寸，例如 1024x1024；不传则使用默认设置',
               },
             },
             'required': ['prompt', 'image_path'],
@@ -368,7 +360,8 @@ class AIToolRuntime {
         );
       }
 
-      final sizeArg = _normalizeOptionalText(args['size']);
+      // 对聊天工具调用，尺寸统一跟随生图设置页，避免模型携带旧 size 导致配置不生效。
+      final sizeFromSettings = settings.generationSize;
       late final ImageGenerationTask task;
       if (isGenerate) {
         if (modelFeatures.modelType != ModelType.imageGeneration) {
@@ -391,7 +384,7 @@ class AIToolRuntime {
           model: targetModel,
           requestMode: modelFeatures.imageRequestMode,
           prompt: prompt,
-          size: sizeArg,
+          size: sizeFromSettings,
           requestCount: settings.generationCount,
         );
       } else {
@@ -431,7 +424,7 @@ class AIToolRuntime {
           requestMode: modelFeatures.imageRequestMode,
           prompt: prompt,
           sourceImagePath: imagePath,
-          size: sizeArg,
+          size: sizeFromSettings,
         );
       }
 
@@ -445,6 +438,7 @@ class AIToolRuntime {
         'mode': task.mode.name,
         'providerId': provider.id,
         'model': targetModel,
+        'size': task.size,
         'requestCount': task.requestCount,
         'message': '任务已加入生图队列，请稍后在工作台查看结果',
       };
@@ -584,13 +578,6 @@ class AIToolRuntime {
     if (value == null) return fallback;
     if (value < min) return min;
     if (value > max) return max;
-    return value;
-  }
-
-  /// 将动态参数标准化为可选文本，空白字符串会转换为 null。
-  static String? _normalizeOptionalText(dynamic raw) {
-    final value = raw?.toString().trim();
-    if (value == null || value.isEmpty) return null;
     return value;
   }
 

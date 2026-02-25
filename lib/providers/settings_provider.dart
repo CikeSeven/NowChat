@@ -13,7 +13,6 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
   static const int defaultMaxToolCallsValue = 10;
   static const bool defaultExposeImageToolsToChatValue = false;
   static const String defaultImageGenerateSizeValue = '1024x1024';
-  static const String defaultImageEditSizeValue = '1024x1024';
   static const int defaultImageGenerateCountValue = 1;
   static const int defaultImageQueueConcurrencyValue = 2;
 
@@ -56,7 +55,7 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
   String? _defaultImageEditProviderId;
   String? _defaultImageEditModel;
   String _defaultImageGenerateSize = defaultImageGenerateSizeValue;
-  String _defaultImageEditSize = defaultImageEditSizeValue;
+  String _defaultImageEditSize = defaultImageGenerateSizeValue;
   int _defaultImageGenerateCount = defaultImageGenerateCountValue;
   int _imageQueueConcurrency = defaultImageQueueConcurrencyValue;
 
@@ -77,6 +76,7 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
   String? get defaultImageEditProviderId => _defaultImageEditProviderId;
   String? get defaultImageEditModel => _defaultImageEditModel;
   String get defaultImageGenerateSize => _defaultImageGenerateSize;
+  /// 兼容旧调用：图片编辑尺寸与生图尺寸统一。
   String get defaultImageEditSize => _defaultImageEditSize;
   int get defaultImageGenerateCount => _defaultImageGenerateCount;
   int get imageQueueConcurrency => _imageQueueConcurrency;
@@ -150,12 +150,12 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
         _normalizeImageSize(
           prefs.getString(_defaultImageGenerateSizeKey),
         ) ??
-        defaultImageGenerateSizeValue;
-    _defaultImageEditSize =
         _normalizeImageSize(
           prefs.getString(_defaultImageEditSizeKey),
         ) ??
-        defaultImageEditSizeValue;
+        defaultImageGenerateSizeValue;
+    // 尺寸配置统一：编辑尺寸与生图尺寸保持一致。
+    _defaultImageEditSize = _defaultImageGenerateSize;
     _defaultImageGenerateCount = _normalizeGenerateCount(
       prefs.getInt(_defaultImageGenerateCountKey),
     );
@@ -315,18 +315,18 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> setDefaultImageGenerateSize(String value) async {
     final normalized = _normalizeImageSize(value) ?? defaultImageGenerateSizeValue;
     _defaultImageGenerateSize = normalized;
+    _defaultImageEditSize = normalized;
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_defaultImageGenerateSizeKey, normalized);
+    // 兼容旧版本读取路径，写入同值避免历史分叉。
+    await prefs.setString(_defaultImageEditSizeKey, normalized);
   }
 
   /// 设置默认图片编辑尺寸（image-to-image）。
   Future<void> setDefaultImageEditSize(String value) async {
-    final normalized = _normalizeImageSize(value) ?? defaultImageEditSizeValue;
-    _defaultImageEditSize = normalized;
-    notifyListeners();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_defaultImageEditSizeKey, normalized);
+    // 尺寸配置统一到生图尺寸，编辑入口调用时直接复用同一配置。
+    await setDefaultImageGenerateSize(value);
   }
 
   /// 设置默认每次生图任务生成数量（仅允许 1/2/4）。
