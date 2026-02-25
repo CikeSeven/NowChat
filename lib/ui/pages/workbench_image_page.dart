@@ -483,7 +483,7 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
         ),
         child: Padding(
           // 缩短顶部与整体内边距，让记录卡片更紧凑。
-          padding: const EdgeInsets.fromLTRB(10, 1, 10, 5),
+          padding: const EdgeInsets.fromLTRB(10, 5, 10, 5),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

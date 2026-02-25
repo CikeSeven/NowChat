@@ -122,6 +122,8 @@ class ImageGenerationQueueProvider extends ChangeNotifier {
     final allowed = taskIds.difference(runningIds);
     if (allowed.isEmpty) return;
     _tasks.removeWhere((item) => allowed.contains(item.id));
+    // 同步删除历史记录，避免应用重启时历史迁移把已删任务“回灌”到队列。
+    await _deleteHistoryByTaskIds(allowed);
     await _persistTasks();
     notifyListeners();
   }
@@ -314,6 +316,17 @@ class ImageGenerationQueueProvider extends ChangeNotifier {
       record,
       ...history.where((item) => item.id != record.id),
     ];
+    await Storage.saveImageGenerationHistory(next);
+  }
+
+  /// 删除历史面板中的指定任务记录，保持“队列删除”与“历史展示”一致。
+  Future<void> _deleteHistoryByTaskIds(Set<String> taskIds) async {
+    if (taskIds.isEmpty) return;
+    final history = await Storage.loadImageGenerationHistory();
+    if (history.isEmpty) return;
+    final next =
+        history.where((item) => !taskIds.contains(item.id)).toList(growable: false);
+    if (next.length == history.length) return;
     await Storage.saveImageGenerationHistory(next);
   }
 
