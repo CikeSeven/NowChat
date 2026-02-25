@@ -482,7 +482,8 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
                   : BorderSide.none,
         ),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+          // 缩短顶部与整体内边距，让记录卡片更紧凑。
+          padding: const EdgeInsets.fromLTRB(10, 1, 10, 5),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -515,10 +516,15 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
                       tooltip: '删除',
                       onPressed: () => _deleteSingleTask(queueProvider, task),
                       icon: const Icon(Icons.delete_outline_rounded, size: 20),
+                      visualDensity: VisualDensity.compact,
+                      constraints: const BoxConstraints(
+                        minWidth: 32,
+                        minHeight: 32,
+                      ),
                     ),
                 ],
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 1),
               Row(
                 children: [
                   Expanded(
@@ -535,6 +541,11 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
                     tooltip: '复制提示词',
                     onPressed: () => _copyPrompt(prompt),
                     icon: const Icon(Icons.content_copy_rounded, size: 18),
+                    visualDensity: VisualDensity.compact,
+                    constraints: const BoxConstraints(
+                      minWidth: 32,
+                      minHeight: 32,
+                    ),
                   ),
                 ],
               ),
