@@ -27,26 +27,42 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     final color = Theme.of(context).colorScheme;
-    return Scaffold(
-      body: _pages[_index],
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _index,
-        onTap: (i) => setState(() => _index = i),
-        type: BottomNavigationBarType.fixed,
-        backgroundColor: color.surfaceContainerLow,
-        selectedItemColor: color.primary,
-        unselectedItemColor: color.onSurfaceVariant,
-        selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600),
-        showUnselectedLabels: true,
-        items: [
-          BottomNavigationBarItem(icon: Icon(Icons.chat), label: '会话'),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.handyman_outlined),
-            label: '工作台',
-          ),
-          BottomNavigationBarItem(icon: Icon(Icons.api), label: 'API'),
-          BottomNavigationBarItem(icon: Icon(Icons.settings), label: '设置'),
-        ],
+    return WillPopScope(
+      // 根页面返回策略：
+      // - 非会话页：先切回会话页，不直接退出应用。
+      // - 会话页：按系统默认行为退出应用。
+      onWillPop: () async {
+        if (_index != 0) {
+          setState(() => _index = 0);
+          return false;
+        }
+        return true;
+      },
+      child: Scaffold(
+        // 使用 IndexedStack 保活一级页面状态，避免工作台子页切换后回到默认页签。
+        body: IndexedStack(
+          index: _index,
+          children: _pages,
+        ),
+        bottomNavigationBar: BottomNavigationBar(
+          currentIndex: _index,
+          onTap: (i) => setState(() => _index = i),
+          type: BottomNavigationBarType.fixed,
+          backgroundColor: color.surfaceContainerLow,
+          selectedItemColor: color.primary,
+          unselectedItemColor: color.onSurfaceVariant,
+          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600),
+          showUnselectedLabels: true,
+          items: [
+            BottomNavigationBarItem(icon: Icon(Icons.chat), label: '会话'),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.handyman_outlined),
+              label: '工作台',
+            ),
+            BottomNavigationBarItem(icon: Icon(Icons.api), label: 'API'),
+            BottomNavigationBarItem(icon: Icon(Icons.settings), label: '设置'),
+          ],
+        ),
       ),
     );
   }
