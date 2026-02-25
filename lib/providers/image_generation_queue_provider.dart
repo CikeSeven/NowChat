@@ -69,10 +69,12 @@ class ImageGenerationQueueProvider extends ChangeNotifier {
               );
             }
             return task;
-          }).toList(growable: false);
+          }).toList(growable: true);
+      await _mergeLegacyHistory(normalized);
       _tasks
         ..clear()
         ..addAll(normalized);
+      await _persistTasks();
       _initialized = true;
       notifyListeners();
       _schedule();
@@ -298,5 +300,44 @@ class ImageGenerationQueueProvider extends ChangeNotifier {
       ...history.where((item) => item.id != record.id),
     ];
     await Storage.saveImageGenerationHistory(next);
+  }
+
+  /// 兼容旧版数据：将历史记录迁移到任务列表中展示。
+  ///
+  /// 迁移策略：
+  /// - 按 `id` 去重；
+  /// - 仅补充缺失项，不覆盖新队列已有状态；
+  /// - 首次迁移后会写回新队列存储。
+  Future<void> _mergeLegacyHistory(List<ImageGenerationTask> target) async {
+    final history = await Storage.loadImageGenerationHistory();
+    if (history.isEmpty) return;
+    final existingIds = target.map((item) => item.id).toSet();
+    for (final record in history) {
+      if (existingIds.contains(record.id)) continue;
+      target.add(
+        ImageGenerationTask(
+          id: record.id,
+          createdAt: record.createdAt,
+          updatedAt: record.createdAt,
+          startedAt: record.createdAt,
+          finishedAt: record.createdAt,
+          mode:
+              record.modelType == ModelType.imageEdit
+                  ? ImageGenerationTaskMode.edit
+                  : ImageGenerationTaskMode.generate,
+          status: ImageGenerationTaskStatus.succeeded,
+          providerId: record.providerId,
+          model: record.model,
+          requestMode: ImageRequestMode.inheritProvider,
+          size: null,
+          prompt: record.prompt,
+          sourceImagePath: record.sourceImagePath,
+          resultImageUris: record.imageUris,
+          revisedPrompt: record.revisedPrompt,
+          errorMessage: null,
+          retryCount: 0,
+        ),
+      );
+    }
   }
 }

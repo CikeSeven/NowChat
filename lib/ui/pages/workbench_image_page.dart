@@ -64,7 +64,7 @@ class _WorkbenchImagePageState extends State<WorkbenchImagePage> {
                 Row(
                   children: [
                     Text(
-                      '任务列表',
+                      '生成记录',
                       style: TextStyle(
                         fontSize: 14.5,
                         fontWeight: FontWeight.w700,
@@ -189,28 +189,6 @@ class _WorkbenchImagePageState extends State<WorkbenchImagePage> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SegmentedButton<_ImageWorkbenchMode>(
-              segments: const [
-                ButtonSegment(
-                  value: _ImageWorkbenchMode.generate,
-                  icon: Icon(Icons.image_outlined),
-                  label: Text('图片生成'),
-                ),
-                ButtonSegment(
-                  value: _ImageWorkbenchMode.edit,
-                  icon: Icon(Icons.auto_fix_high_outlined),
-                  label: Text('图片编辑'),
-                ),
-              ],
-              selected: {_mode},
-              onSelectionChanged: (value) {
-                setState(() {
-                  _mode = value.first;
-                  _sourceImagePath = null;
-                });
-              },
-            ),
-            const SizedBox(height: 8),
             Text(
               '模型：$modelSummary  ·  尺寸：$sizeSummary',
               style: TextStyle(
@@ -271,6 +249,46 @@ class _WorkbenchImagePageState extends State<WorkbenchImagePage> {
                   },
                   icon: const Icon(Icons.tune_rounded),
                   label: const Text('配置'),
+                ),
+                const SizedBox(width: 8),
+                Builder(
+                  builder: (modeContext) {
+                    Offset tapPosition = Offset.zero;
+                    return InkWell(
+                      borderRadius: BorderRadius.circular(10),
+                      onTapDown: (details) => tapPosition = details.globalPosition,
+                      onTap: () => _showModeMenu(modeContext, tapPosition),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: color.outlineVariant),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              _mode == _ImageWorkbenchMode.generate
+                                  ? Icons.image_outlined
+                                  : Icons.auto_fix_high_outlined,
+                              size: 18,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              _mode == _ImageWorkbenchMode.generate
+                                  ? '图片生成'
+                                  : '图片编辑',
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                            const SizedBox(width: 2),
+                            const Icon(Icons.unfold_more, size: 18),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
                 ),
                 const Spacer(),
                 FilledButton.icon(
@@ -730,5 +748,47 @@ class _WorkbenchImagePageState extends State<WorkbenchImagePage> {
     final hour = time.hour.toString().padLeft(2, '0');
     final minute = time.minute.toString().padLeft(2, '0');
     return '$month-$day $hour:$minute';
+  }
+
+  /// 模式切换菜单：交互与设置页主题切换保持一致。
+  Future<void> _showModeMenu(BuildContext context, Offset position) async {
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    final selected = await showMenu<_ImageWorkbenchMode>(
+      context: context,
+      position: RelativeRect.fromRect(
+        position & const Size(40, 40),
+        Offset.zero & overlay.size,
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      items: [
+        PopupMenuItem(
+          value: _ImageWorkbenchMode.generate,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('图片生成'),
+              if (_mode == _ImageWorkbenchMode.generate)
+                const Icon(Icons.check, color: Colors.blue),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: _ImageWorkbenchMode.edit,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('图片编辑'),
+              if (_mode == _ImageWorkbenchMode.edit)
+                const Icon(Icons.check, color: Colors.blue),
+            ],
+          ),
+        ),
+      ],
+    );
+    if (selected == null || !mounted) return;
+    setState(() {
+      _mode = selected;
+      _sourceImagePath = null;
+    });
   }
 }
