@@ -87,7 +87,8 @@ class AIToolRuntime {
             },
           };
         })
-        .toList(growable: false);
+        // 后续会按设置动态追加内置生图工具，因此必须使用可增长列表。
+        .toList(growable: true);
     if (settings.exposeImageToolsToChat) {
       schemas.addAll(_buildBuiltinImageToolsSchema());
     }

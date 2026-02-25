@@ -371,6 +371,7 @@ Future<List<Map<String, dynamic>>> _buildOpenAIMessagesPayload(
   List<Message> messages, {
   required bool allowVision,
   String? systemPrompt,
+  bool includeAssistantReasoning = false,
 }) async {
   final payload = <Map<String, dynamic>>[];
   final normalizedSystemPrompt = systemPrompt?.trim() ?? '';
@@ -380,15 +381,26 @@ Future<List<Map<String, dynamic>>> _buildOpenAIMessagesPayload(
 
   for (final message in messages) {
     final attachments = _attachmentsOf(message);
+    final isAssistant = message.role == 'assistant';
+    final reasoning = (message.reasoning ?? '').trim();
+    final includeReasoning = includeAssistantReasoning && isAssistant;
     if (attachments.isEmpty) {
-      payload.add({'role': message.role, 'content': message.content});
+      payload.add({
+        'role': message.role,
+        'content': message.content,
+        if (includeReasoning) 'reasoning_content': reasoning,
+      });
       continue;
     }
     final contentParts = await _buildOpenAIContentParts(
       message,
       allowVision: allowVision,
     );
-    payload.add({'role': message.role, 'content': contentParts});
+    payload.add({
+      'role': message.role,
+      'content': contentParts,
+      if (includeReasoning) 'reasoning_content': reasoning,
+    });
   }
   return payload;
 }
@@ -604,6 +616,13 @@ bool _isToolCallingEnabledForSession(
   return provider.featuresForModel(selectedModel).supportsTools;
 }
 
+/// 某些兼容接口（如 DeepSeek thinking mode）要求 assistant 消息携带 `reasoning_content`。
+bool _requiresReasoningContentForOpenAI(AIProviderConfig provider) {
+  if (provider.type == ProviderType.deepseek) return true;
+  final base = (provider.baseUrl ?? '').toLowerCase();
+  return base.contains('deepseek');
+}
+
 /// 将 OpenAI `message.content`（字符串/分片数组）提取为纯文本。
 String _extractOpenAIMessageContentText(Map<String, dynamic>? message) {
   if (message == null) return '';
@@ -621,6 +640,23 @@ String _extractOpenAIMessageContentText(Map<String, dynamic>? message) {
         if (text.trim().isNotEmpty) {
           texts.add(text);
         }
+      }
+    }
+    return texts.join('\n');
+  }
+  return '';
+}
+
+/// 从 OpenAI assistant message 中提取 reasoning 文本（兼容 `reasoning_content/reasoning`）。
+String _extractOpenAIMessageReasoningText(Map<String, dynamic>? message) {
+  if (message == null) return '';
+  final raw = message['reasoning_content'] ?? message['reasoning'];
+  if (raw is String) return raw;
+  if (raw is List) {
+    final texts = <String>[];
+    for (final item in raw) {
+      if (item is String && item.trim().isNotEmpty) {
+        texts.add(item);
       }
     }
     return texts.join('\n');

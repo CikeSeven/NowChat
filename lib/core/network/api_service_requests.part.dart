@@ -74,6 +74,7 @@ Future<Map<String, dynamic>> _sendOpenAIChatRequest({
     headers['Authorization'] = 'Bearer $apiKey';
   }
   final shouldUseTools = _isToolCallingEnabledForSession(provider, session);
+  final requiresReasoningContent = _requiresReasoningContentForOpenAI(provider);
   var remainingToolCalls = session.maxToolCalls <= 0 ? 0 : session.maxToolCalls;
   final toolLogs = <Map<String, dynamic>>[];
   // 会话级消息上下文，后续会在工具调用循环中持续追加 assistant/tool 消息。
@@ -81,6 +82,7 @@ Future<Map<String, dynamic>> _sendOpenAIChatRequest({
     filteredMessages,
     allowVision: allowVision,
     systemPrompt: systemPrompt,
+    includeAssistantReasoning: requiresReasoningContent,
   );
   final responseTextBuffer = StringBuffer();
 
@@ -134,6 +136,9 @@ Future<Map<String, dynamic>> _sendOpenAIChatRequest({
       final content = _extractOpenAIMessageContentText(
         message is Map ? Map<String, dynamic>.from(message) : null,
       );
+      final reasoning = _extractOpenAIMessageReasoningText(
+        message is Map ? Map<String, dynamic>.from(message) : null,
+      );
       if (content.isNotEmpty) {
         responseTextBuffer.write(content);
       }
@@ -157,6 +162,7 @@ Future<Map<String, dynamic>> _sendOpenAIChatRequest({
       conversation.add(<String, dynamic>{
         'role': 'assistant',
         if (content.isNotEmpty) 'content': content,
+        if (requiresReasoningContent) 'reasoning_content': reasoning,
         'tool_calls': toolCalls
             .map((call) => _toOpenAIToolCallPayload(call))
             .toList(growable: false),

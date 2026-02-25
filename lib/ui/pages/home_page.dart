@@ -50,7 +50,14 @@ class _HomePageState extends State<HomePage> {
         // 使用 IndexedStack 保活一级页面状态，避免工作台子页切换后回到默认页签。
         body: IndexedStack(
           index: _index,
-          children: _pages,
+          // IndexedStack 会同时保活多个页面。
+          // 这里仅允许当前页面参与 Hero，避免多个页面中的默认 FAB heroTag 冲突。
+          children: List<Widget>.generate(_pages.length, (i) {
+            return HeroMode(
+              enabled: i == _index,
+              child: _pages[i],
+            );
+          }),
         ),
         bottomNavigationBar: BottomNavigationBar(
           currentIndex: _index,
