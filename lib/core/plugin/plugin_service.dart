@@ -272,9 +272,8 @@ class PluginService {
 
   /// 从 zip 中读取 `plugin.json` 并解析插件定义。
   ///
-  /// 兼容两种常见布局：
-  /// - 根目录直接有 `plugin.json`
-  /// - 顶层目录下包含 `plugin.json`
+  /// 导入规则要求：zip 根目录必须直接包含 `plugin.json`。
+  /// 不接受 `plugin_dir/plugin.json` 这类带一层目录的结构，避免导入后路径不一致。
   Future<PluginDefinition> parsePluginDefinitionFromZip(File zipFile) async {
     if (!zipFile.existsSync()) {
       throw Exception('插件包不存在: ${zipFile.path}');
@@ -284,14 +283,21 @@ class PluginService {
     ArchiveFile? pluginFile;
     for (final entry in archive) {
       if (!entry.isFile) continue;
-      final normalized = entry.name.replaceAll('\\', '/').toLowerCase();
-      if (normalized == 'plugin.json' || normalized.endsWith('/plugin.json')) {
+      final normalizedSegments =
+          entry.name
+              .replaceAll('\\', '/')
+              .split('/')
+              .map((item) => item.trim())
+              .where((item) => item.isNotEmpty && item != '.')
+              .toList();
+      if (normalizedSegments.length == 1 &&
+          normalizedSegments.first.toLowerCase() == 'plugin.json') {
         pluginFile = entry;
         break;
       }
     }
     if (pluginFile == null) {
-      throw const FormatException('插件包缺少 plugin.json');
+      throw const FormatException('插件包根目录必须包含 plugin.json');
     }
     final contentBytes = pluginFile.content as List<int>;
     final raw = utf8.decode(contentBytes);
@@ -336,6 +342,7 @@ class PluginService {
     required String sourceZipPath,
     required Directory pluginRootDir,
     required String targetDir,
+    List<String> preserveTopLevelDirs = const <String>[],
   }) async {
     final sourceFile = File(sourceZipPath);
     if (!sourceFile.existsSync()) {
@@ -344,10 +351,26 @@ class PluginService {
     final installDir = Directory(
       p.join(pluginRootDir.path, _normalizeRelativePath(targetDir)),
     );
+    final preserveNames =
+        preserveTopLevelDirs
+            .map((item) => item.trim())
+            .where((item) => item.isNotEmpty)
+            .toSet();
     if (installDir.existsSync()) {
-      await installDir.delete(recursive: true);
+      if (preserveNames.isEmpty) {
+        await installDir.delete(recursive: true);
+      } else {
+        // 覆盖安装时可保留指定目录（如 __requirements__），避免重复下载依赖。
+        for (final entity in installDir.listSync(followLinks: false)) {
+          final name = p.basename(entity.path);
+          if (preserveNames.contains(name)) continue;
+          await entity.delete(recursive: true);
+        }
+      }
     }
-    await installDir.create(recursive: true);
+    if (!installDir.existsSync()) {
+      await installDir.create(recursive: true);
+    }
     await _extractZip(sourceFile, installDir);
   }
 

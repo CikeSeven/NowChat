@@ -1,235 +1,155 @@
-# Python Requirements 动态安装系统（V2 全新方案）
+﻿# Python Requirements 运行时安装系统（当前实现）
 
-## 1. 文档目标
+本文描述 NowChat 当前代码中的 Python requirements 安装行为，用于插件开发、排障和发布验收。
 
-本文定义 NowChat 的新一代 Python 插件依赖安装系统（V2），用于替代“插件预打包 `libs/`”为主的旧方式。
+## 1. 目标
 
-本方案目标：
+requirements 系统用于替代“把第三方库直接打进插件包”的单一路径，实现：
 
-1. 插件通过 `plugin.json` 声明 `requirements`，应用在安装阶段自动下载并安装依赖。
-2. 支持不同插件使用同一库的不同版本并行运行。
-3. 保持运行期可观测：解析、下载、安装、回退、执行全链路可日志追踪。
+1. 插件按 `plugin.json` 声明依赖并在安装阶段自动拉取。
+2. 插件版本级依赖隔离，避免不同插件相互污染。
+3. 通过 lock 文件记录可追溯安装结果。
 
----
+## 2. 数据来源与入口
 
-## 2. 兼容性声明（硬性）
+### 2.1 requirements 声明入口
 
-这是一个**新系统**，按“无旧版本插件存在”处理，明确约束如下：
-
-1. **不对旧插件做兼容适配**。
-2. **不实现旧数据迁移逻辑**（包括旧 `libs/` 目录、旧安装记录的自动转换）。
-3. 插件中心仅面向新规范插件（携带 `requirements` 或明确声明无需额外依赖）。
-4. 出现旧格式插件时，按“不支持”处理并给出明确错误提示。
-
----
-
-## 3. 总体架构
-
-系统分为四层：
-
-1. 声明层：插件通过 `plugin.json` 提供 `requirements`。
-2. 解析层：将依赖声明解析为可安装候选集合（版本候选序列）。
-3. 安装层：下载并安装到“插件独立环境”，并写入 lock 结果。
-4. 执行层：运行插件代码前注入该插件专属 `sys.path`。
-
-目录设计：
-
-```text
-plugin_runtime/
-├── .pkg_cache/                              # 全局包缓存，避免重复下载
-└── plugins/
-    └── <pluginId>/
-        ├── site_packages/                   # 该插件独立依赖环境
-        └── plugin_requirements_lock.json    # 该插件最终锁定结果
-```
-
----
-
-## 4. plugin.json 新字段规范
-
-新增字段：
+插件 `plugin.json`：
 
 ```json
 {
-  "requirements": [
-    "requests",
-    "pydantic==2.9.2",
-    "httpx>=0.27,<0.29"
-  ]
+  "requirements": ["numpy", "pandas", "matplotlib"]
 }
 ```
 
-规则：
+### 2.2 安装调用入口
 
-1. 若指定精确版本（`==`），必须严格安装该版本。
-2. 若为范围约束（如 `>=,<`），从候选中选择满足约束的最高可用版本。
-3. 若未指定版本，仅写包名，则默认尝试安装最新版本。
+调用链：
 
----
+1. `PluginProvider._installRequirementsPackageIfNeeded`
+2. `PythonPluginService.installRequirements`
 
-## 5. 版本策略与失败回退
+相关文件：
 
-### 5.1 默认策略
+- `lib/providers/plugin_provider.dart`
+- `lib/core/plugin/python_plugin_service.dart`
 
-1. `requirements` 显式版本：按声明安装。
-2. `requirements` 未显式版本：先尝试最新版本。
+## 3. 安装目录与产物
 
-### 5.2 自动回退策略
+对于某个插件版本目录：`<pluginTargetDir>`
 
-当目标版本安装失败或导入失败时：
+1. requirements 安装目录：`<pluginTargetDir>/__requirements__`
+2. lock 文件：`<pluginTargetDir>/plugin_requirements_lock.json`
 
-1. 自动回退到次新版本。
-2. 按版本倒序继续尝试，直到成功或候选耗尽。
-3. 成功版本写入 lock，后续优先复用，避免每次重新探测。
+示例（本地导入）：
 
-### 5.3 镜像源策略（国内可用性）
+- `plugin_runtime/local_plugins/<pluginId>/<version>/__requirements__`
+- `plugin_runtime/local_plugins/<pluginId>/<version>/plugin_requirements_lock.json`
 
-为避免部分地区无法稳定访问官方源，requirements 安装必须支持镜像回退链路。
+示例（仓库安装）：
 
-默认镜像链路：
+- `plugin_runtime/remote_plugins/<pluginId>/<version>/__requirements__`
+- `plugin_runtime/remote_plugins/<pluginId>/<version>/plugin_requirements_lock.json`
 
-1. Chaquopy 官方 wheel 源：`https://chaquo.com/pypi-13.1`
-2. 自定义 Chaquopy 镜像（可选，由部署侧配置）
+## 4. 镜像链路
 
-策略说明：
+镜像配置文件：`lib/core/network/python_package_mirror_config.dart`
 
-1. 解析入口优先使用 Chaquopy 索引：`/<package>/`，并兼容尝试 `/simple/<package>/`。
-2. 从索引页直接筛选 wheel 文件，不使用 PyPI JSON 接口。
-3. 单镜像失败后自动切换到下一个镜像，不要求用户手动干预。
-4. 支持自定义镜像地址，作为扩展入口（运维/企业内网环境）。
+当前策略：
 
----
-
-## 6. 依赖隔离策略（已定）
-
-采用**插件独立环境**：
-
-1. 每个插件拥有独立 `site_packages`，互不覆盖。
-2. 同一设备允许 `A` 插件使用 `x==1.x`，`B` 插件使用 `x==2.x`。
-3. 通过全局 `.pkg_cache` 降低重复下载。
+1. 优先 Chaquopy 源（`direct`）。
+2. 解析不到候选时回退 PyPI simple：
+   - `https://pypi.tuna.tsinghua.edu.cn/simple`
+   - `https://pypi.org/simple`
 
 说明：
 
-1. “是否重复安装”不是核心风险，核心是“运行时版本冲突”。
-2. 独立环境可直接消除插件间依赖污染问题。
+1. PyPI 回退是解析层回退，不代表接受任意 wheel。
+2. 安装器会继续做 wheel 兼容筛选。
 
----
+## 5. 依赖解析规则
 
-## 7. 安装状态机
+### 5.1 直接依赖
 
-插件安装后依赖阶段状态机：
+支持示例：
 
-1. `resolve_start`：开始解析 requirements。
-2. `resolve_done`：得到候选版本列表。
-3. `download_start`：开始下载候选包。
-4. `download_done`：下载完成并写入缓存。
-5. `install_start`：安装到插件 `site_packages`。
-6. `install_done`：安装完成。
-7. `import_verify`：导入验证（最小可执行检查）。
-8. `lock_write`：写入 `plugin_requirements_lock.json`。
-9. `ready`：插件进入可运行状态。
+- `name`
+- `name==1.2.3`
+- `name>=1.0,<2.0`
 
-失败转移：
+### 5.2 传递依赖
 
-1. 任一步失败进入 `fallback_try_next`（若有候选版本）。
-2. 候选耗尽后进入 `failed` 并输出可读错误。
+安装器会读取 wheel metadata 的 `Requires-Dist`，并追加到待安装队列。
 
----
+关键点：
 
-## 8. Lock 文件规范
+1. 支持常见 marker：`python_version/sys_platform/platform_system/os_name/extra`。
+2. marker 无法可靠解析时，采用保守策略避免漏装关键依赖。
+3. extras 条件在当前运行模式下按“无 extras 选择”处理。
 
-文件：`plugin_requirements_lock.json`
+### 5.3 wheel 候选评分
 
-作用：
+安装器会按 Python 版本、ABI、平台标签进行候选评分，优先匹配 Android 场景。
 
-1. 记录最终安装成功的实际版本。
-2. 记录包来源、hash、安装时间、回退信息。
-3. 提供问题复现与回归诊断依据。
+PyPI 回退路径额外限制：
 
-示例：
+1. 优先纯 Python wheel（如 `py3-none-any`）。
+2. 以降低 ABI 不兼容和 native 崩溃概率。
 
-```json
-{
-  "pluginId": "now_chat_plugin_example",
-  "resolvedAt": "2026-02-24T10:00:00Z",
-  "packages": [
-    {
-      "name": "requests",
-      "requested": "requests",
-      "resolvedVersion": "2.32.3",
-      "sourceUrl": "https://.../requests-2.32.3.whl",
-      "sha256": "xxxx",
-      "fallbackTried": []
-    }
-  ]
-}
-```
+## 6. lock 文件字段
 
----
+`plugin_requirements_lock.json` 当前主要字段：
 
-## 9. 运行时注入与执行
+- `pluginId`
+- `resolvedAt`
+- `targetDir`
+- `requirements`
+- `mirrorChain`
+- `pypiFallback`
+- `packages[]`
 
-执行插件前：
+`packages[]` 典型字段：
 
-1. 读取插件路径与 `site_packages`。
-2. 将其放入 `extraSysPaths` 前列。
-3. 再执行 `runner.py` 中的脚本代码。
+- `requirement`
+- `sourceRequirement`
+- `package`
+- `version`
+- `sourceType`（`chaquopy` 或 `pypi`）
+- `mirrorId`
+- `indexUrl`
+- `downloadUrl`
+- `sha256`
+- `discoveredDependencies`
+- `fallbackTried`
 
-结果：
+## 7. 覆盖安装与依赖复用
 
-1. 依赖解析优先命中插件私有环境。
-2. 基础环境仅作为兜底，不参与版本竞争。
+同 ID 本地插件覆盖安装时：
 
----
+1. 若旧版与新版 requirements 签名一致，可复用旧 `__requirements__`。
+2. 若不一致，重新安装 requirements。
+3. 旧版本中不再需要的包目录会被清理。
 
-## 10. 卸载与修复
+相关逻辑：`PluginProvider.importLocalPluginPayload`。
 
-### 10.1 卸载插件
+## 8. 失败类型与排障
 
-1. 删除插件目录（含 `site_packages` 与 lock）。
-2. 缓存包按引用计数或定期 GC 清理。
+常见失败类型：
 
-### 10.2 修复依赖
+1. 镜像不可达 / 索引 404。
+2. requirements 无可用候选 wheel。
+3. checksum 不匹配。
+4. 运行时 native 依赖缺失（如部分科学计算库场景）。
 
-提供“修复依赖”动作：
+排障顺序：
 
-1. 删除插件 `site_packages`。
-2. 基于 lock 重建。
-3. lock 失效时重新解析并走安装流程。
+1. 看安装阶段日志：`解析依赖`、`依赖索引请求失败`、`依赖安装成功`。
+2. 看 lock 文件：确认最终包版本、来源、回退链。
+3. 看运行时报错：定位是导入错误、路径错误还是 native `.so` 问题。
 
----
+## 9. 发布建议
 
-## 11. 日志与可观测性
-
-每个插件依赖安装至少打印以下日志：
-
-1. 插件 ID、requirements 原文。
-2. 解析结果与候选版本序列。
-3. 下载 URL、文件大小、hash 校验结果。
-4. 安装目标目录与耗时。
-5. 导入验证结果。
-6. 回退尝试轨迹与最终锁定版本。
-
-日志要求：
-
-1. 错误日志必须包含“包名 + 版本 + 阶段 + 原因”。
-2. 用户可直接据日志判断是“无可用版本”还是“安装失败”。
-
----
-
-## 12. 验收标准
-
-1. 无 requirements 插件：可正常安装运行。
-2. 有 requirements 插件：可自动安装依赖并运行。
-3. 两插件同库不同版本：可同时运行不冲突。
-4. 最新版本失败：可自动回退并成功运行。
-5. 插件重装后：可复用 lock 快速恢复。
-6. 卸载插件后：不影响其他插件运行。
-
----
-
-## 13. 实施边界
-
-1. 本文仅定义新系统，不包含对旧插件格式兼容。
-2. 本文不引入“旧版本自动迁移”任务。
-3. 新系统上线后，插件中心发布规则以本规范为准。
+1. 插件 requirements 保持最小集合。
+2. 优先验证主流机型（Android 版本 + ABI）。
+3. 每次发布都保留 lock 安装日志做回归比对。
+4. 对有 native 依赖的库优先做真机验证，不依赖模拟器结论。

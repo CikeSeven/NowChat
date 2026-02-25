@@ -25,11 +25,14 @@ class PythonPackageMirrorPreset {
 /// 该配置用于 requirements 运行时安装。
 ///
 /// 约束：
-/// 1. 安卓端只使用 Chaquopy wheel 源，不走 PyPI JSON。
+/// 1. 优先使用 Chaquopy wheel 源（适配 Android ABI 的包优先级最高）。
 /// 2. 解析入口使用 simple index：`/simple/<name>/`。
 class PythonPackageMirrorConfig {
   static const String directId = 'direct';
   static const String customId = 'custom';
+  static const String pypiTsinghuaSimpleBaseUrl =
+      'https://pypi.tuna.tsinghua.edu.cn/simple';
+  static const String pypiOfficialSimpleBaseUrl = 'https://pypi.org/simple';
 
   /// 镜像预设清单。
   static const List<PythonPackageMirrorPreset> presets =
@@ -53,6 +56,16 @@ class PythonPackageMirrorConfig {
   /// 说明：自定义镜像是否启用由业务侧显式传入 mirrorId 控制。
   static const List<String> automaticFallbackMirrorIds = <String>[
     directId,
+  ];
+
+  /// PyPI simple 回退链路（按顺序尝试）。
+  ///
+  /// 说明：
+  /// - `requirements` 解析不到 Chaquopy 候选时，才会回退到该链路。
+  /// - 运行时侧会进一步限制 wheel 类型（仅允许纯 Python wheel）。
+  static const List<String> pypiFallbackSimpleBaseUrls = <String>[
+    pypiTsinghuaSimpleBaseUrl,
+    pypiOfficialSimpleBaseUrl,
   ];
 
   /// 根据镜像 ID 查找预设。
@@ -120,5 +133,21 @@ class PythonPackageMirrorConfig {
       '$effectiveBase/$normalizedPackage/',
       '$effectiveBase/simple/$normalizedPackage/',
     ];
+  }
+
+  /// 构造 PyPI simple 候选地址（仅 simple 风格）。
+  ///
+  /// 注意：
+  /// - 这里不拼接 `/<package>/` 旧格式，避免对 PyPI 官方源产生无效请求。
+  static List<String> buildPypiSimpleIndexUrls({
+    required String packageName,
+    required String simpleBaseUrl,
+  }) {
+    final normalizedPackage = packageName.trim().toLowerCase();
+    final normalizedBase = normalizeCustomBaseUrl(simpleBaseUrl);
+    if (normalizedPackage.isEmpty || normalizedBase.isEmpty) {
+      return const <String>[];
+    }
+    return <String>['$normalizedBase/$normalizedPackage/'];
   }
 }

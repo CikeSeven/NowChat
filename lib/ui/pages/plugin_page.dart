@@ -218,6 +218,52 @@ class _PluginPageState extends State<PluginPage> {
     customController.dispose();
   }
 
+  /// 处理本地 zip 导入，并在同 ID 时弹窗确认覆盖。
+  Future<void> _handleLocalPluginImport(
+    BuildContext context,
+    PluginProvider provider,
+  ) async {
+    final payload = await provider.pickLocalPluginImportPayload();
+    if (!context.mounted || payload == null) return;
+    final plugin = payload.plugin;
+    final oldVersion = provider.installedPluginVersion(plugin.id);
+    var allowOverwrite = true;
+    if (oldVersion != null) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('检测到同 ID 插件'),
+            content: Text(
+              '插件 ID：${plugin.id}\n'
+              '当前版本：$oldVersion\n'
+              '导入版本：${plugin.version}\n\n'
+              '是否覆盖安装？\n'
+              '覆盖时会尽量复用旧依赖目录，避免重复下载。',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('覆盖安装'),
+              ),
+            ],
+          );
+        },
+      );
+      allowOverwrite = confirmed == true;
+      if (!allowOverwrite) return;
+    }
+    if (!context.mounted) return;
+    await provider.importLocalPluginPayload(
+      payload,
+      allowOverwrite: allowOverwrite,
+    );
+  }
+
   /// 构建单个插件卡片。
   ///
   /// 交互规则：
@@ -408,7 +454,14 @@ class _PluginPageState extends State<PluginPage> {
                       : () => _showMirrorDialog(context, provider),
               icon: const Icon(Icons.language_rounded),
             ),
-            // 暂时隐藏本地导入入口，避免与远程清单流程混淆。
+            IconButton(
+              tooltip: '导入 zip 插件',
+              onPressed:
+                  provider.isBusy
+                      ? null
+                      : () => _handleLocalPluginImport(context, provider),
+              icon: const Icon(Icons.folder_zip_rounded),
+            ),
             IconButton(
               tooltip: '刷新清单',
               onPressed: provider.isBusy ? null : provider.refreshManifest,

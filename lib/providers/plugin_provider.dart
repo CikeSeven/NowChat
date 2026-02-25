@@ -158,6 +158,10 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
   /// 查询插件是否已安装。
   bool isInstalled(String pluginId) => _installedRecords.containsKey(pluginId);
 
+  /// 读取已安装插件版本（未安装返回 null）。
+  String? installedPluginVersion(String pluginId) =>
+      _installedRecords[pluginId]?.pluginVersion;
+
   /// 查询插件是否启用。
   bool isPluginEnabled(String pluginId) {
     final record = _installedRecords[pluginId];
@@ -398,6 +402,28 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
 
   /// 导入本地插件 zip 并安装。
   Future<void> importLocalPlugin() async {
+    final payload = await pickLocalPluginImportPayload();
+    if (payload == null) {
+      AppLogger.i('用户取消本地插件导入');
+      return;
+    }
+    await importLocalPluginPayload(payload, allowOverwrite: true);
+  }
+
+  /// 选择本地插件 zip，并仅解析出插件元信息。
+  ///
+  /// 该方法用于 UI 侧“安装前确认”流程（例如同 ID 覆盖提示）。
+  Future<LocalPluginImportPayload?> pickLocalPluginImportPayload() async {
+    return _pluginService.pickAndParseLocalPluginZip();
+  }
+
+  /// 安装已解析的本地插件 payload。
+  ///
+  /// `allowOverwrite=false` 且已存在同 ID 安装记录时会直接拒绝安装。
+  Future<void> importLocalPluginPayload(
+    LocalPluginImportPayload payload, {
+    required bool allowOverwrite,
+  }) async {
     if (_isInstalling || _pluginRootDir == null) return;
     _isInstalling = true;
     _activePluginId = null;
@@ -406,13 +432,50 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
     notifyListeners();
     AppLogger.i('开始导入本地插件');
     try {
-      final payload = await _pluginService.pickAndParseLocalPluginZip();
-      if (payload == null) {
-        AppLogger.i('用户取消本地插件导入');
+      final plugin = payload.plugin;
+      final oldRecord = _installedRecords[plugin.id];
+      if (oldRecord != null && !allowOverwrite) {
+        _lastError =
+            '插件已安装：${plugin.id} (当前版本 ${oldRecord.pluginVersion}，导入版本 ${plugin.version})';
+        AppLogger.w('本地插件导入被取消（未确认覆盖）: id=${plugin.id}');
         return;
       }
-      final plugin = payload.plugin;
-      final targetDir = p.join('local_plugins', plugin.id, plugin.version);
+
+      // 覆盖策略：
+      // 1. 同 ID 且 requirements 一致：复用旧 __requirements__ 目录；
+      // 2. requirements 不一致：重新安装依赖，并清理旧版本无关文件。
+      final oldPlugin = _localPluginsById[plugin.id];
+      final oldRequirementsPackage =
+          oldRecord == null ? null : _findRequirementsPackage(oldRecord);
+      final reuseRequirements =
+          oldRecord != null &&
+          oldRecord.isLocalImport &&
+          oldRequirementsPackage != null &&
+          _sameRequirementSignature(
+            oldRequirements: oldPlugin?.requirements ?? const <String>[],
+            newRequirements: plugin.requirements,
+          );
+
+      final mainTargetDir =
+          oldRecord == null
+              ? p.join('local_plugins', plugin.id, plugin.version)
+              : oldRecord.isLocalImport
+              ? _resolveMainPackageTargetDir(
+                pluginId: plugin.id,
+                record: oldRecord,
+                fallbackVersion: plugin.version,
+              )
+              : p.join('local_plugins', plugin.id, plugin.version);
+
+      if (oldRecord != null) {
+        await _removeLegacyPackagesBeforeLocalOverwrite(
+          pluginId: plugin.id,
+          record: oldRecord,
+          keepMainTargetDir: mainTargetDir,
+          keepRequirementsTargetDir:
+              reuseRequirements ? oldRequirementsPackage.targetDir : null,
+        );
+      }
       _activePluginId = plugin.id;
       _pluginStates[plugin.id] = PluginInstallState.installing;
       notifyListeners();
@@ -420,7 +483,11 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
       await _pluginService.installPackageFromLocalZip(
         sourceZipPath: payload.sourceZipPath,
         pluginRootDir: _pluginRootDir!,
-        targetDir: targetDir,
+        targetDir: mainTargetDir,
+        preserveTopLevelDirs:
+            reuseRequirements
+                ? const <String>['__requirements__']
+                : const <String>[],
       );
 
       _localPluginsById[plugin.id] = plugin;
@@ -435,18 +502,25 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
         InstalledPluginPackageRecord(
           id: firstPackage?.id ?? 'main',
           version: firstPackage?.version ?? plugin.version,
-          targetDir: targetDir,
+          targetDir: mainTargetDir,
           pythonPathEntries: firstPackage?.pythonPathEntries ?? const <String>['.'],
           entryPoint: firstPackage?.entryPoint,
         ),
       ];
-      final requirementsPackage = await _installRequirementsPackageIfNeeded(
-        pluginId: plugin.id,
-        plugin: plugin,
-        baseTargetDir: targetDir,
-      );
-      if (requirementsPackage != null) {
-        installedPackageRecords.add(requirementsPackage);
+      if (reuseRequirements && oldRequirementsPackage != null) {
+        installedPackageRecords.add(oldRequirementsPackage);
+        AppLogger.i(
+          '本地插件覆盖复用依赖目录: id=${plugin.id}, requirementsDir=${oldRequirementsPackage.targetDir}',
+        );
+      } else {
+        final requirementsPackage = await _installRequirementsPackageIfNeeded(
+          pluginId: plugin.id,
+          plugin: plugin,
+          baseTargetDir: mainTargetDir,
+        );
+        if (requirementsPackage != null) {
+          installedPackageRecords.add(requirementsPackage);
+        }
       }
       _installedRecords[plugin.id] = InstalledPluginRecord(
         pluginId: plugin.id,
@@ -470,6 +544,81 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
       _activePluginId = null;
       notifyListeners();
     }
+  }
+
+  /// 覆盖导入前清理同 ID 的旧包目录。
+  ///
+  /// 说明：
+  /// 1. 仅删除安装记录中“不再需要”的包目录；
+  /// 2. 与新版本共用的依赖目录会保留，避免重复下载与安装。
+  Future<void> _removeLegacyPackagesBeforeLocalOverwrite({
+    required String pluginId,
+    required InstalledPluginRecord record,
+    required String keepMainTargetDir,
+    required String? keepRequirementsTargetDir,
+  }) async {
+    final pluginRootDir = _pluginRootDir;
+    if (pluginRootDir == null) return;
+    AppLogger.i('开始清理旧版本插件目录（覆盖安装）: id=$pluginId');
+    for (final package in record.packages.reversed) {
+      final keepMain = package.targetDir == keepMainTargetDir;
+      final keepRequirements =
+          keepRequirementsTargetDir != null &&
+          package.targetDir == keepRequirementsTargetDir;
+      if (keepMain || keepRequirements) {
+        continue;
+      }
+      await _pluginService.uninstallByRelativeDir(
+        pluginRootDir: pluginRootDir,
+        relativeTargetDir: package.targetDir,
+      );
+    }
+    // 覆盖时保留 UI 运行态缓存可能导致展示旧内容，先清空后再写入新记录。
+    _pluginUiPages.remove(pluginId);
+    _pluginUiErrors.remove(pluginId);
+    _pluginUiLoadingPluginIds.remove(pluginId);
+    _pluginReadmeCache.remove(pluginId);
+  }
+
+  /// 解析安装记录中的主包目录（排除 __requirements__ 包）。
+  String _resolveMainPackageTargetDir({
+    required String pluginId,
+    required InstalledPluginRecord record,
+    required String fallbackVersion,
+  }) {
+    for (final package in record.packages) {
+      if (package.id == '__requirements__') continue;
+      return package.targetDir;
+    }
+    return p.join('local_plugins', pluginId, fallbackVersion);
+  }
+
+  /// 提取 __requirements__ 安装记录。
+  InstalledPluginPackageRecord? _findRequirementsPackage(
+    InstalledPluginRecord record,
+  ) {
+    for (final package in record.packages) {
+      if (package.id == '__requirements__') return package;
+    }
+    return null;
+  }
+
+  /// 判断两版插件 requirements 是否一致（忽略大小写与空白差异）。
+  bool _sameRequirementSignature({
+    required List<String> oldRequirements,
+    required List<String> newRequirements,
+  }) {
+    Set<String> normalize(List<String> source) {
+      return source
+          .map((item) => item.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ''))
+          .where((item) => item.isNotEmpty)
+          .toSet();
+    }
+
+    final oldSet = normalize(oldRequirements);
+    final newSet = normalize(newRequirements);
+    if (oldSet.length != newSet.length) return false;
+    return oldSet.containsAll(newSet);
   }
 
   /// 若插件声明了 requirements，则安装到插件独立依赖目录并返回安装记录。

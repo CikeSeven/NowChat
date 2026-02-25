@@ -48,6 +48,12 @@ class PythonPluginService {
   _runLogListeners = <String, void Function(_PythonLogEvent event)>{};
   static StreamSubscription<dynamic>? _pythonLogSubscription;
   static final Random _random = Random();
+  static const String _sourceChaquopy = 'chaquopy';
+  static const String _sourcePypi = 'pypi';
+  static const String _runtimePythonVersion = '3.10';
+  static const String _runtimeSysPlatform = 'linux';
+  static const String _runtimePlatformSystem = 'linux';
+  static const String _runtimeOsName = 'posix';
 
   PythonPluginService({Dio? dio}) : _dio = dio ?? Dio();
 
@@ -217,18 +223,48 @@ class PythonPluginService {
       preferredMirrorId,
       ...PythonPackageMirrorConfig.automaticFallbackMirrorIds,
     ].toSet().toList();
+    final pypiFallbackSources = PythonPackageMirrorConfig.pypiFallbackSimpleBaseUrls;
     final lockPackages = <Map<String, dynamic>>[];
-    final total = normalizedRequirements.length;
+    final pendingQueue =
+        normalizedRequirements
+            .map(
+              (item) => _PendingRequirement(
+                requirement: item,
+                source: 'manifest',
+              ),
+            )
+            .toList();
+    final queuedPackageNames = <String>{
+      ...pendingQueue.map(
+        (item) => _RequirementSpec.parse(item.requirement).packageName,
+      ),
+    };
+    final installedByPackage = <String, _ResolvedRequirementCandidate>{};
 
     AppLogger.i(
-      '开始安装插件 requirements: plugin=$pluginId, count=$total, mirrorChain=$mirrorIds',
+      '开始安装插件 requirements: plugin=$pluginId, count=${normalizedRequirements.length}, mirrorChain=$mirrorIds, pypiFallback=$pypiFallbackSources',
     );
-    for (var index = 0; index < normalizedRequirements.length; index += 1) {
-      final rawRequirement = normalizedRequirements[index];
-      final spec = _RequirementSpec.parse(rawRequirement);
-      onProgress?.call(index / total);
+    while (pendingQueue.isNotEmpty) {
+      final pending = pendingQueue.removeAt(0);
+      final spec = _RequirementSpec.parse(pending.requirement);
+      queuedPackageNames.remove(spec.packageName);
+
+      final installed = installedByPackage[spec.packageName];
+      if (installed != null) {
+        // 若同包重复声明但版本约束冲突，直接失败，避免运行期出现不可预测行为。
+        if (!spec.matches(installed.version)) {
+          throw Exception(
+            '依赖版本冲突: ${spec.raw} 与已安装 ${installed.packageName}==${installed.version}',
+          );
+        }
+        continue;
+      }
+
+      final completed = installedByPackage.length;
+      final dynamicTotal = completed + pendingQueue.length + 1;
+      onProgress?.call(completed / dynamicTotal);
       AppLogger.i(
-        '解析依赖: plugin=$pluginId, requirement=${spec.raw}, package=${spec.packageName}',
+        '解析依赖: plugin=$pluginId, requirement=${spec.raw}, package=${spec.packageName}, source=${pending.source}',
       );
 
       final candidates = await _resolveRequirementCandidates(
@@ -241,6 +277,7 @@ class PythonPluginService {
       }
 
       _ResolvedRequirementCandidate? selectedCandidate;
+      File? selectedWheelFile;
       final fallbackTried = <Map<String, dynamic>>[];
       Object? lastError;
       for (final candidate in candidates) {
@@ -251,8 +288,9 @@ class PythonPluginService {
           );
           await _extractZip(wheelFile, installDir);
           selectedCandidate = candidate;
+          selectedWheelFile = wheelFile;
           AppLogger.i(
-            '依赖安装成功: plugin=$pluginId, package=${spec.packageName}, version=${candidate.version}, mirror=${candidate.mirrorId}',
+            '依赖安装成功: plugin=$pluginId, package=${spec.packageName}, version=${candidate.version}, source=${candidate.sourceType}, mirror=${candidate.mirrorId}',
           );
           break;
         } catch (e, st) {
@@ -260,28 +298,64 @@ class PythonPluginService {
           fallbackTried.add(<String, dynamic>{
             'version': candidate.version,
             'mirrorId': candidate.mirrorId,
+            'sourceType': candidate.sourceType,
             'error': e.toString(),
           });
           AppLogger.w(
-            '依赖候选安装失败，尝试回退: plugin=$pluginId, package=${spec.packageName}, version=${candidate.version}, mirror=${candidate.mirrorId}, error=$e',
+            '依赖候选安装失败，尝试回退: plugin=$pluginId, package=${spec.packageName}, version=${candidate.version}, source=${candidate.sourceType}, mirror=${candidate.mirrorId}, error=$e',
           );
           AppLogger.e('依赖候选安装异常', e, st);
         }
       }
-      if (selectedCandidate == null) {
+      if (selectedCandidate == null || selectedWheelFile == null) {
         throw Exception('依赖安装失败(${spec.raw}): ${lastError ?? "无可用候选"}');
+      }
+
+      installedByPackage[spec.packageName] = selectedCandidate;
+      final discoveredRequirements = await _extractTransitiveRequirementsFromWheel(
+        wheelFile: selectedWheelFile,
+        sourcePackage: selectedCandidate.packageName,
+      );
+      final discoveredForLock = <String>[];
+      for (final dependency in discoveredRequirements) {
+        final dependencySpec = _RequirementSpec.parse(dependency.requirement);
+        final dependencyPackage = dependencySpec.packageName;
+        if (installedByPackage.containsKey(dependencyPackage) ||
+            queuedPackageNames.contains(dependencyPackage)) {
+          continue;
+        }
+        pendingQueue.add(
+          _PendingRequirement(
+            requirement: dependency.requirement,
+            source: selectedCandidate.packageName,
+          ),
+        );
+        queuedPackageNames.add(dependencyPackage);
+        discoveredForLock.add(dependency.requirement);
+        AppLogger.i(
+          '发现传递依赖: plugin=$pluginId, parent=${selectedCandidate.packageName}, requirement=${dependency.requirement}',
+        );
       }
 
       lockPackages.add(<String, dynamic>{
         'requirement': spec.raw,
+        'sourceRequirement': pending.source,
         'package': spec.packageName,
         'version': selectedCandidate.version,
+        'sourceType': selectedCandidate.sourceType,
         'mirrorId': selectedCandidate.mirrorId,
+        'indexUrl': selectedCandidate.indexUrl,
         'downloadUrl': selectedCandidate.downloadUrl,
         'sha256': selectedCandidate.sha256,
+        'discoveredDependencies': discoveredForLock,
         'fallbackTried': fallbackTried,
       });
-      onProgress?.call((index + 1) / total);
+
+      final completedAfter = installedByPackage.length;
+      final dynamicTotalAfter = completedAfter + pendingQueue.length;
+      final progress =
+          dynamicTotalAfter == 0 ? 1.0 : completedAfter / dynamicTotalAfter;
+      onProgress?.call(progress);
     }
 
     await lockFile.parent.create(recursive: true);
@@ -290,6 +364,8 @@ class PythonPluginService {
       'resolvedAt': DateTime.now().toUtc().toIso8601String(),
       'targetDir': normalizedTargetDir,
       'requirements': normalizedRequirements,
+      'mirrorChain': mirrorIds,
+      'pypiFallback': pypiFallbackSources,
       'packages': lockPackages,
     };
     await lockFile.writeAsString(jsonEncode(lockPayload));
@@ -552,6 +628,7 @@ class PythonPluginService {
     required String customMirrorBaseUrl,
   }) async {
     final packageNameCandidates = _buildPackageNameCandidates(spec.packageName);
+    // 第一阶段：优先 Chaquopy 源，尽量命中 Android 预编译 wheel。
     for (final mirrorId in mirrorIds) {
       for (final packageNameCandidate in packageNameCandidates) {
         final indexUrls = PythonPackageMirrorConfig.buildSimpleIndexUrls(
@@ -573,6 +650,7 @@ class PythonPluginService {
               indexUrl: indexUrl,
               simpleHtml: response.data ?? '',
               mirrorId: mirrorId,
+              sourceType: _sourceChaquopy,
             );
             if (candidates.isNotEmpty) {
               return candidates;
@@ -580,6 +658,48 @@ class PythonPluginService {
           } catch (e, st) {
             AppLogger.w(
               '依赖索引解析失败: package=${spec.packageName}, mirror=$mirrorId, url=$indexUrl, error=$e',
+            );
+            AppLogger.e('依赖索引解析异常', e, st);
+          }
+        }
+      }
+    }
+
+    // 第二阶段：Chaquopy 不可用时，回退到 PyPI simple（国内镜像优先）。
+    for (final simpleBaseUrl in PythonPackageMirrorConfig.pypiFallbackSimpleBaseUrls) {
+      final fallbackMirrorId = simpleBaseUrl.contains('tuna.tsinghua.edu.cn')
+          ? 'pypi_tsinghua'
+          : 'pypi_official';
+      for (final packageNameCandidate in packageNameCandidates) {
+        final indexUrls = PythonPackageMirrorConfig.buildPypiSimpleIndexUrls(
+          packageName: packageNameCandidate,
+          simpleBaseUrl: simpleBaseUrl,
+        );
+        for (final indexUrl in indexUrls) {
+          try {
+            final response = await _fetchSimpleIndexWithRetry(indexUrl);
+            if (response.statusCode != 200) {
+              AppLogger.w(
+                '依赖索引请求失败: package=${spec.packageName}, mirror=$fallbackMirrorId, url=$indexUrl, status=${response.statusCode}',
+              );
+              continue;
+            }
+            final candidates = _extractRequirementCandidatesFromSimpleIndex(
+              spec: spec,
+              indexUrl: indexUrl,
+              simpleHtml: response.data ?? '',
+              mirrorId: fallbackMirrorId,
+              sourceType: _sourcePypi,
+            );
+            if (candidates.isNotEmpty) {
+              AppLogger.i(
+                '依赖解析回退到 PyPI: package=${spec.packageName}, mirror=$fallbackMirrorId, candidates=${candidates.length}',
+              );
+              return candidates;
+            }
+          } catch (e, st) {
+            AppLogger.w(
+              '依赖索引解析失败: package=${spec.packageName}, mirror=$fallbackMirrorId, url=$indexUrl, error=$e',
             );
             AppLogger.e('依赖索引解析异常', e, st);
           }
@@ -595,6 +715,7 @@ class PythonPluginService {
     required String indexUrl,
     required String simpleHtml,
     required String mirrorId,
+    required String sourceType,
   }) {
     if (simpleHtml.trim().isEmpty) {
       return const <_ResolvedRequirementCandidate>[];
@@ -622,6 +743,11 @@ class PythonPluginService {
       if (fileName.isEmpty || !fileName.toLowerCase().endsWith('.whl')) {
         continue;
       }
+      // PyPI 回退阶段只允许纯 Python wheel，避免安装到不兼容的本地动态库。
+      if (sourceType == _sourcePypi &&
+          !fileName.toLowerCase().contains('py3-none-any')) {
+        continue;
+      }
       final score = _scoreWheelFilename(fileName);
       if (score < 0) continue;
       final version = _extractWheelVersionFromFilename(fileName);
@@ -635,6 +761,8 @@ class PythonPluginService {
         downloadUrl: resolvedUri.toString(),
         sha256: _extractSha256FromFragment(resolvedUri.fragment),
         mirrorId: mirrorId,
+        sourceType: sourceType,
+        indexUrl: indexUrl,
         wheelScore: score,
         uploadedAt: null,
       );
@@ -845,6 +973,272 @@ class PythonPluginService {
     return cacheFile;
   }
 
+  /// 从 wheel 的 METADATA 中提取传递依赖（Requires-Dist）。
+  ///
+  /// 说明：
+  /// 1. 该方法只解析并返回“下一层依赖声明”，由安装主循环继续递归处理。
+  /// 2. marker 条件会在解析阶段按当前 Android/Python 运行时进行过滤。
+  Future<List<_TransitiveRequirement>> _extractTransitiveRequirementsFromWheel({
+    required File wheelFile,
+    required String sourcePackage,
+  }) async {
+    if (!wheelFile.existsSync()) {
+      return const <_TransitiveRequirement>[];
+    }
+    final bytes = await wheelFile.readAsBytes();
+    final archive = ZipDecoder().decodeBytes(bytes, verify: false);
+    ArchiveFile? metadataEntry;
+    for (final entry in archive) {
+      if (!entry.isFile) continue;
+      final normalized = entry.name.replaceAll('\\', '/').toLowerCase();
+      if (normalized.endsWith('.dist-info/metadata')) {
+        metadataEntry = entry;
+        break;
+      }
+    }
+    if (metadataEntry == null) {
+      return const <_TransitiveRequirement>[];
+    }
+    final metadataRaw = utf8.decode(
+      metadataEntry.content as List<int>,
+      allowMalformed: true,
+    );
+    final requiresDistValues = _readMetadataHeaderValues(
+      metadataRaw,
+      headerName: 'Requires-Dist',
+    );
+    if (requiresDistValues.isEmpty) {
+      return const <_TransitiveRequirement>[];
+    }
+
+    final dependencies = <_TransitiveRequirement>[];
+    for (final requiresDist in requiresDistValues) {
+      final normalizedRequirement = _normalizeRequiresDistRequirement(
+        requiresDist,
+      );
+      if (normalizedRequirement == null ||
+          normalizedRequirement.trim().isEmpty) {
+        continue;
+      }
+      dependencies.add(
+        _TransitiveRequirement(
+          requirement: normalizedRequirement,
+          source: sourcePackage,
+        ),
+      );
+    }
+    return dependencies;
+  }
+
+  /// 读取 Python package metadata 的指定头部（兼容续行语法）。
+  List<String> _readMetadataHeaderValues(
+    String metadataRaw, {
+    required String headerName,
+  }) {
+    final headerKey = headerName.trim().toLowerCase();
+    final output = <String>[];
+    String? activeHeader;
+    final activeValue = StringBuffer();
+
+    void flushActiveHeader() {
+      if ((activeHeader ?? '').toLowerCase() != headerKey) return;
+      final value = activeValue.toString().trim();
+      if (value.isNotEmpty) {
+        output.add(value);
+      }
+    }
+
+    for (final rawLine in const LineSplitter().convert(metadataRaw)) {
+      final line = rawLine.replaceAll('\r', '');
+      if (line.isEmpty) {
+        flushActiveHeader();
+        activeHeader = null;
+        activeValue.clear();
+        continue;
+      }
+      if ((line.startsWith(' ') || line.startsWith('\t')) &&
+          activeHeader != null) {
+        activeValue.write(' ');
+        activeValue.write(line.trim());
+        continue;
+      }
+      flushActiveHeader();
+      activeHeader = null;
+      activeValue.clear();
+      final sepIndex = line.indexOf(':');
+      if (sepIndex <= 0) continue;
+      activeHeader = line.substring(0, sepIndex).trim();
+      activeValue.write(line.substring(sepIndex + 1).trim());
+    }
+    flushActiveHeader();
+    return output;
+  }
+
+  /// 规范化 `Requires-Dist` 到当前 requirement 语法子集。
+  ///
+  /// 示例：
+  /// - `python-dateutil (>=2.8.2)` -> `python-dateutil>=2.8.2`
+  /// - `pytz; python_version < "3.12"` -> `pytz`（marker 命中时）
+  String? _normalizeRequiresDistRequirement(String requiresDistRaw) {
+    final raw = requiresDistRaw.trim();
+    if (raw.isEmpty) return null;
+    final splitIndex = raw.indexOf(';');
+    final requirementPart =
+        splitIndex >= 0 ? raw.substring(0, splitIndex).trim() : raw;
+    final markerPart = splitIndex >= 0 ? raw.substring(splitIndex + 1).trim() : '';
+    if (markerPart.isNotEmpty && !_evaluateEnvironmentMarker(markerPart)) {
+      return null;
+    }
+
+    final withoutExtras = requirementPart.replaceAll(
+      RegExp(r'\[[^\]]+\]'),
+      '',
+    );
+    final match = RegExp(
+      r'^([A-Za-z0-9_.-]+)\s*(?:\(([^)]+)\)|([<>=!~].*))?$',
+    ).firstMatch(withoutExtras.trim());
+    if (match == null) {
+      return null;
+    }
+    final packageName = (match.group(1) ?? '').trim().toLowerCase();
+    if (packageName.isEmpty) return null;
+    final rawSpec = (match.group(2) ?? match.group(3) ?? '').trim();
+    if (rawSpec.isEmpty) {
+      return packageName;
+    }
+    final normalizedTokens =
+        rawSpec
+            .split(',')
+            .map(_normalizeRequirementConstraintToken)
+            .where((item) => item.isNotEmpty)
+            .toList();
+    if (normalizedTokens.isEmpty) {
+      return packageName;
+    }
+    return '$packageName${normalizedTokens.join(',')}';
+  }
+
+  /// 规范化单个版本约束 token。
+  ///
+  /// 说明：`~=` 在当前轻量实现中退化为下界约束 `>=`。
+  String _normalizeRequirementConstraintToken(String tokenRaw) {
+    final token = tokenRaw.trim().replaceAll(' ', '');
+    if (token.isEmpty) return '';
+    final match = RegExp(
+      r'^(===|==|!=|~=|>=|<=|>|<)\s*([A-Za-z0-9_.+\-]+)$',
+    ).firstMatch(token);
+    if (match == null) return '';
+    final operator = match.group(1)!;
+    final version = match.group(2)!;
+    if (operator == '~=') {
+      return '>=$version';
+    }
+    if (operator == '===') {
+      return '==$version';
+    }
+    return '$operator$version';
+  }
+
+  /// 评估 PEP 508 marker（简化实现）。
+  ///
+  /// 设计取舍：
+  /// 1. 支持常用键：`python_version/sys_platform/platform_system/os_name/extra`。
+  /// 2. 复杂表达式无法解析时返回 `true`，优先避免漏装必要依赖。
+  bool _evaluateEnvironmentMarker(String markerExpression) {
+    final normalized = markerExpression.trim();
+    if (normalized.isEmpty) return true;
+    final orParts = normalized.split(RegExp(r'\s+or\s+', caseSensitive: false));
+    for (final orPart in orParts) {
+      final andParts = orPart.split(RegExp(r'\s+and\s+', caseSensitive: false));
+      var allMatched = true;
+      for (final andPart in andParts) {
+        if (!_evaluateMarkerCondition(andPart.trim())) {
+          allMatched = false;
+          break;
+        }
+      }
+      if (allMatched) return true;
+    }
+    return false;
+  }
+
+  bool _evaluateMarkerCondition(String condition) {
+    if (condition.isEmpty) return true;
+    final extraMatch = RegExp(
+      r'''^extra\s*(==|!=)\s*['"]?([a-z0-9_.-]+)['"]?$''',
+      caseSensitive: false,
+    ).firstMatch(condition);
+    if (extraMatch != null) {
+      // 当前场景无 extras 选择能力：extra==x 恒 false，extra!=x 恒 true。
+      return extraMatch.group(1) == '!=';
+    }
+    final match = RegExp(
+      r'''^(python_version|sys_platform|platform_system|os_name)\s*(==|!=|>=|<=|>|<)\s*['"]?([a-z0-9._-]+)['"]?$''',
+      caseSensitive: false,
+    ).firstMatch(condition);
+    if (match == null) {
+      return true;
+    }
+    final key = match.group(1)!.toLowerCase();
+    final operator = match.group(2)!;
+    final expected = match.group(3)!.toLowerCase();
+    switch (key) {
+      case 'python_version':
+        return _compareByOperator(
+          current: _runtimePythonVersion,
+          expected: expected,
+          operator: operator,
+          isVersion: true,
+        );
+      case 'sys_platform':
+        return _compareByOperator(
+          current: _runtimeSysPlatform,
+          expected: expected,
+          operator: operator,
+        );
+      case 'platform_system':
+        return _compareByOperator(
+          current: _runtimePlatformSystem,
+          expected: expected,
+          operator: operator,
+        );
+      case 'os_name':
+        return _compareByOperator(
+          current: _runtimeOsName,
+          expected: expected,
+          operator: operator,
+        );
+    }
+    return true;
+  }
+
+  bool _compareByOperator({
+    required String current,
+    required String expected,
+    required String operator,
+    bool isVersion = false,
+  }) {
+    final cmp =
+        isVersion
+            ? _compareVersionsLoose(current, expected)
+            : current.compareTo(expected);
+    switch (operator) {
+      case '==':
+        return cmp == 0;
+      case '!=':
+        return cmp != 0;
+      case '>=':
+        return cmp >= 0;
+      case '<=':
+        return cmp <= 0;
+      case '>':
+        return cmp > 0;
+      case '<':
+        return cmp < 0;
+    }
+    return true;
+  }
+
   /// 宽松版本比较，用于按“新版本优先”排序与区间判断。
   ///
   /// 说明：这里不实现完整 PEP 440，仅覆盖常见 `x.y.z[-pre]` 形式。
@@ -925,6 +1319,25 @@ class _PythonLogEvent {
   }
 }
 
+/// requirements 安装队列节点（包含来源，用于日志追踪）。
+class _PendingRequirement {
+  final String requirement;
+  final String source;
+
+  const _PendingRequirement({required this.requirement, required this.source});
+}
+
+/// 从 wheel metadata 解析出的传递依赖。
+class _TransitiveRequirement {
+  final String requirement;
+  final String source;
+
+  const _TransitiveRequirement({
+    required this.requirement,
+    required this.source,
+  });
+}
+
 /// requirements 单条声明解析结果。
 class _RequirementSpec {
   final String raw;
@@ -965,7 +1378,9 @@ class _RequirementSpec {
     for (final tokenRaw in tokens) {
       final token = tokenRaw.trim();
       if (token.isEmpty) continue;
-      final opMatch = RegExp(r'^(==|>=|<=|>|<)\s*([A-Za-z0-9_.+\-]+)$').firstMatch(token);
+      final opMatch = RegExp(
+        r'^(==|!=|~=|>=|<=|>|<)\s*([A-Za-z0-9_.+\-]+)$',
+      ).firstMatch(token);
       if (opMatch == null) {
         throw FormatException('暂不支持的版本约束: $raw');
       }
@@ -994,6 +1409,13 @@ class _RequirementSpec {
       switch (constraint.operator) {
         case '==':
           if (cmp != 0) return false;
+          break;
+        case '!=':
+          if (cmp == 0) return false;
+          break;
+        case '~=':
+          // 轻量语义：`~=` 退化为 `>=` 下界匹配。
+          if (cmp < 0) return false;
           break;
         case '>=':
           if (cmp < 0) return false;
@@ -1029,6 +1451,8 @@ class _ResolvedRequirementCandidate {
   final String downloadUrl;
   final String sha256;
   final String mirrorId;
+  final String sourceType;
+  final String indexUrl;
   final int wheelScore;
   final DateTime? uploadedAt;
 
@@ -1039,6 +1463,8 @@ class _ResolvedRequirementCandidate {
     required this.downloadUrl,
     required this.sha256,
     required this.mirrorId,
+    required this.sourceType,
+    required this.indexUrl,
     required this.wheelScore,
     required this.uploadedAt,
   });
