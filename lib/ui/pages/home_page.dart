@@ -15,13 +15,15 @@ class HomePage extends StatefulWidget {
 /// _HomePageState 视图状态。
 class _HomePageState extends State<HomePage> {
   int _index = 0;
+  final GlobalKey<WorkbenchPageState> _workbenchPageKey =
+      GlobalKey<WorkbenchPageState>();
 
   /// 首页一级页面缓存，使用 BottomNavigationBar 切换。
-  final List<Widget> _pages = const [
-    ChatListPage(),
-    WorkbenchPage(),
-    ApiPage(),
-    SettingsPage(),
+  late final List<Widget> _pages = [
+    const ChatListPage(),
+    WorkbenchPage(key: _workbenchPageKey),
+    const ApiPage(),
+    const SettingsPage(),
   ];
 
   @override
@@ -33,6 +35,12 @@ class _HomePageState extends State<HomePage> {
       // - 会话页：按系统默认行为退出应用。
       onWillPop: () async {
         if (_index != 0) {
+          // 工作台生图页可能存在“内部可取消状态”（例如已选原图、多选态），
+          // 这种情况优先由工作台消费返回，不直接切换到会话页。
+          if (_index == 1 &&
+              (_workbenchPageKey.currentState?.consumeBackAction() ?? false)) {
+            return false;
+          }
           setState(() => _index = 0);
           return false;
         }

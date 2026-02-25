@@ -8,12 +8,14 @@ class WorkbenchPage extends StatefulWidget {
   const WorkbenchPage({super.key});
 
   @override
-  State<WorkbenchPage> createState() => _WorkbenchPageState();
+  State<WorkbenchPage> createState() => WorkbenchPageState();
 }
 
-class _WorkbenchPageState extends State<WorkbenchPage>
+class WorkbenchPageState extends State<WorkbenchPage>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
+  final GlobalKey<WorkbenchImagePageState> _imagePageKey =
+      GlobalKey<WorkbenchImagePageState>();
 
   @override
   void initState() {
@@ -30,6 +32,13 @@ class _WorkbenchPageState extends State<WorkbenchPage>
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  /// 首页返回键分发入口：
+  /// 当前位于生图子页时，优先由生图页消费“取消选择”等内部返回行为。
+  bool consumeBackAction() {
+    if (_tabController.index != 1) return false;
+    return _imagePageKey.currentState?.consumeBackAction() ?? false;
   }
 
   @override
@@ -65,9 +74,9 @@ class _WorkbenchPageState extends State<WorkbenchPage>
         },
         body: TabBarView(
           controller: _tabController,
-          children: const [
-            AgentPageBody(),
-            WorkbenchImagePage(),
+          children: [
+            const AgentPageBody(),
+            WorkbenchImagePage(key: _imagePageKey),
           ],
         ),
       ),

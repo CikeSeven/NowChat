@@ -22,10 +22,10 @@ class WorkbenchImagePage extends StatefulWidget {
   const WorkbenchImagePage({super.key});
 
   @override
-  State<WorkbenchImagePage> createState() => _WorkbenchImagePageState();
+  State<WorkbenchImagePage> createState() => WorkbenchImagePageState();
 }
 
-class _WorkbenchImagePageState extends State<WorkbenchImagePage> {
+class WorkbenchImagePageState extends State<WorkbenchImagePage> {
   final TextEditingController _promptController = TextEditingController();
   final ImagePicker _imagePicker = ImagePicker();
   _ImageWorkbenchMode _mode = _ImageWorkbenchMode.generate;
@@ -50,13 +50,7 @@ class _WorkbenchImagePageState extends State<WorkbenchImagePage> {
     final color = Theme.of(context).colorScheme;
 
     return WillPopScope(
-      onWillPop: () async {
-        if (_isSelectionMode) {
-          _clearSelection();
-          return false;
-        }
-        return true;
-      },
+      onWillPop: () async => !consumeBackAction(),
       child: Column(
         children: [
           Expanded(
@@ -141,6 +135,24 @@ class _WorkbenchImagePageState extends State<WorkbenchImagePage> {
         ],
       ),
     );
+  }
+
+  /// 消费生图页内部返回事件。
+  /// 返回 true 表示已消费（不应继续触发外层返回逻辑）。
+  bool consumeBackAction() {
+    // 1) 批量选择态：优先取消多选。
+    if (_isSelectionMode) {
+      _clearSelection();
+      return true;
+    }
+    // 2) 编辑模式已选图片：优先清空已选原图。
+    if ((_sourceImagePath ?? '').trim().isNotEmpty) {
+      setState(() {
+        _sourceImagePath = null;
+      });
+      return true;
+    }
+    return false;
   }
 
   /// 列表顶部状态统计标签。
