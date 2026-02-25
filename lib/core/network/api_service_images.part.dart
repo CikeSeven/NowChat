@@ -228,7 +228,7 @@ Map<String, String> _buildImageRequestHeaders(AIProviderConfig provider) {
 /// 从图片响应中抽取可展示图片地址（URL 或落地后的本地路径）。
 Future<List<String>> _extractImageUrisFromResponse(
   Map<String, dynamic> payload,
-  Uri? requestUri,
+  Uri? requestUri
 ) async {
   final data = payload['data'];
   if (data is! List || data.isEmpty) return const <String>[];

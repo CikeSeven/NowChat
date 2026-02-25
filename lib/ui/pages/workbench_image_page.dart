@@ -32,6 +32,10 @@ class _WorkbenchImagePageState extends State<WorkbenchImagePage> {
   String? _sourceImagePath;
   bool _submitting = false;
   List<ImageGenerationRecord> _history = <ImageGenerationRecord>[];
+  final Set<String> _selectedHistoryIds = <String>{};
+
+  /// 是否处于历史记录多选模式。
+  bool get _isSelectionMode => _selectedHistoryIds.isNotEmpty;
 
   @override
   void initState() {
@@ -210,13 +214,38 @@ class _WorkbenchImagePageState extends State<WorkbenchImagePage> {
           ),
         ),
         const SizedBox(height: 8),
-        Text(
-          '历史记录',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: color.onSurface,
-          ),
+        Row(
+          children: [
+            Text(
+              '历史记录',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: color.onSurface,
+              ),
+            ),
+            const Spacer(),
+            if (_isSelectionMode) ...[
+              Text(
+                '已选 ${_selectedHistoryIds.length}',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  color: color.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: _clearHistorySelection,
+                child: const Text('取消'),
+              ),
+              const SizedBox(width: 4),
+              FilledButton.tonalIcon(
+                onPressed: _deleteSelectedHistoryRecords,
+                icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                label: const Text('删除'),
+              ),
+            ],
+          ],
         ),
         const SizedBox(height: 6),
         if (_history.isEmpty)
@@ -383,73 +412,105 @@ class _WorkbenchImagePageState extends State<WorkbenchImagePage> {
   Widget _buildHistoryCard(BuildContext context, ImageGenerationRecord record) {
     final color = Theme.of(context).colorScheme;
     final firstUri = record.imageUris.isEmpty ? null : record.imageUris.first;
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  record.modelType == ModelType.imageEdit
-                      ? Icons.auto_fix_high_outlined
-                      : Icons.image_outlined,
-                  size: 16,
-                  color: color.primary,
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    '${record.model} · ${_formatTime(record.createdAt)}',
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      color: color.onSurfaceVariant,
+    final isSelected = _selectedHistoryIds.contains(record.id);
+    return GestureDetector(
+      onLongPress: () => _onHistoryRecordLongPress(record.id),
+      onTap:
+          _isSelectionMode ? () => _toggleHistorySelection(record.id) : null,
+      child: Card(
+        margin: const EdgeInsets.only(bottom: 8),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side:
+              isSelected
+                  ? BorderSide(color: color.primary, width: 1.4)
+                  : BorderSide.none,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    record.modelType == ModelType.imageEdit
+                        ? Icons.auto_fix_high_outlined
+                        : Icons.image_outlined,
+                    size: 16,
+                    color: color.primary,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      '${record.model} · ${_formatTime(record.createdAt)}',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: color.onSurfaceVariant,
+                      ),
                     ),
+                  ),
+                  if (_isSelectionMode)
+                    Icon(
+                      isSelected
+                          ? Icons.check_circle_rounded
+                          : Icons.radio_button_unchecked_rounded,
+                      color:
+                          isSelected ? color.primary : color.onSurfaceVariant,
+                      size: 20,
+                    )
+                  else
+                    IconButton(
+                      tooltip: '删除',
+                      onPressed: () => _deleteSingleHistoryRecord(record),
+                      icon: const Icon(Icons.delete_outline_rounded, size: 20),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                record.prompt,
+                style: TextStyle(color: color.onSurface, fontSize: 13.5),
+              ),
+              if (record.revisedPrompt != null &&
+                  record.revisedPrompt!.trim().isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    '修订提示词：${record.revisedPrompt!.trim()}',
+                    style: TextStyle(
+                      color: color.onSurfaceVariant,
+                      fontSize: 12.5,
+                    ),
+                  ),
+                ),
+              if (firstUri != null) ...[
+                const SizedBox(height: 8),
+                InkWell(
+                  borderRadius: BorderRadius.circular(10),
+                  onTap:
+                      _isSelectionMode
+                          ? null
+                          : () {
+                            final previewUri = Uri.parse(
+                              _normalizeDisplayImageUri(firstUri),
+                            );
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder:
+                                    (_) => ImagePreviewPage(imageUri: previewUri),
+                              ),
+                            );
+                          },
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: _buildImageByUri(firstUri),
                   ),
                 ),
               ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              record.prompt,
-              style: TextStyle(color: color.onSurface, fontSize: 13.5),
-            ),
-            if (record.revisedPrompt != null &&
-                record.revisedPrompt!.trim().isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Text(
-                  '修订提示词：${record.revisedPrompt!.trim()}',
-                  style: TextStyle(
-                    color: color.onSurfaceVariant,
-                    fontSize: 12.5,
-                  ),
-                ),
-              ),
-            if (firstUri != null) ...[
-              const SizedBox(height: 8),
-              InkWell(
-                borderRadius: BorderRadius.circular(10),
-                onTap: () {
-                  final previewUri = Uri.parse(
-                    _normalizeDisplayImageUri(firstUri),
-                  );
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => ImagePreviewPage(imageUri: previewUri),
-                    ),
-                  );
-                },
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: _buildImageByUri(firstUri),
-                ),
-              ),
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -512,5 +573,98 @@ class _WorkbenchImagePageState extends State<WorkbenchImagePage> {
     final hour = time.hour.toString().padLeft(2, '0');
     final minute = time.minute.toString().padLeft(2, '0');
     return '$month-$day $hour:$minute';
+  }
+
+  /// 长按历史记录：进入（或保持）多选模式并切换当前项选中状态。
+  void _onHistoryRecordLongPress(String recordId) {
+    setState(() {
+      if (_selectedHistoryIds.contains(recordId)) {
+        _selectedHistoryIds.remove(recordId);
+      } else {
+        _selectedHistoryIds.add(recordId);
+      }
+    });
+  }
+
+  /// 点选历史记录：仅在多选模式中切换选中状态。
+  void _toggleHistorySelection(String recordId) {
+    setState(() {
+      if (_selectedHistoryIds.contains(recordId)) {
+        _selectedHistoryIds.remove(recordId);
+      } else {
+        _selectedHistoryIds.add(recordId);
+      }
+    });
+  }
+
+  /// 清空多选状态。
+  void _clearHistorySelection() {
+    if (_selectedHistoryIds.isEmpty) return;
+    setState(() {
+      _selectedHistoryIds.clear();
+    });
+  }
+
+  /// 删除单条历史记录（带二次确认）。
+  Future<void> _deleteSingleHistoryRecord(ImageGenerationRecord record) async {
+    final ok = await _confirmDeleteHistory(
+      title: '删除图片记录',
+      content: '确认删除这条生成记录吗？删除后无法恢复。',
+    );
+    if (!ok) return;
+    await _deleteHistoryByIds(<String>{record.id});
+  }
+
+  /// 批量删除当前选中的历史记录（带二次确认）。
+  Future<void> _deleteSelectedHistoryRecords() async {
+    if (_selectedHistoryIds.isEmpty) return;
+    final count = _selectedHistoryIds.length;
+    final ok = await _confirmDeleteHistory(
+      title: '批量删除',
+      content: '确认删除已选中的 $count 条记录吗？删除后无法恢复。',
+    );
+    if (!ok) return;
+    await _deleteHistoryByIds(Set<String>.from(_selectedHistoryIds));
+  }
+
+  /// 执行历史记录删除并落盘。
+  Future<void> _deleteHistoryByIds(Set<String> ids) async {
+    if (ids.isEmpty) return;
+    final next =
+        _history.where((record) => !ids.contains(record.id)).toList(growable: false);
+    await Storage.saveImageGenerationHistory(next);
+    if (!mounted) return;
+    setState(() {
+      _history = next;
+      _selectedHistoryIds.removeAll(ids);
+    });
+    _showSnackBar('已删除 ${ids.length} 条记录');
+  }
+
+  /// 删除确认弹窗。
+  Future<bool> _confirmDeleteHistory({
+    required String title,
+    required String content,
+  }) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(title),
+          content: Text(content),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('删除'),
+            ),
+          ],
+        );
+      },
+    );
+    return result ?? false;
   }
 }
