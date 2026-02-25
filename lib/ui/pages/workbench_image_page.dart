@@ -36,6 +36,7 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
   final ImagePicker _imagePicker = ImagePicker();
   _ImageWorkbenchMode _mode = _ImageWorkbenchMode.generate;
   String? _sourceImagePath;
+  bool _composerCollapsed = false;
   final Set<String> _selectedTaskIds = <String>{};
   final Set<String> _expandedPromptTaskIds = <String>{};
 
@@ -196,10 +197,45 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
             ? settings.defaultImageGenerateSize
             : settings.defaultImageEditSize;
     final countSummary = settings.defaultImageGenerateCount;
+    if (_composerCollapsed) {
+      return SafeArea(
+        top: false,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
+          decoration: BoxDecoration(
+            color: color.surface,
+            border: Border(top: BorderSide(color: color.outlineVariant)),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '输入区已收起',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: color.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _composerCollapsed = false;
+                  });
+                },
+                icon: const Icon(Icons.keyboard_arrow_up_rounded, size: 18),
+                label: const Text('展开'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     return SafeArea(
       top: false,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+        // 底部输入区做紧凑化，减少对内容列表的遮挡。
+        padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
         decoration: BoxDecoration(
           color: color.surface,
           border: Border(top: BorderSide(color: color.outlineVariant)),
@@ -208,17 +244,39 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              _mode == _ImageWorkbenchMode.generate
-                  ? '模型：$modelSummary  ·  尺寸：$sizeSummary  ·  数量：$countSummary'
-                  : '模型：$modelSummary  ·  尺寸：$sizeSummary',
-              style: TextStyle(
-                fontSize: 12.2,
-                color: color.onSurfaceVariant,
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _mode == _ImageWorkbenchMode.generate
+                        ? '模型：$modelSummary  ·  尺寸：$sizeSummary  ·  数量：$countSummary'
+                        : '模型：$modelSummary  ·  尺寸：$sizeSummary',
+                    style: TextStyle(
+                      fontSize: 11.8,
+                      color: color.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _composerCollapsed = true;
+                    });
+                  },
+                  icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
+                  label: const Text('收起'),
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                  ),
+                ),
+              ],
             ),
             if (_mode == _ImageWorkbenchMode.edit) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               Row(
                 children: [
                   Expanded(
@@ -239,21 +297,25 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
                     borderRadius: BorderRadius.circular(10),
                     child: Image.file(
                       File(_sourceImagePath!),
-                      height: 96,
+                      height: 72,
                       width: double.infinity,
                       fit: BoxFit.cover,
                     ),
                   ),
                 ),
             ],
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             TextField(
               controller: _promptController,
-              minLines: 2,
-              maxLines: 5,
+              minLines: 1,
+              maxLines: 4,
               decoration: InputDecoration(
                 border: const OutlineInputBorder(),
                 isDense: true,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 labelText: _mode == _ImageWorkbenchMode.generate ? '生图提示词' : '编辑提示词',
                 hintText:
                     _mode == _ImageWorkbenchMode.generate
@@ -261,7 +323,7 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
                         : '例如：保持主体不变，把背景改为海边落日',
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Row(
               children: [
                 OutlinedButton.icon(
@@ -270,6 +332,13 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
                   },
                   icon: const Icon(Icons.tune_rounded),
                   label: const Text('配置'),
+                  style: OutlinedButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Builder(
@@ -281,8 +350,8 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
                       onTap: () => _showModeMenu(modeContext, tapPosition),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 8,
+                          horizontal: 8,
+                          vertical: 6,
                         ),
                         decoration: BoxDecoration(
                           border: Border.all(color: color.outlineVariant),
@@ -324,6 +393,13 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
                     _mode == _ImageWorkbenchMode.generate
                         ? '加入生图队列'
                         : '加入编辑队列',
+                  ),
+                  style: FilledButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
                   ),
                 ),
               ],
