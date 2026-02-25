@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:now_chat/core/image/image_generation_queue_bridge.dart';
 import 'package:now_chat/core/models/ai_provider_config.dart';
 import 'package:now_chat/core/models/image_generation_record.dart';
 import 'package:now_chat/core/models/image_generation_task.dart';
@@ -16,6 +17,14 @@ import 'package:now_chat/util/storage.dart';
 /// 2. 保证队列状态可持久化；
 /// 3. 提供统一的任务增删改查接口，供工作台 UI 使用。
 class ImageGenerationQueueProvider extends ChangeNotifier {
+  ImageGenerationQueueProvider() {
+    // 让核心层（如 AI 工具运行时）可将任务直接提交到活跃队列。
+    ImageGenerationQueueBridge.registerEnqueueHandler(_bridgeEnqueueTask);
+  }
+
+  late final Future<void> Function(ImageGenerationTask task)
+  _bridgeEnqueueTask = enqueueTask;
+
   SettingsProvider? _settings;
   bool _initialized = false;
   bool _initializing = false;
@@ -50,6 +59,12 @@ class ImageGenerationQueueProvider extends ChangeNotifier {
     if (_initialized && previousConcurrency != concurrency) {
       _schedule();
     }
+  }
+
+  @override
+  void dispose() {
+    ImageGenerationQueueBridge.unregisterEnqueueHandler(_bridgeEnqueueTask);
+    super.dispose();
   }
 
   /// 初始化队列状态：加载本地任务并恢复调度。

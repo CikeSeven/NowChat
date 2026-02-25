@@ -1,8 +1,9 @@
 import 'dart:convert';
 
+import 'package:now_chat/core/image/image_generation_queue_bridge.dart';
 import 'package:now_chat/core/image/image_tool_settings.dart';
 import 'package:now_chat/core/models/ai_provider_config.dart';
-import 'package:now_chat/core/network/api_service.dart';
+import 'package:now_chat/core/models/image_generation_task.dart';
 import 'package:now_chat/core/plugin/plugin_hook_bus.dart';
 import 'package:now_chat/core/plugin/plugin_registry.dart';
 import 'package:now_chat/core/plugin/plugin_runtime_executor.dart';
@@ -236,7 +237,9 @@ class AIToolRuntime {
         'type': 'function',
         'function': <String, dynamic>{
           'name': _toolGenerateImage,
-          'description': '根据提示词生成图片（使用生图设置中的默认生图模型）',
+          'description':
+              '将“图片生成”任务加入生图队列（使用生图设置中的默认生图模型），'
+                  '立即返回入队结果，不等待图片生成完成',
           'parameters': <String, dynamic>{
             'type': 'object',
             'properties': <String, dynamic>{
@@ -246,11 +249,7 @@ class AIToolRuntime {
               },
               'size': <String, dynamic>{
                 'type': 'string',
-                'description': '图片尺寸，例如 1024x1024',
-              },
-              'quality': <String, dynamic>{
-                'type': 'string',
-                'description': '图片质量参数（如 high / standard）',
+                'description': '可选尺寸，例如 1024x1024；不传则使用默认设置',
               },
             },
             'required': ['prompt'],
@@ -261,7 +260,9 @@ class AIToolRuntime {
         'type': 'function',
         'function': <String, dynamic>{
           'name': _toolEditImage,
-          'description': '对本地图片进行编辑（使用生图设置中的默认图片编辑模型）',
+          'description':
+              '将“图片编辑”任务加入生图队列（使用生图设置中的默认图片编辑模型），'
+                  '立即返回入队结果，不等待图片生成完成',
           'parameters': <String, dynamic>{
             'type': 'object',
             'properties': <String, dynamic>{
@@ -275,7 +276,7 @@ class AIToolRuntime {
               },
               'size': <String, dynamic>{
                 'type': 'string',
-                'description': '图片尺寸，例如 1024x1024',
+                'description': '可选尺寸，例如 1024x1024；不传则使用默认设置',
               },
             },
             'required': ['prompt', 'image_path'],
@@ -366,7 +367,8 @@ class AIToolRuntime {
         );
       }
 
-      late final Map<String, dynamic> response;
+      final sizeArg = _normalizeOptionalText(args['size']);
+      late final ImageGenerationTask task;
       if (isGenerate) {
         if (modelFeatures.modelType != ModelType.imageGeneration) {
           return _withDuration(
@@ -382,13 +384,13 @@ class AIToolRuntime {
             started,
           );
         }
-        response = await ApiService.generateImage(
-          provider: provider,
+        task = ImageGenerationTask.createQueued(
+          mode: ImageGenerationTaskMode.generate,
+          providerId: provider.id,
           model: targetModel,
-          prompt: prompt,
           requestMode: modelFeatures.imageRequestMode,
-          size: args['size']?.toString(),
-          quality: args['quality']?.toString(),
+          prompt: prompt,
+          size: sizeArg,
         );
       } else {
         if (modelFeatures.modelType != ModelType.imageEdit) {
@@ -420,34 +422,33 @@ class AIToolRuntime {
             started,
           );
         }
-        response = await ApiService.editImage(
-          provider: provider,
+        task = ImageGenerationTask.createQueued(
+          mode: ImageGenerationTaskMode.edit,
+          providerId: provider.id,
           model: targetModel,
-          imagePath: imagePath,
-          prompt: prompt,
           requestMode: modelFeatures.imageRequestMode,
-          size: args['size']?.toString(),
+          prompt: prompt,
+          sourceImagePath: imagePath,
+          size: sizeArg,
         );
       }
 
-      final imageUris =
-          (response['imageUris'] as List?)
-              ?.map((item) => item.toString().trim())
-              .where((item) => item.isNotEmpty)
-              .toList() ??
-          <String>[];
+      await ImageGenerationQueueBridge.enqueueTask(task);
       final payload = <String, dynamic>{
         'ok': true,
+        'queued': true,
         'tool': call.name,
+        'taskId': task.id,
+        'taskStatus': task.status.name,
+        'mode': task.mode.name,
         'providerId': provider.id,
         'model': targetModel,
-        'imageUris': imageUris,
-        'revisedPrompt': response['revisedPrompt'],
+        'message': '任务已加入生图队列，请稍后在工作台查看结果',
       };
       return _withDuration(
         AIToolExecutionResult(
           status: 'success',
-          summary: '${call.name} 执行成功，images=${imageUris.length}',
+          summary: '${call.name} 入队成功，task=${task.id}',
           toolMessageContent: jsonEncode(payload),
           error: null,
         ),
@@ -580,6 +581,13 @@ class AIToolRuntime {
     if (value == null) return fallback;
     if (value < min) return min;
     if (value > max) return max;
+    return value;
+  }
+
+  /// 将动态参数标准化为可选文本，空白字符串会转换为 null。
+  static String? _normalizeOptionalText(dynamic raw) {
+    final value = raw?.toString().trim();
+    if (value == null || value.isEmpty) return null;
     return value;
   }
 

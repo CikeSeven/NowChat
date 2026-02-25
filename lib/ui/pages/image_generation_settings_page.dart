@@ -51,7 +51,7 @@ class ImageGenerationSettingsPage extends StatelessWidget {
           SwitchListTile(
             contentPadding: const EdgeInsets.symmetric(horizontal: 16),
             title: const Text('向聊天模型暴露生图工具'),
-            subtitle: const Text('开启后聊天模型可调用“生图/图片编辑”工具'),
+            subtitle: const Text('开启后聊天模型调用工具会将任务加入生图队列，不等待生成完成'),
             value: settings.exposeImageToolsToChat,
             onChanged: (value) async {
               await context.read<SettingsProvider>().setExposeImageToolsToChat(
