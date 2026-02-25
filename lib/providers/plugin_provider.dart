@@ -142,7 +142,11 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
     for (final plugin in _manifest?.plugins ?? const <PluginDefinition>[]) {
       byId[plugin.id] = plugin;
     }
-    byId.addAll(_localPluginsById);
+    // 对“同 ID 的远端插件”优先使用清单版本，避免本地残留旧 plugin.json 覆盖最新定义。
+    // 本地插件仅在清单中不存在该 ID 时才补入列表（典型场景：纯本地导入插件）。
+    for (final localPlugin in _localPluginsById.values) {
+      byId.putIfAbsent(localPlugin.id, () => localPlugin);
+    }
     final result = byId.values.toList();
     result.sort((a, b) => a.name.compareTo(b.name));
     return result;
@@ -153,6 +157,10 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
 
   /// 查询插件是否已安装。
   bool isInstalled(String pluginId) => _installedRecords.containsKey(pluginId);
+
+  /// 读取已安装插件版本（未安装返回 null）。
+  String? installedPluginVersion(String pluginId) =>
+      _installedRecords[pluginId]?.pluginVersion;
 
   /// 查询插件是否启用。
   bool isPluginEnabled(String pluginId) {
@@ -223,15 +231,6 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
       notifyListeners();
       return;
     }
-    final missingRequiredPluginIds = _findMissingRequiredPluginIds(plugin);
-    if (missingRequiredPluginIds.isNotEmpty) {
-      final missingText = _buildRequiredPluginDisplayText(missingRequiredPluginIds);
-      _lastError = '请先安装前置插件：$missingText';
-      _pluginStates[pluginId] = PluginInstallState.notInstalled;
-      AppLogger.w('插件安装被拦截，缺少前置插件: plugin=$pluginId, missing=$missingRequiredPluginIds');
-      notifyListeners();
-      return;
-    }
 
     _isInstalling = true;
     _activePluginId = pluginId;
@@ -271,21 +270,30 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
                 .where((item) => item.enabledByDefault)
                 .map((item) => item.name)
                 .toList();
+        final installedPackageRecords = <InstalledPluginPackageRecord>[
+          InstalledPluginPackageRecord(
+            id: firstPackage?.id ?? 'main',
+            version: firstPackage?.version ?? installedPlugin.version,
+            targetDir: targetDir,
+            pythonPathEntries:
+                firstPackage?.pythonPathEntries ?? const <String>['.'],
+            entryPoint: firstPackage?.entryPoint,
+          ),
+        ];
+        final requirementsPackage = await _installRequirementsPackageIfNeeded(
+          pluginId: plugin.id,
+          plugin: installedPlugin,
+          baseTargetDir: targetDir,
+        );
+        if (requirementsPackage != null) {
+          installedPackageRecords.add(requirementsPackage);
+        }
         _installedRecords[plugin.id] = InstalledPluginRecord(
           pluginId: plugin.id,
           pluginVersion: installedPlugin.version,
           enabled: true,
           enabledTools: enabledTools,
-          packages: <InstalledPluginPackageRecord>[
-            InstalledPluginPackageRecord(
-              id: firstPackage?.id ?? 'main',
-              version: firstPackage?.version ?? installedPlugin.version,
-              targetDir: targetDir,
-              pythonPathEntries:
-                  firstPackage?.pythonPathEntries ?? const <String>['.'],
-              entryPoint: firstPackage?.entryPoint,
-            ),
-          ],
+          packages: installedPackageRecords,
           installedAt: DateTime.now(),
           isLocalImport: false,
         );
@@ -331,6 +339,16 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
         for (final package in plugin.packages) {
           await installPackage(package);
         }
+        final requirementsBaseTargetDir =
+            installedPackages.isNotEmpty ? installedPackages.first.targetDir : '';
+        final requirementsPackage = await _installRequirementsPackageIfNeeded(
+          pluginId: pluginId,
+          plugin: plugin,
+          baseTargetDir: requirementsBaseTargetDir,
+        );
+        if (requirementsPackage != null) {
+          installedPackages.add(requirementsPackage);
+        }
 
         final enabledTools =
             plugin.tools
@@ -364,6 +382,13 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
           '期望 SHA256: ${e.expectedSha256}\n'
           '实际 SHA256: ${e.actualSha256}';
       AppLogger.e('插件安装校验失败: $pluginId', e, st);
+    } on PythonPackageChecksumException catch (e, st) {
+      _pluginStates[pluginId] = PluginInstallState.broken;
+      _lastError =
+          '依赖包校验失败（${e.packageId}）\n'
+          '期望 SHA256: ${e.expectedSha256}\n'
+          '实际 SHA256: ${e.actualSha256}';
+      AppLogger.e('插件依赖安装校验失败: $pluginId', e, st);
     } catch (e, st) {
       _pluginStates[pluginId] = PluginInstallState.broken;
       _lastError = '插件安装失败: $e';
@@ -377,6 +402,28 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
 
   /// 导入本地插件 zip 并安装。
   Future<void> importLocalPlugin() async {
+    final payload = await pickLocalPluginImportPayload();
+    if (payload == null) {
+      AppLogger.i('用户取消本地插件导入');
+      return;
+    }
+    await importLocalPluginPayload(payload, allowOverwrite: true);
+  }
+
+  /// 选择本地插件 zip，并仅解析出插件元信息。
+  ///
+  /// 该方法用于 UI 侧“安装前确认”流程（例如同 ID 覆盖提示）。
+  Future<LocalPluginImportPayload?> pickLocalPluginImportPayload() async {
+    return _pluginService.pickAndParseLocalPluginZip();
+  }
+
+  /// 安装已解析的本地插件 payload。
+  ///
+  /// `allowOverwrite=false` 且已存在同 ID 安装记录时会直接拒绝安装。
+  Future<void> importLocalPluginPayload(
+    LocalPluginImportPayload payload, {
+    required bool allowOverwrite,
+  }) async {
     if (_isInstalling || _pluginRootDir == null) return;
     _isInstalling = true;
     _activePluginId = null;
@@ -385,13 +432,50 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
     notifyListeners();
     AppLogger.i('开始导入本地插件');
     try {
-      final payload = await _pluginService.pickAndParseLocalPluginZip();
-      if (payload == null) {
-        AppLogger.i('用户取消本地插件导入');
+      final plugin = payload.plugin;
+      final oldRecord = _installedRecords[plugin.id];
+      if (oldRecord != null && !allowOverwrite) {
+        _lastError =
+            '插件已安装：${plugin.id} (当前版本 ${oldRecord.pluginVersion}，导入版本 ${plugin.version})';
+        AppLogger.w('本地插件导入被取消（未确认覆盖）: id=${plugin.id}');
         return;
       }
-      final plugin = payload.plugin;
-      final targetDir = p.join('local_plugins', plugin.id, plugin.version);
+
+      // 覆盖策略：
+      // 1. 同 ID 且 requirements 一致：复用旧 __requirements__ 目录；
+      // 2. requirements 不一致：重新安装依赖，并清理旧版本无关文件。
+      final oldPlugin = _localPluginsById[plugin.id];
+      final oldRequirementsPackage =
+          oldRecord == null ? null : _findRequirementsPackage(oldRecord);
+      final reuseRequirements =
+          oldRecord != null &&
+          oldRecord.isLocalImport &&
+          oldRequirementsPackage != null &&
+          _sameRequirementSignature(
+            oldRequirements: oldPlugin?.requirements ?? const <String>[],
+            newRequirements: plugin.requirements,
+          );
+
+      final mainTargetDir =
+          oldRecord == null
+              ? p.join('local_plugins', plugin.id, plugin.version)
+              : oldRecord.isLocalImport
+              ? _resolveMainPackageTargetDir(
+                pluginId: plugin.id,
+                record: oldRecord,
+                fallbackVersion: plugin.version,
+              )
+              : p.join('local_plugins', plugin.id, plugin.version);
+
+      if (oldRecord != null) {
+        await _removeLegacyPackagesBeforeLocalOverwrite(
+          pluginId: plugin.id,
+          record: oldRecord,
+          keepMainTargetDir: mainTargetDir,
+          keepRequirementsTargetDir:
+              reuseRequirements ? oldRequirementsPackage.targetDir : null,
+        );
+      }
       _activePluginId = plugin.id;
       _pluginStates[plugin.id] = PluginInstallState.installing;
       notifyListeners();
@@ -399,7 +483,11 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
       await _pluginService.installPackageFromLocalZip(
         sourceZipPath: payload.sourceZipPath,
         pluginRootDir: _pluginRootDir!,
-        targetDir: targetDir,
+        targetDir: mainTargetDir,
+        preserveTopLevelDirs:
+            reuseRequirements
+                ? const <String>['__requirements__']
+                : const <String>[],
       );
 
       _localPluginsById[plugin.id] = plugin;
@@ -410,20 +498,36 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
               .where((item) => item.enabledByDefault)
               .map((item) => item.name)
               .toList();
+      final installedPackageRecords = <InstalledPluginPackageRecord>[
+        InstalledPluginPackageRecord(
+          id: firstPackage?.id ?? 'main',
+          version: firstPackage?.version ?? plugin.version,
+          targetDir: mainTargetDir,
+          pythonPathEntries: firstPackage?.pythonPathEntries ?? const <String>['.'],
+          entryPoint: firstPackage?.entryPoint,
+        ),
+      ];
+      if (reuseRequirements && oldRequirementsPackage != null) {
+        installedPackageRecords.add(oldRequirementsPackage);
+        AppLogger.i(
+          '本地插件覆盖复用依赖目录: id=${plugin.id}, requirementsDir=${oldRequirementsPackage.targetDir}',
+        );
+      } else {
+        final requirementsPackage = await _installRequirementsPackageIfNeeded(
+          pluginId: plugin.id,
+          plugin: plugin,
+          baseTargetDir: mainTargetDir,
+        );
+        if (requirementsPackage != null) {
+          installedPackageRecords.add(requirementsPackage);
+        }
+      }
       _installedRecords[plugin.id] = InstalledPluginRecord(
         pluginId: plugin.id,
         pluginVersion: plugin.version,
         enabled: true,
         enabledTools: enabledTools,
-        packages: <InstalledPluginPackageRecord>[
-          InstalledPluginPackageRecord(
-            id: firstPackage?.id ?? 'main',
-            version: firstPackage?.version ?? plugin.version,
-            targetDir: targetDir,
-            pythonPathEntries: firstPackage?.pythonPathEntries ?? const <String>['.'],
-            entryPoint: firstPackage?.entryPoint,
-          ),
-        ],
+        packages: installedPackageRecords,
         installedAt: DateTime.now(),
         isLocalImport: true,
       );
@@ -440,6 +544,133 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
       _activePluginId = null;
       notifyListeners();
     }
+  }
+
+  /// 覆盖导入前清理同 ID 的旧包目录。
+  ///
+  /// 说明：
+  /// 1. 仅删除安装记录中“不再需要”的包目录；
+  /// 2. 与新版本共用的依赖目录会保留，避免重复下载与安装。
+  Future<void> _removeLegacyPackagesBeforeLocalOverwrite({
+    required String pluginId,
+    required InstalledPluginRecord record,
+    required String keepMainTargetDir,
+    required String? keepRequirementsTargetDir,
+  }) async {
+    final pluginRootDir = _pluginRootDir;
+    if (pluginRootDir == null) return;
+    AppLogger.i('开始清理旧版本插件目录（覆盖安装）: id=$pluginId');
+    for (final package in record.packages.reversed) {
+      final keepMain = package.targetDir == keepMainTargetDir;
+      final keepRequirements =
+          keepRequirementsTargetDir != null &&
+          package.targetDir == keepRequirementsTargetDir;
+      if (keepMain || keepRequirements) {
+        continue;
+      }
+      await _pluginService.uninstallByRelativeDir(
+        pluginRootDir: pluginRootDir,
+        relativeTargetDir: package.targetDir,
+      );
+    }
+    // 覆盖时保留 UI 运行态缓存可能导致展示旧内容，先清空后再写入新记录。
+    _pluginUiPages.remove(pluginId);
+    _pluginUiErrors.remove(pluginId);
+    _pluginUiLoadingPluginIds.remove(pluginId);
+    _pluginReadmeCache.remove(pluginId);
+  }
+
+  /// 解析安装记录中的主包目录（排除 __requirements__ 包）。
+  String _resolveMainPackageTargetDir({
+    required String pluginId,
+    required InstalledPluginRecord record,
+    required String fallbackVersion,
+  }) {
+    for (final package in record.packages) {
+      if (package.id == '__requirements__') continue;
+      return package.targetDir;
+    }
+    return p.join('local_plugins', pluginId, fallbackVersion);
+  }
+
+  /// 提取 __requirements__ 安装记录。
+  InstalledPluginPackageRecord? _findRequirementsPackage(
+    InstalledPluginRecord record,
+  ) {
+    for (final package in record.packages) {
+      if (package.id == '__requirements__') return package;
+    }
+    return null;
+  }
+
+  /// 判断两版插件 requirements 是否一致（忽略大小写与空白差异）。
+  bool _sameRequirementSignature({
+    required List<String> oldRequirements,
+    required List<String> newRequirements,
+  }) {
+    Set<String> normalize(List<String> source) {
+      return source
+          .map((item) => item.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ''))
+          .where((item) => item.isNotEmpty)
+          .toSet();
+    }
+
+    final oldSet = normalize(oldRequirements);
+    final newSet = normalize(newRequirements);
+    if (oldSet.length != newSet.length) return false;
+    return oldSet.containsAll(newSet);
+  }
+
+  /// 若插件声明了 requirements，则安装到插件独立依赖目录并返回安装记录。
+  ///
+  /// 返回 `null` 代表插件未声明 requirements，或声明为空。
+  Future<InstalledPluginPackageRecord?> _installRequirementsPackageIfNeeded({
+    required String pluginId,
+    required PluginDefinition plugin,
+    required String baseTargetDir,
+  }) async {
+    final normalizedRequirements =
+        plugin.requirements
+            .map((item) => item.trim())
+            .where((item) => item.isNotEmpty)
+            .toList();
+    if (normalizedRequirements.isEmpty) {
+      return null;
+    }
+    AppLogger.i(
+      '插件 requirements 清单: plugin=$pluginId, version=${plugin.version}, requirements=${normalizedRequirements.join(', ')}',
+    );
+    final pluginRootDir = _pluginRootDir;
+    if (pluginRootDir == null) {
+      throw Exception('插件目录尚未初始化，无法安装 requirements');
+    }
+    if (baseTargetDir.trim().isEmpty) {
+      throw Exception('插件缺少基础目录，无法安装 requirements: $pluginId');
+    }
+    final requirementsTargetDir = p.join(baseTargetDir, '__requirements__');
+    final progressBase = _downloadProgress.clamp(0, 1).toDouble();
+    AppLogger.i(
+      '开始安装插件 requirements: plugin=$pluginId, count=${normalizedRequirements.length}, target=$requirementsTargetDir',
+    );
+    await _pythonService.installRequirements(
+      pluginId: pluginId,
+      pluginRootDir: pluginRootDir,
+      requirements: normalizedRequirements,
+      targetRelativeDir: requirementsTargetDir,
+      onProgress: (progress) {
+        // 将 requirements 安装阶段映射到当前剩余进度区间，避免进度条倒退。
+        final mapped = progressBase + (1 - progressBase) * progress;
+        _downloadProgress = mapped.clamp(0, 1).toDouble();
+        notifyListeners();
+      },
+    );
+    return InstalledPluginPackageRecord(
+      id: '__requirements__',
+      version: 'dynamic',
+      targetDir: requirementsTargetDir,
+      pythonPathEntries: const <String>['.'],
+      entryPoint: null,
+    );
   }
 
   /// 卸载插件及其安装包。
@@ -1010,45 +1241,4 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
         null;
   }
 
-  /// 查询指定插件缺失的前置插件 ID 列表。
-  ///
-  /// 该方法用于 UI 层在“安装前”做显式提示，避免用户点击后无感失败。
-  List<String> missingRequiredPluginIdsFor(String pluginId) {
-    final plugin = getPluginById(pluginId);
-    if (plugin == null) return const <String>[];
-    return _findMissingRequiredPluginIds(plugin);
-  }
-
-  /// 返回插件展示标签：优先“名称(id)”，回退为 id。
-  String pluginDisplayLabel(String pluginId) {
-    final plugin = getPluginById(pluginId);
-    if (plugin == null) return pluginId;
-    final name = plugin.name.trim();
-    if (name.isEmpty) return pluginId;
-    return '$name($pluginId)';
-  }
-
-  /// 返回当前插件缺失的前置插件 ID 列表。
-  ///
-  /// 仅检查“已安装”状态，不强制要求前置插件处于启用状态。
-  List<String> _findMissingRequiredPluginIds(PluginDefinition plugin) {
-    final requiredIds = plugin.requiredPluginIds.toSet();
-    requiredIds.removeWhere((item) => item == plugin.id);
-    if (requiredIds.isEmpty) return const <String>[];
-    return requiredIds.where((item) => !isInstalled(item)).toList();
-  }
-
-  /// 将前置插件 ID 列表格式化为可读提示文本。
-  ///
-  /// 若能解析到插件名称，则按“名称(id)”展示；否则仅展示 ID。
-  String _buildRequiredPluginDisplayText(List<String> pluginIds) {
-    if (pluginIds.isEmpty) return '';
-    final labels = pluginIds.map((pluginId) {
-      final plugin = getPluginById(pluginId);
-      final name = (plugin?.name ?? '').trim();
-      if (name.isEmpty) return pluginId;
-      return '$name($pluginId)';
-    }).toList();
-    return labels.join('、');
-  }
 }

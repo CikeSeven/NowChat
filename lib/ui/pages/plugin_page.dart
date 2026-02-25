@@ -218,84 +218,49 @@ class _PluginPageState extends State<PluginPage> {
     customController.dispose();
   }
 
-  /// 安装前置缺失时弹窗提示，并展示当前插件声明的前置插件列表。
-  ///
-  /// 该弹窗只做引导，不会自动安装前置插件。
-  Future<void> _showRequiredPluginsDialog({
-    required BuildContext context,
-    required PluginProvider provider,
-    required PluginDefinition plugin,
-  }) async {
-    final requiredPluginIds =
-        plugin.requiredPluginIds
-            .where((item) => item.trim().isNotEmpty && item != plugin.id)
-            .toList();
-    if (requiredPluginIds.isEmpty) return;
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        final color = Theme.of(dialogContext).colorScheme;
-        return AlertDialog(
-          title: const Text('请先安装前置插件'),
-          content: SizedBox(
-            width: 360,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('安装“${plugin.name}”前，需要先安装以下插件：'),
-                const SizedBox(height: 10),
-                ...requiredPluginIds.map((requiredId) {
-                  final installed = provider.isInstalled(requiredId);
-                  final label = provider.pluginDisplayLabel(requiredId);
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          installed
-                              ? Icons.check_circle_rounded
-                              : Icons.error_outline_rounded,
-                          size: 16,
-                          color: installed ? Colors.green : color.error,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            '$label  ${installed ? "(已安装)" : "(未安装)"}',
-                            style: TextStyle(
-                              fontSize: 12.5,
-                              color:
-                                  installed
-                                      ? color.onSurface
-                                      : color.error,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }),
-                const SizedBox(height: 4),
-                Text(
-                  '请先安装未安装项，再安装当前插件。',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: color.onSurfaceVariant,
-                  ),
-                ),
-              ],
+  /// 处理本地 zip 导入，并在同 ID 时弹窗确认覆盖。
+  Future<void> _handleLocalPluginImport(
+    BuildContext context,
+    PluginProvider provider,
+  ) async {
+    final payload = await provider.pickLocalPluginImportPayload();
+    if (!context.mounted || payload == null) return;
+    final plugin = payload.plugin;
+    final oldVersion = provider.installedPluginVersion(plugin.id);
+    var allowOverwrite = true;
+    if (oldVersion != null) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('检测到同 ID 插件'),
+            content: Text(
+              '插件 ID：${plugin.id}\n'
+              '当前版本：$oldVersion\n'
+              '导入版本：${plugin.version}\n\n'
+              '是否覆盖安装？\n'
+              '覆盖时会尽量复用旧依赖目录，避免重复下载。',
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('知道了'),
-            ),
-          ],
-        );
-      },
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('覆盖安装'),
+              ),
+            ],
+          );
+        },
+      );
+      allowOverwrite = confirmed == true;
+      if (!allowOverwrite) return;
+    }
+    if (!context.mounted) return;
+    await provider.importLocalPluginPayload(
+      payload,
+      allowOverwrite: allowOverwrite,
     );
   }
 
@@ -397,17 +362,6 @@ class _PluginPageState extends State<PluginPage> {
                             ? null
                             : () async {
                               if (!installed) {
-                                // 安装前先显式检查前置插件，缺失时给出可读弹窗。
-                                final missingRequiredPluginIds =
-                                    provider.missingRequiredPluginIdsFor(plugin.id);
-                                if (missingRequiredPluginIds.isNotEmpty) {
-                                  await _showRequiredPluginsDialog(
-                                    context: context,
-                                    provider: provider,
-                                    plugin: plugin,
-                                  );
-                                  return;
-                                }
                                 await provider.installPlugin(plugin.id);
                                 return;
                               }
@@ -500,7 +454,14 @@ class _PluginPageState extends State<PluginPage> {
                       : () => _showMirrorDialog(context, provider),
               icon: const Icon(Icons.language_rounded),
             ),
-            // 暂时隐藏本地导入入口，避免与远程清单流程混淆。
+            IconButton(
+              tooltip: '导入 zip 插件',
+              onPressed:
+                  provider.isBusy
+                      ? null
+                      : () => _handleLocalPluginImport(context, provider),
+              icon: const Icon(Icons.folder_zip_rounded),
+            ),
             IconButton(
               tooltip: '刷新清单',
               onPressed: provider.isBusy ? null : provider.refreshManifest,

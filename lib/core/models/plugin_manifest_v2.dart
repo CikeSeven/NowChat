@@ -188,10 +188,13 @@ class PluginDefinition {
   final String version;
   final String type;
 
-  /// 前置插件 ID 列表。
+  /// 插件运行所需的 Python 依赖声明（PEP 508 风格简化子集）。
   ///
-  /// 当该列表不为空时，安装当前插件前必须先安装这些插件。
-  final List<String> requiredPluginIds;
+  /// 例如：
+  /// - `requests`
+  /// - `pydantic==2.9.2`
+  /// - `httpx>=0.27,<0.29`
+  final List<String> requirements;
 
   /// Python 插件的 UI 命名空间目录（例如 `sample_tool_ui`）。
   ///
@@ -217,7 +220,7 @@ class PluginDefinition {
     required this.description,
     required this.version,
     required this.type,
-    required this.requiredPluginIds,
+    required this.requirements,
     required this.pythonNamespace,
     required this.providesGlobalPythonPaths,
     required this.packages,
@@ -235,7 +238,7 @@ class PluginDefinition {
     String? description,
     String? version,
     String? type,
-    List<String>? requiredPluginIds,
+    List<String>? requirements,
     String? pythonNamespace,
     bool? providesGlobalPythonPaths,
     List<PluginPackage>? packages,
@@ -251,7 +254,7 @@ class PluginDefinition {
       description: description ?? this.description,
       version: version ?? this.version,
       type: type ?? this.type,
-      requiredPluginIds: requiredPluginIds ?? this.requiredPluginIds,
+      requirements: requirements ?? this.requirements,
       pythonNamespace: pythonNamespace ?? this.pythonNamespace,
       providesGlobalPythonPaths:
           providesGlobalPythonPaths ?? this.providesGlobalPythonPaths,
@@ -275,11 +278,10 @@ class PluginDefinition {
     final description = (json['description'] ?? '').toString().trim();
     final typeRaw = (json['type'] ?? '').toString().trim();
     final type = typeRaw.isEmpty ? 'python' : typeRaw;
-    final rawRequiredPluginIds =
-        json['requiredPluginIds'] ?? json['prerequisitePluginIds'];
-    final requiredPluginIds =
-        rawRequiredPluginIds is List
-            ? rawRequiredPluginIds
+    final rawRequirements = json['requirements'];
+    final requirements =
+        rawRequirements is List
+            ? rawRequirements
                 .map((item) => item.toString().trim())
                 .where((item) => item.isNotEmpty)
                 .toList()
@@ -355,7 +357,7 @@ class PluginDefinition {
       description: description,
       version: version,
       type: type,
-      requiredPluginIds: requiredPluginIds,
+      requirements: requirements,
       pythonNamespace: pythonNamespace,
       providesGlobalPythonPaths: json['providesGlobalPythonPaths'] == true,
       packages: packages,
