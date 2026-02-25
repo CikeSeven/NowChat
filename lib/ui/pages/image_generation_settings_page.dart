@@ -16,6 +16,8 @@ class ImageGenerationSettingsPage extends StatelessWidget {
 
   static const List<String> _sizeOptions = <String>[
     '512x512',
+    '1280x720',
+    '720x1280',
     '768x768',
     '1024x1024',
     '1024x1536',
@@ -63,7 +65,7 @@ class ImageGenerationSettingsPage extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.photo_size_select_large_outlined),
             title: const Text('默认生图尺寸'),
-            subtitle: Text(settings.defaultImageGenerateSize),
+            subtitle: Text(_formatSizeWithRatio(settings.defaultImageGenerateSize)),
             trailing: const Icon(Icons.chevron_right_rounded),
             onTap: () {
               _showSizeSelector(
@@ -80,7 +82,7 @@ class ImageGenerationSettingsPage extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.crop_outlined),
             title: const Text('默认编辑尺寸'),
-            subtitle: Text(settings.defaultImageEditSize),
+            subtitle: Text(_formatSizeWithRatio(settings.defaultImageEditSize)),
             trailing: const Icon(Icons.chevron_right_rounded),
             onTap: () {
               _showSizeSelector(
@@ -254,7 +256,7 @@ class ImageGenerationSettingsPage extends StatelessWidget {
               ),
               for (final size in _sizeOptions)
                 ListTile(
-                  title: Text(size),
+                  title: Text(_formatSizeWithRatio(size)),
                   trailing:
                       size == currentValue
                           ? Icon(
@@ -314,5 +316,33 @@ class ImageGenerationSettingsPage extends StatelessWidget {
         );
       },
     );
+  }
+
+  /// 将尺寸格式化为“宽x高 · 比例”展示，例如：`1024x1536 · 2:3`。
+  String _formatSizeWithRatio(String rawSize) {
+    final normalized = rawSize.trim().toLowerCase();
+    final parts = normalized.split('x');
+    if (parts.length != 2) return rawSize;
+    final width = int.tryParse(parts[0]);
+    final height = int.tryParse(parts[1]);
+    if (width == null || height == null || width <= 0 || height <= 0) {
+      return rawSize;
+    }
+    final divisor = _gcd(width, height);
+    final ratioW = width ~/ divisor;
+    final ratioH = height ~/ divisor;
+    return '${width}x${height} · $ratioW:$ratioH';
+  }
+
+  /// 计算最大公约数，用于归一化宽高比例。
+  int _gcd(int a, int b) {
+    var x = a.abs();
+    var y = b.abs();
+    while (y != 0) {
+      final temp = x % y;
+      x = y;
+      y = temp;
+    }
+    return x == 0 ? 1 : x;
   }
 }

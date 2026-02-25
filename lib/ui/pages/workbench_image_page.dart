@@ -438,7 +438,6 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
         _sourceImagePath = null;
       }
     });
-    _showSnackBar('已加入队列');
   }
 
   /// 选择图片编辑原图。
