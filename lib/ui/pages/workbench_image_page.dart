@@ -457,6 +457,11 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
     EdgeInsetsGeometry margin = const EdgeInsets.only(bottom: 8),
   }) {
     final color = Theme.of(context).colorScheme;
+    // 记录卡片使用浅主题色混合，保证层次感但不过度抢视觉焦点。
+    final cardColor = Color.alphaBlend(
+      color.primary.withAlpha(17),
+      color.surfaceContainerLow,
+    );
     final isSelected = _selectedTaskIds.contains(task.id);
     final deletable = _isTaskDeletable(task);
     final firstUri = task.resultImageUris.isEmpty ? null : task.resultImageUris.first;
@@ -467,8 +472,8 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
       onLongPress: () => _onTaskLongPress(task),
       onTap: () => _onTaskTap(task, firstUri),
       child: Card(
+        color: cardColor,
         margin: margin,
-        color: color.secondaryContainer,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
           side:

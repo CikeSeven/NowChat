@@ -45,65 +45,69 @@ class WorkbenchPageState extends State<WorkbenchPage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        title: const Text('工作台'),
+        actions: [
+          if (_tabController.index == 0)
+            IconButton(
+              tooltip: '新建工具',
+              onPressed: () {
+                Navigator.pushNamed(context, AppRoutes.agentForm);
+              },
+              icon: const Icon(Icons.add),
+            ),
+          if (_tabController.index == 1)
+            PopupMenuButton<int>(
+              tooltip: '更多',
+              icon: const Icon(Icons.more_vert),
+              onSelected: (value) {
+                if (value != _imageListColumns) {
+                  setState(() {
+                    _imageListColumns = value;
+                  });
+                }
+              },
+              itemBuilder:
+                  (menuContext) => [
+                    PopupMenuItem(
+                      value: 1,
+                      child: Row(
+                        children: [
+                          const Expanded(child: Text('一行一张')),
+                          if (_imageListColumns == 1)
+                            const Icon(Icons.check, size: 18),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 2,
+                      child: Row(
+                        children: [
+                          const Expanded(child: Text('一行两张')),
+                          if (_imageListColumns == 2)
+                            const Icon(Icons.check, size: 18),
+                        ],
+                      ),
+                    ),
+                  ],
+            ),
+        ],
+      ),
       body: NestedScrollView(
         headerSliverBuilder: (context, innerBoxIsScrolled) {
           return [
-            SliverAppBar(
+            SliverPersistentHeader(
               floating: true,
-              snap: true,
               pinned: false,
-              title: const Text('工作台'),
-              actions: [
-                if (_tabController.index == 0)
-                  IconButton(
-                    tooltip: '新建工具',
-                    onPressed: () {
-                      Navigator.pushNamed(context, AppRoutes.agentForm);
-                    },
-                    icon: const Icon(Icons.add),
-                  ),
-                if (_tabController.index == 1)
-                  PopupMenuButton<int>(
-                    tooltip: '列表布局',
-                    icon: const Icon(Icons.view_list_rounded),
-                    onSelected: (value) {
-                      if (value != _imageListColumns) {
-                        setState(() {
-                          _imageListColumns = value;
-                        });
-                      }
-                    },
-                    itemBuilder:
-                        (menuContext) => [
-                          PopupMenuItem(
-                            value: 1,
-                            child: Row(
-                              children: [
-                                const Expanded(child: Text('一行一张')),
-                                if (_imageListColumns == 1)
-                                  const Icon(Icons.check, size: 18),
-                              ],
-                            ),
-                          ),
-                          PopupMenuItem(
-                            value: 2,
-                            child: Row(
-                              children: [
-                                const Expanded(child: Text('一行两张')),
-                                if (_imageListColumns == 2)
-                                  const Icon(Icons.check, size: 18),
-                              ],
-                            ),
-                          ),
-                        ],
-                  ),
-              ],
-              bottom: TabBar(
-                controller: _tabController,
-                tabs: const [
-                  Tab(icon: Icon(Icons.handyman_outlined), text: '工具'),
-                  Tab(icon: Icon(Icons.image_outlined), text: '生图'),
-                ],
+              delegate: _WorkbenchTabBarHeaderDelegate(
+                context: context,
+                tabBar: TabBar(
+                  controller: _tabController,
+                  tabs: const [
+                    Tab(text: '工具'),
+                    Tab(text: '生图'),
+                  ],
+                ),
               ),
             ),
           ];
@@ -120,5 +124,46 @@ class WorkbenchPageState extends State<WorkbenchPage>
         ),
       ),
     );
+  }
+}
+
+/// 工作台页签头部：
+/// 仅负责二级 Tab 导航的显隐，避免把主标题栏一起卷走。
+class _WorkbenchTabBarHeaderDelegate extends SliverPersistentHeaderDelegate {
+  _WorkbenchTabBarHeaderDelegate({
+    required this.context,
+    required this.tabBar,
+  });
+
+  final BuildContext context;
+  final TabBar tabBar;
+
+  @override
+  double get minExtent => tabBar.preferredSize.height;
+
+  @override
+  double get maxExtent => tabBar.preferredSize.height;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    final color = Theme.of(this.context).colorScheme;
+    return Container(
+      decoration: BoxDecoration(
+        color: color.surface,
+        border: Border(
+          bottom: BorderSide(color: color.outlineVariant),
+        ),
+      ),
+      child: tabBar,
+    );
+  }
+
+  @override
+  bool shouldRebuild(covariant _WorkbenchTabBarHeaderDelegate oldDelegate) {
+    return oldDelegate.tabBar != tabBar || oldDelegate.context != context;
   }
 }
