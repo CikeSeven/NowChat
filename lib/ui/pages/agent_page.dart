@@ -9,9 +9,6 @@ class AgentPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = Theme.of(context).colorScheme;
-    final agents = context.watch<AgentProvider>().agents;
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('工具'),
@@ -28,88 +25,100 @@ class AgentPage extends StatelessWidget {
           ),
         ],
       ),
-      // 空态与列表态分支，保持入口清晰。
-      body: agents.isEmpty
-          ? Center(
-              child: Text(
-                '还没有工具，点击右上角创建',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: color.onSurfaceVariant,
-                ),
-              ),
-            )
-          : GridView.builder(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 10,
-                mainAxisSpacing: 10,
-                mainAxisExtent: 104,
-              ),
-              itemCount: agents.length,
-              itemBuilder: (context, index) {
-                final agent = agents[index];
-                final summary = agent.summary.trim().isEmpty
-                    ? agent.prompt.trim()
-                    : agent.summary.trim();
-                return Card(
-                  margin: EdgeInsets.zero,
-                  color: color.surfaceContainerLow,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: () {
-                      Navigator.pushNamed(
-                        context,
-                        AppRoutes.agentDetail,
-                        arguments: {'agentId': agent.id},
-                      );
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.handyman_outlined,
-                                size: 18,
-                                color: color.primary,
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  agent.name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 14.8,
-                                    fontWeight: FontWeight.w700,
-                                    color: color.onSurface,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            summary,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 12.5,
-                              height: 1.35,
-                              color: color.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
+      body: const AgentPageBody(),
+    );
+  }
+}
+
+/// 工具列表主体，可在“独立工具页”和“工作台子页”复用。
+class AgentPageBody extends StatelessWidget {
+  const AgentPageBody({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme;
+    final agents = context.watch<AgentProvider>().agents;
+
+    // 空态与列表态分支，保持入口清晰。
+    if (agents.isEmpty) {
+      return Center(
+        child: Text(
+          '还没有工具，点击右上角创建',
+          style: TextStyle(fontSize: 14, color: color.onSurfaceVariant),
+        ),
+      );
+    }
+
+    return GridView.builder(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+        mainAxisExtent: 104,
+      ),
+      itemCount: agents.length,
+      itemBuilder: (context, index) {
+        final agent = agents[index];
+        final summary = agent.summary.trim().isEmpty
+            ? agent.prompt.trim()
+            : agent.summary.trim();
+        return Card(
+          margin: EdgeInsets.zero,
+          color: color.surfaceContainerLow,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () {
+              Navigator.pushNamed(
+                context,
+                AppRoutes.agentDetail,
+                arguments: {'agentId': agent.id},
+              );
+            },
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.handyman_outlined,
+                        size: 18,
+                        color: color.primary,
                       ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          agent.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 14.8,
+                            fontWeight: FontWeight.w700,
+                            color: color.onSurface,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    summary,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      height: 1.35,
+                      color: color.onSurfaceVariant,
                     ),
                   ),
-                );
-              },
+                ],
+              ),
             ),
+          ),
+        );
+      },
     );
   }
 }

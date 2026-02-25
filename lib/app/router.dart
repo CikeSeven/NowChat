@@ -6,6 +6,7 @@ import 'package:now_chat/ui/pages/agent_form_page.dart';
 import 'package:now_chat/ui/pages/chat_settings_page.dart';
 import 'package:now_chat/ui/pages/default_chat_params_page.dart';
 import 'package:now_chat/ui/pages/edit_message_page.dart';
+import 'package:now_chat/ui/pages/image_generation_settings_page.dart';
 import 'package:now_chat/ui/pages/plugin_page.dart';
 import 'package:now_chat/ui/pages/provider_form_page.dart';
 import 'package:now_chat/ui/pages/startup_loading_page.dart';
@@ -51,6 +52,9 @@ class AppRoutes {
 
   /// 设置 -> 插件中心。
   static const plugin = '/settings/plugin';
+
+  /// 设置 -> 生图设置。
+  static const imageGenerationSettings = '/settings/image_generation';
 
   /// 工具创建/编辑页。
   ///
@@ -134,6 +138,11 @@ class AppRoutes {
       case plugin:
         return _buildSlideRoute(
           builder: (_) => const PluginPage(),
+        );
+
+      case imageGenerationSettings:
+        return _buildSlideRoute(
+          builder: (_) => const ImageGenerationSettingsPage(),
         );
 
       case agentForm:

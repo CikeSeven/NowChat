@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:cross_file/cross_file.dart';
 import 'package:http/http.dart' as http;
@@ -7,6 +8,7 @@ import 'package:isar/isar.dart';
 import 'package:logger/web.dart';
 import 'package:now_chat/core/models/message.dart';
 import 'package:now_chat/util/app_logger.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../models/ai_provider_config.dart';
 import '../models/chat_session.dart';
@@ -15,6 +17,7 @@ import '../tooling/ai_tool_runtime.dart';
 part 'api_service_common.part.dart';
 part 'api_service_streaming.part.dart';
 part 'api_service_requests.part.dart';
+part 'api_service_images.part.dart';
 
 /// 用户主动中断生成时抛出的受控异常。
 class GenerationAbortedException implements Exception {
@@ -105,4 +108,42 @@ class ApiService {
     String baseUrl,
     String apiKey,
   ) => _fetchModelsInternal(provider, baseUrl, apiKey);
+
+  /// 发送图片生成请求（text-to-image）。
+  static Future<Map<String, dynamic>> generateImage({
+    required AIProviderConfig provider,
+    required String model,
+    required String prompt,
+    ImageRequestMode requestMode = ImageRequestMode.inheritProvider,
+    String? size,
+    String? quality,
+    int n = 1,
+  }) => _generateImageInternal(
+    provider: provider,
+    model: model,
+    prompt: prompt,
+    requestMode: requestMode,
+    size: size,
+    quality: quality,
+    n: n,
+  );
+
+  /// 发送图片编辑请求（image-to-image）。
+  static Future<Map<String, dynamic>> editImage({
+    required AIProviderConfig provider,
+    required String model,
+    required String imagePath,
+    required String prompt,
+    ImageRequestMode requestMode = ImageRequestMode.inheritProvider,
+    String? size,
+    int n = 1,
+  }) => _editImageInternal(
+    provider: provider,
+    model: model,
+    imagePath: imagePath,
+    prompt: prompt,
+    requestMode: requestMode,
+    size: size,
+    n: n,
+  );
 }

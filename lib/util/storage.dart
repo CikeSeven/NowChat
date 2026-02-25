@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:now_chat/core/models/ai_provider_config.dart';
 import 'package:now_chat/core/models/agent_profile.dart';
+import 'package:now_chat/core/models/image_generation_record.dart';
 import 'package:now_chat/util/app_logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -17,6 +18,7 @@ class Storage {
 
   /// 智能体列表 JSON 存储键。
   static const _kAgentProfiles = 'agent_profiles';
+  static const _kImageGenerationHistory = 'image_generation_history';
 
   /// 首次示例智能体是否已注入标记。
   static const _kAgentExampleSeeded = 'agent_example_seeded';
@@ -100,5 +102,41 @@ class Storage {
   static Future<void> markAgentExampleSeeded() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_kAgentExampleSeeded, true);
+  }
+
+  /// 读取“工作台生图”独立历史列表。
+  static Future<List<ImageGenerationRecord>> loadImageGenerationHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_kImageGenerationHistory);
+    if (raw == null || raw.trim().isEmpty) return <ImageGenerationRecord>[];
+    try {
+      final decoded = json.decode(raw);
+      if (decoded is! List) return <ImageGenerationRecord>[];
+      return decoded
+          .whereType<Map>()
+          .map(
+            (item) => ImageGenerationRecord.fromJson(
+              Map<String, dynamic>.from(item),
+            ),
+          )
+          .toList();
+    } catch (error) {
+      AppLogger.e('读取生图历史失败', error);
+      return <ImageGenerationRecord>[];
+    }
+  }
+
+  /// 保存“工作台生图”独立历史列表。
+  ///
+  /// 为避免 SharedPreferences 存储无限增长，这里仅保留最近 200 条。
+  static Future<void> saveImageGenerationHistory(
+    List<ImageGenerationRecord> history,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    final sorted = List<ImageGenerationRecord>.from(history)
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    final trimmed = sorted.take(200).toList(growable: false);
+    final payload = trimmed.map((item) => item.toJson()).toList();
+    await prefs.setString(_kImageGenerationHistory, json.encode(payload));
   }
 }

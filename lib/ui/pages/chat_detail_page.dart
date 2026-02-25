@@ -691,6 +691,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
       builder:
           (context) => ModelSelectorBottomSheet(
+            allowedModelTypes: const {ModelType.text},
             onModelSelected: (providerId, model) {
               if (chat != null) {
                 chatProvider.updateChat(

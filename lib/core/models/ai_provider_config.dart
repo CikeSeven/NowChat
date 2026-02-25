@@ -33,15 +33,15 @@ enum ProviderType {
   String get defaultBaseUrl {
     switch (this) {
       case ProviderType.openai:
-        return 'https://api.openai.com';
+        return 'https://api.openai.com/v1';
       case ProviderType.gemini:
         return 'https://generativelanguage.googleapis.com';
       case ProviderType.claude:
         return 'https://api.anthropic.com';
       case ProviderType.ollama:
-        return 'http://localhost:11434';
+        return 'http://localhost:11434/v1';
       case ProviderType.deepseek:
-        return 'https://api.deepseek.com';
+        return 'https://api.deepseek.com/v1';
       case ProviderType.openaiCompatible:
         return '';
     }
@@ -53,7 +53,7 @@ enum ProviderType {
       case ProviderType.deepseek:
       case ProviderType.ollama:
       case ProviderType.openai:
-        return '/v1/chat/completions';
+        return '/chat/completions';
       case ProviderType.gemini:
         return '/v1beta/models/[model]:generateContent';
       case ProviderType.claude:
@@ -115,11 +115,63 @@ enum RequestMode {
   String get defaultPath {
     switch (this) {
       case RequestMode.openaiChat:
-        return '/v1/chat/completions';
+        return '/chat/completions';
       case RequestMode.geminiGenerateContent:
         return '/v1beta/models/[model]:generateContent';
       case RequestMode.claudeMessages:
         return '/v1/messages';
+    }
+  }
+}
+
+/// 模型类型，用于区分文本模型与图像模型能力场景。
+enum ModelType {
+  /// 常规文本对话模型。
+  text,
+
+  /// 文生图模型（text-to-image）。
+  imageGeneration,
+
+  /// 图片编辑模型（image-to-image）。
+  imageEdit;
+
+  /// 中文显示名称。
+  String get label {
+    switch (this) {
+      case ModelType.text:
+        return '文本模型';
+      case ModelType.imageGeneration:
+        return '生图模型';
+      case ModelType.imageEdit:
+        return '图片编辑模型';
+    }
+  }
+}
+
+/// 图像请求协议模式。
+///
+/// 说明：
+/// - `inheritProvider` 表示按 Provider 默认协议推断（当前主要用于 OpenAI 兼容链路）。
+/// - 其余值表示模型级显式覆盖。
+enum ImageRequestMode {
+  /// 继承 Provider 默认请求语义。
+  inheritProvider,
+
+  /// OpenAI Images Generate 协议。
+  openaiImagesGenerate,
+
+  /// OpenAI Images Edit 协议。
+  openaiImagesEdit;
+
+  /// 中文显示名称。
+  String get label {
+    switch (this) {
+      case ImageRequestMode.inheritProvider:
+        return '继承 Provider 默认协议';
+      case ImageRequestMode.openaiImagesGenerate:
+        return 'OpenAI Images Generate';
+      case ImageRequestMode.openaiImagesEdit:
+        return 'OpenAI Images Edit';
     }
   }
 }
@@ -132,19 +184,34 @@ class ModelFeatureOptions {
   /// 是否支持工具调用。
   final bool supportsTools;
 
+  /// 模型类型（文本/生图/图片编辑）。
+  final ModelType modelType;
+
+  /// 图像请求协议（可覆盖 Provider 默认）。
+  final ImageRequestMode imageRequestMode;
+
   const ModelFeatureOptions({
     this.supportsVision = false,
     this.supportsTools = false,
+    this.modelType = ModelType.text,
+    this.imageRequestMode = ImageRequestMode.inheritProvider,
   });
 
   /// 是否至少开启了一项能力。
   bool get hasAnyCapability => supportsVision || supportsTools;
 
   /// 返回带有部分字段变更的新实例。
-  ModelFeatureOptions copyWith({bool? supportsVision, bool? supportsTools}) {
+  ModelFeatureOptions copyWith({
+    bool? supportsVision,
+    bool? supportsTools,
+    ModelType? modelType,
+    ImageRequestMode? imageRequestMode,
+  }) {
     return ModelFeatureOptions(
       supportsVision: supportsVision ?? this.supportsVision,
       supportsTools: supportsTools ?? this.supportsTools,
+      modelType: modelType ?? this.modelType,
+      imageRequestMode: imageRequestMode ?? this.imageRequestMode,
     );
   }
 
@@ -152,6 +219,8 @@ class ModelFeatureOptions {
   Map<String, dynamic> toJson() => {
     'supportsVision': supportsVision,
     'supportsTools': supportsTools,
+    'modelType': modelType.name,
+    'imageRequestMode': imageRequestMode.name,
   };
 
   /// 从动态对象解析能力配置，兼容多种历史字段名。
@@ -165,12 +234,76 @@ class ModelFeatureOptions {
           raw['supportsTools'] == true ||
           raw['tools'] == true ||
           raw['functionCalling'] == true;
+      final modelTypeRaw =
+          raw['modelType']?.toString() ??
+          raw['type']?.toString() ??
+          raw['modelKind']?.toString();
+      final imageModeRaw =
+          raw['imageRequestMode']?.toString() ??
+          raw['imageProtocol']?.toString() ??
+          raw['imageMode']?.toString();
       return ModelFeatureOptions(
         supportsVision: supportsVision,
         supportsTools: supportsTools,
+        modelType: _parseModelType(modelTypeRaw),
+        imageRequestMode: _parseImageRequestMode(imageModeRaw),
       );
     }
     return const ModelFeatureOptions();
+  }
+
+  /// 解析模型类型，异常或未知值回退为文本模型。
+  static ModelType _parseModelType(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return ModelType.text;
+    final normalized = raw.trim().toLowerCase();
+    for (final value in ModelType.values) {
+      if (value.name.toLowerCase() == normalized) {
+        return value;
+      }
+    }
+    switch (normalized) {
+      case 'image_generation':
+      case 'image-generation':
+      case 'image':
+        return ModelType.imageGeneration;
+      case 'image_edit':
+      case 'image-edit':
+      case 'imageeditor':
+      case 'image_editor':
+      case 'edit':
+        return ModelType.imageEdit;
+      default:
+        return ModelType.text;
+    }
+  }
+
+  /// 解析图像请求协议模式，未知值回退为继承 Provider。
+  static ImageRequestMode _parseImageRequestMode(String? raw) {
+    if (raw == null || raw.trim().isEmpty) {
+      return ImageRequestMode.inheritProvider;
+    }
+    final normalized = raw.trim().toLowerCase();
+    for (final value in ImageRequestMode.values) {
+      if (value.name.toLowerCase() == normalized) {
+        return value;
+      }
+    }
+    switch (normalized) {
+      case 'openai_images_generate':
+      case 'openai-images-generate':
+      case 'images_generate':
+      case 'images-generate':
+      case 'generate':
+        return ImageRequestMode.openaiImagesGenerate;
+      case 'openai_images_edit':
+      case 'openai-images-edit':
+      case 'images_edit':
+      case 'images-edit':
+      case 'edit':
+        return ImageRequestMode.openaiImagesEdit;
+      default:
+        return ImageRequestMode.inheritProvider;
+    }
   }
 }
 
@@ -418,7 +551,11 @@ class AIProviderConfig {
       final key = entry.key.trim();
       if (key.isEmpty || !modelSet.contains(key)) continue;
       final value = entry.value;
-      if (!value.hasAnyCapability) continue;
+      // 兼容新字段：即便视觉/工具都关闭，只要模型类型或图像协议有定制也要保留。
+      final hasImageConfig =
+          value.modelType != ModelType.text ||
+          value.imageRequestMode != ImageRequestMode.inheritProvider;
+      if (!value.hasAnyCapability && !hasImageConfig) continue;
       result[key] = value;
     }
     return result;

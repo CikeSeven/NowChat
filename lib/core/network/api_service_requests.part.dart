@@ -93,21 +93,18 @@ Future<Map<String, dynamic>> _sendOpenAIChatRequest({
       if (_isAbortTriggered(abortController)) {
         throw const GenerationAbortedException();
       }
+      final runtimeTools =
+          shouldUseTools && remainingToolCalls > 0
+              ? await AIToolRuntime.buildOpenAIToolsSchema()
+              : const <Map<String, dynamic>>[];
       final body = <String, dynamic>{
         'model': model,
         'messages': conversation,
         'temperature': session.temperature,
         'top_p': session.topP,
         if (session.maxTokens > 0) 'max_tokens': session.maxTokens,
-        if (shouldUseTools && remainingToolCalls > 0)
-          ...() {
-            final runtimeTools = AIToolRuntime.buildOpenAIToolsSchema();
-            if (runtimeTools.isEmpty) return const <String, dynamic>{};
-            return <String, dynamic>{
-              'tools': runtimeTools,
-              'tool_choice': 'auto',
-            };
-          }(),
+        if (runtimeTools.isNotEmpty) 'tools': runtimeTools,
+        if (runtimeTools.isNotEmpty) 'tool_choice': 'auto',
       };
 
       final response = await client.post(
@@ -408,6 +405,7 @@ Future<List<String>> _fetchModelsInternal(
   switch (provider.type) {
     case ProviderType.openai:
     case ProviderType.deepseek:
+    case ProviderType.ollama:
     case ProviderType.openaiCompatible:
       urlPath = _buildOpenAIStyleModelsEndpoint(baseUrl);
       break;

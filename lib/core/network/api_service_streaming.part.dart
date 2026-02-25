@@ -114,6 +114,10 @@ Future<void> _sendOpenAIChatStreaming({
       if (_isAbortTriggered(abortController)) {
         throw const GenerationAbortedException();
       }
+      final runtimeTools =
+          shouldUseTools && remainingToolCalls > 0
+              ? await AIToolRuntime.buildOpenAIToolsSchema()
+              : const <Map<String, dynamic>>[];
 
       final body = <String, dynamic>{
         'model': model,
@@ -122,15 +126,8 @@ Future<void> _sendOpenAIChatStreaming({
         'top_p': session.topP,
         if (session.maxTokens > 0) 'max_tokens': session.maxTokens,
         'stream': true,
-        if (shouldUseTools && remainingToolCalls > 0)
-          ...() {
-            final runtimeTools = AIToolRuntime.buildOpenAIToolsSchema();
-            if (runtimeTools.isEmpty) return const <String, dynamic>{};
-            return <String, dynamic>{
-              'tools': runtimeTools,
-              'tool_choice': 'auto',
-            };
-          }(),
+        if (runtimeTools.isNotEmpty) 'tools': runtimeTools,
+        if (runtimeTools.isNotEmpty) 'tool_choice': 'auto',
       };
 
       AppLogger.i("(OpenAI) 发起流式请求 -> $uri");

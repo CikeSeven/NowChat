@@ -1,0 +1,67 @@
+import 'package:flutter/material.dart';
+import 'package:now_chat/app/router.dart';
+import 'package:now_chat/ui/pages/agent_page.dart';
+import 'package:now_chat/ui/pages/workbench_image_page.dart';
+
+/// 工作台页面：顶部二级导航（工具/生图）。
+class WorkbenchPage extends StatefulWidget {
+  const WorkbenchPage({super.key});
+
+  @override
+  State<WorkbenchPage> createState() => _WorkbenchPageState();
+}
+
+class _WorkbenchPageState extends State<WorkbenchPage>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging) {
+        setState(() {});
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('工作台'),
+        actions: [
+          if (_tabController.index == 0)
+            IconButton(
+              tooltip: '新建工具',
+              onPressed: () {
+                Navigator.pushNamed(context, AppRoutes.agentForm);
+              },
+              icon: const Icon(Icons.add),
+            ),
+        ],
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(icon: Icon(Icons.handyman_outlined), text: '工具'),
+            Tab(icon: Icon(Icons.image_outlined), text: '生图'),
+          ],
+        ),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: const [
+          AgentPageBody(),
+          WorkbenchImagePage(),
+        ],
+      ),
+    );
+  }
+}

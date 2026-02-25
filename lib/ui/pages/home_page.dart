@@ -1,5 +1,5 @@
 ﻿import 'package:flutter/material.dart';
-import 'package:now_chat/ui/pages/agent_page.dart';
+import 'package:now_chat/ui/pages/workbench_page.dart';
 import 'package:now_chat/ui/pages/api_page.dart';
 import 'package:now_chat/ui/pages/chat_list_page.dart';
 import 'package:now_chat/ui/pages/settings_page.dart';
@@ -19,7 +19,7 @@ class _HomePageState extends State<HomePage> {
   /// 首页一级页面缓存，使用 BottomNavigationBar 切换。
   final List<Widget> _pages = const [
     ChatListPage(),
-    AgentPage(),
+    WorkbenchPage(),
     ApiPage(),
     SettingsPage(),
   ];
@@ -42,7 +42,7 @@ class _HomePageState extends State<HomePage> {
           BottomNavigationBarItem(icon: Icon(Icons.chat), label: '会话'),
           BottomNavigationBarItem(
             icon: Icon(Icons.handyman_outlined),
-            label: '工具',
+            label: '工作台',
           ),
           BottomNavigationBarItem(icon: Icon(Icons.api), label: 'API'),
           BottomNavigationBarItem(icon: Icon(Icons.settings), label: '设置'),

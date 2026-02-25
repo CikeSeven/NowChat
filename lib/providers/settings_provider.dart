@@ -11,6 +11,7 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
   static const bool defaultStreamingValue = true;
   static const bool defaultToolCallingEnabledValue = true;
   static const int defaultMaxToolCallsValue = 10;
+  static const bool defaultExposeImageToolsToChatValue = false;
 
   static const _themeKey = 'theme_mode';
   static const _defaultProviderIdKey = 'default_provider_id';
@@ -23,6 +24,13 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
   static const _defaultStreamingKey = 'default_streaming';
   static const _defaultToolCallingEnabledKey = 'default_tool_calling_enabled';
   static const _defaultMaxToolCallsKey = 'default_max_tool_calls';
+  static const _exposeImageToolsToChatKey = 'expose_image_tools_to_chat';
+  static const _defaultImageGenerationProviderIdKey =
+      'default_image_generation_provider_id';
+  static const _defaultImageGenerationModelKey =
+      'default_image_generation_model';
+  static const _defaultImageEditProviderIdKey = 'default_image_edit_provider_id';
+  static const _defaultImageEditModelKey = 'default_image_edit_model';
 
   ThemeMode _themeMode = ThemeMode.system;
   String? _defaultProviderId;
@@ -34,6 +42,11 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
   bool _defaultStreaming = defaultStreamingValue;
   bool _defaultToolCallingEnabled = defaultToolCallingEnabledValue;
   int _defaultMaxToolCalls = defaultMaxToolCallsValue;
+  bool _exposeImageToolsToChat = defaultExposeImageToolsToChatValue;
+  String? _defaultImageGenerationProviderId;
+  String? _defaultImageGenerationModel;
+  String? _defaultImageEditProviderId;
+  String? _defaultImageEditModel;
 
   ThemeMode get themeMode => _themeMode;
   String? get defaultProviderId => _defaultProviderId;
@@ -45,6 +58,12 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
   bool get defaultStreaming => _defaultStreaming;
   bool get defaultToolCallingEnabled => _defaultToolCallingEnabled;
   int get defaultMaxToolCalls => _defaultMaxToolCalls;
+  bool get exposeImageToolsToChat => _exposeImageToolsToChat;
+  String? get defaultImageGenerationProviderId =>
+      _defaultImageGenerationProviderId;
+  String? get defaultImageGenerationModel => _defaultImageGenerationModel;
+  String? get defaultImageEditProviderId => _defaultImageEditProviderId;
+  String? get defaultImageEditModel => _defaultImageEditModel;
 
   ThemeMode get effectiveThemeMode {
     // 跟随系统模式下实时读取平台亮度，避免缓存导致主题不同步。
@@ -88,6 +107,29 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
         defaultToolCallingEnabledValue;
     _defaultMaxToolCalls =
         prefs.getInt(_defaultMaxToolCallsKey) ?? defaultMaxToolCallsValue;
+    _exposeImageToolsToChat =
+        prefs.getBool(_exposeImageToolsToChatKey) ??
+        defaultExposeImageToolsToChatValue;
+    final imageGenProvider = prefs
+        .getString(_defaultImageGenerationProviderIdKey)
+        ?.trim();
+    final imageGenModel = prefs.getString(_defaultImageGenerationModelKey)?.trim();
+    _defaultImageGenerationProviderId =
+        (imageGenProvider == null || imageGenProvider.isEmpty)
+            ? null
+            : imageGenProvider;
+    _defaultImageGenerationModel =
+        (imageGenModel == null || imageGenModel.isEmpty) ? null : imageGenModel;
+    final imageEditProvider = prefs
+        .getString(_defaultImageEditProviderIdKey)
+        ?.trim();
+    final imageEditModel = prefs.getString(_defaultImageEditModelKey)?.trim();
+    _defaultImageEditProviderId =
+        (imageEditProvider == null || imageEditProvider.isEmpty)
+            ? null
+            : imageEditProvider;
+    _defaultImageEditModel =
+        (imageEditModel == null || imageEditModel.isEmpty) ? null : imageEditModel;
     notifyListeners();
   }
 
@@ -189,6 +231,54 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
     await prefs.setInt(_defaultMaxToolCallsKey, value);
   }
 
+  /// 设置是否向聊天模型暴露“生图/图片编辑”工具。
+  Future<void> setExposeImageToolsToChat(bool value) async {
+    _exposeImageToolsToChat = value;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_exposeImageToolsToChatKey, value);
+  }
+
+  /// 设置默认生图模型（文本到图片）。
+  Future<void> setDefaultImageGenerationModel({
+    required String? providerId,
+    required String? model,
+  }) async {
+    final nextProvider = _normalizeOptional(providerId);
+    final nextModel = _normalizeOptional(model);
+    _defaultImageGenerationProviderId = nextProvider;
+    _defaultImageGenerationModel = nextModel;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await _persistModelPair(
+      prefs: prefs,
+      providerKey: _defaultImageGenerationProviderIdKey,
+      modelKey: _defaultImageGenerationModelKey,
+      providerId: nextProvider,
+      model: nextModel,
+    );
+  }
+
+  /// 设置默认图片编辑模型（image-to-image）。
+  Future<void> setDefaultImageEditModel({
+    required String? providerId,
+    required String? model,
+  }) async {
+    final nextProvider = _normalizeOptional(providerId);
+    final nextModel = _normalizeOptional(model);
+    _defaultImageEditProviderId = nextProvider;
+    _defaultImageEditModel = nextModel;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await _persistModelPair(
+      prefs: prefs,
+      providerKey: _defaultImageEditProviderIdKey,
+      modelKey: _defaultImageEditModelKey,
+      providerId: nextProvider,
+      model: nextModel,
+    );
+  }
+
   /// 恢复所有默认对话参数并清理本地覆盖项。
   Future<void> restoreDefaultChatParams() async {
     _defaultProviderId = null;
@@ -223,6 +313,32 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
     } else {
       setThemeMode(ThemeMode.dark);
     }
+  }
+
+  /// 将可选字符串标准化为 `null | 非空 trim`。
+  String? _normalizeOptional(String? value) {
+    final normalized = value?.trim();
+    if (normalized == null || normalized.isEmpty) return null;
+    return normalized;
+  }
+
+  /// 持久化“provider + model”成对配置。
+  ///
+  /// 任一为空时统一清理，避免出现“只有 provider 或只有 model”的半配置。
+  Future<void> _persistModelPair({
+    required SharedPreferences prefs,
+    required String providerKey,
+    required String modelKey,
+    required String? providerId,
+    required String? model,
+  }) async {
+    if (providerId == null || model == null) {
+      await prefs.remove(providerKey);
+      await prefs.remove(modelKey);
+      return;
+    }
+    await prefs.setString(providerKey, providerId);
+    await prefs.setString(modelKey, model);
   }
 
   @override
