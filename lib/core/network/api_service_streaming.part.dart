@@ -95,6 +95,8 @@ Future<void> _sendOpenAIChatStreaming({
     final allowVision = _supportsVisionForSessionModel(provider, session);
     final systemPrompt = _resolvedSystemPrompt(session);
     final shouldUseTools = _isToolCallingEnabledForSession(provider, session);
+    final requiresReasoningContent =
+        _requiresReasoningContentForOpenAI(provider);
     var remainingToolCalls =
         session.maxToolCalls <= 0 ? 0 : session.maxToolCalls;
 
@@ -107,6 +109,7 @@ Future<void> _sendOpenAIChatStreaming({
       filteredMessages,
       allowVision: allowVision,
       systemPrompt: systemPrompt,
+      includeAssistantReasoning: requiresReasoningContent,
     );
 
     // 流式模式下同样支持工具循环：先流出文本增量，再根据 tool_calls 执行工具并继续请求。
@@ -114,6 +117,10 @@ Future<void> _sendOpenAIChatStreaming({
       if (_isAbortTriggered(abortController)) {
         throw const GenerationAbortedException();
       }
+      final runtimeTools =
+          shouldUseTools && remainingToolCalls > 0
+              ? await AIToolRuntime.buildOpenAIToolsSchema()
+              : const <Map<String, dynamic>>[];
 
       final body = <String, dynamic>{
         'model': model,
@@ -122,15 +129,8 @@ Future<void> _sendOpenAIChatStreaming({
         'top_p': session.topP,
         if (session.maxTokens > 0) 'max_tokens': session.maxTokens,
         'stream': true,
-        if (shouldUseTools && remainingToolCalls > 0)
-          ...() {
-            final runtimeTools = AIToolRuntime.buildOpenAIToolsSchema();
-            if (runtimeTools.isEmpty) return const <String, dynamic>{};
-            return <String, dynamic>{
-              'tools': runtimeTools,
-              'tool_choice': 'auto',
-            };
-          }(),
+        if (runtimeTools.isNotEmpty) 'tools': runtimeTools,
+        if (runtimeTools.isNotEmpty) 'tool_choice': 'auto',
       };
 
       AppLogger.i("(OpenAI) 发起流式请求 -> $uri");
@@ -148,6 +148,7 @@ Future<void> _sendOpenAIChatStreaming({
       final utf8Stream = response.stream.transform(utf8.decoder);
       var buffer = '';
       final assistantContentBuffer = StringBuffer();
+      final assistantReasoningBuffer = StringBuffer();
       // tool_calls 在 SSE 中会分片增量返回，这里按 index 聚合完整调用参数。
       final toolCallBuilders = <int, _StreamingToolCallBuilder>{};
 
@@ -194,6 +195,9 @@ Future<void> _sendOpenAIChatStreaming({
             if (content.isNotEmpty) {
               assistantContentBuffer.write(content);
             }
+            if (reasoning != null && reasoning.isNotEmpty) {
+              assistantReasoningBuffer.write(reasoning);
+            }
 
             final toolCallsRaw = delta['tool_calls'];
             if (toolCallsRaw is List) {
@@ -223,9 +227,12 @@ Future<void> _sendOpenAIChatStreaming({
       }
 
       final assistantContent = assistantContentBuffer.toString();
+      final assistantReasoning = assistantReasoningBuffer.toString();
       conversation.add(<String, dynamic>{
         'role': 'assistant',
         if (assistantContent.isNotEmpty) 'content': assistantContent,
+        if (requiresReasoningContent)
+          'reasoning_content': assistantReasoning,
         'tool_calls': toolCalls
             .map((call) => _toOpenAIToolCallPayload(call))
             .toList(growable: false),

@@ -8,12 +8,14 @@ class ModelSelectorBottomSheet extends StatefulWidget {
   final void Function(String, String) onModelSelected;
   final String? model;
   final String? providerId;
+  final Set<ModelType>? allowedModelTypes;
 
   const ModelSelectorBottomSheet({
     super.key,
     required this.onModelSelected,
     required this.model,
     required this.providerId,
+    this.allowedModelTypes,
   });
 
   @override
@@ -76,10 +78,17 @@ class _ModelSelectorBottomSheetState extends State<ModelSelectorBottomSheet> {
     final visibleProviders =
         normalizedQuery.isEmpty
             ? providers
+                .where(
+                  (provider) => provider.models.any(
+                    (model) => _isModelAllowedByType(provider, model),
+                  ),
+                )
+                .toList()
             : providers.where((provider) {
-                return provider.models.any(
-                  (model) => _modelMatches(provider, model, normalizedQuery),
-                );
+                return provider.models.any((model) {
+                  if (!_isModelAllowedByType(provider, model)) return false;
+                  return _modelMatches(provider, model, normalizedQuery);
+                });
               }).toList();
 
     // 若当前激活 provider 在过滤后不存在，回退到首个可见 provider。
@@ -100,6 +109,7 @@ class _ModelSelectorBottomSheetState extends State<ModelSelectorBottomSheet> {
         activeProvider == null
             ? <String>[]
             : activeProvider.models.where((model) {
+                if (!_isModelAllowedByType(activeProvider, model)) return false;
                 if (normalizedQuery.isEmpty) return true;
                 return _modelMatches(activeProvider, model, normalizedQuery);
               }).toList();
@@ -325,6 +335,14 @@ class _ModelSelectorBottomSheetState extends State<ModelSelectorBottomSheet> {
     final raw = model.toLowerCase();
     final display = provider.displayNameForModel(model).toLowerCase();
     return raw.contains(normalizedQuery) || display.contains(normalizedQuery);
+  }
+
+  /// 按调用方限定的模型类型过滤候选模型。
+  bool _isModelAllowedByType(AIProviderConfig provider, String model) {
+    final allowed = widget.allowedModelTypes;
+    if (allowed == null || allowed.isEmpty) return true;
+    final modelType = provider.featuresForModel(model).modelType;
+    return allowed.contains(modelType);
   }
 
   /// 能力图标统一样式。

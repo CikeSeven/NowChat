@@ -145,6 +145,7 @@ class _AgentDetailPageState extends State<AgentDetailPage> {
       backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
       builder: (sheetContext) {
         return ModelSelectorBottomSheet(
+          allowedModelTypes: const {ModelType.text},
           providerId: initialProviderId,
           model: initialModel,
           onModelSelected: (providerId, model) {

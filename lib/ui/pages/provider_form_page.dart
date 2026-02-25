@@ -275,6 +275,8 @@ class _ProviderFormPageState extends State<ProviderFormPage> {
     String? remark,
     bool? supportsVision,
     bool? supportsTools,
+    ModelType? modelType,
+    ImageRequestMode? imageRequestMode,
   }) {
     final normalizedModel = model.trim();
     if (normalizedModel.isEmpty) return;
@@ -295,8 +297,13 @@ class _ProviderFormPageState extends State<ProviderFormPage> {
       final next = previous.copyWith(
         supportsVision: supportsVision,
         supportsTools: supportsTools,
+        modelType: modelType,
+        imageRequestMode: imageRequestMode,
       );
-      if (next.hasAnyCapability) {
+      final hasImageConfig =
+          next.modelType != ModelType.text ||
+          next.imageRequestMode != ImageRequestMode.inheritProvider;
+      if (next.hasAnyCapability || hasImageConfig) {
         _modelCapabilities[normalizedModel] = next;
       } else {
         _modelCapabilities.remove(normalizedModel);
@@ -327,7 +334,10 @@ class _ProviderFormPageState extends State<ProviderFormPage> {
       supportsTools: supportsTools,
     );
     setState(() {
-      if (next.hasAnyCapability) {
+      final hasImageConfig =
+          next.modelType != ModelType.text ||
+          next.imageRequestMode != ImageRequestMode.inheritProvider;
+      if (next.hasAnyCapability || hasImageConfig) {
         _modelCapabilities[model] = next;
       } else {
         _modelCapabilities.remove(model);
@@ -357,6 +367,8 @@ class _ProviderFormPageState extends State<ProviderFormPage> {
       remark: result.remark,
       supportsVision: result.supportsVision,
       supportsTools: result.supportsTools,
+      modelType: result.modelType,
+      imageRequestMode: result.imageRequestMode,
     );
   }
 

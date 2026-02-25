@@ -58,6 +58,25 @@ class CurrentModelListItem extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: colors.secondaryContainer.withAlpha(160),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          features.modelType.label,
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w600,
+                            color: colors.onSecondaryContainer,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
                       _CapabilityToggleIcon(
                         selected: features.supportsVision,
                         tooltip: '支持视觉',

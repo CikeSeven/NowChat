@@ -1,4 +1,5 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:now_chat/core/models/ai_provider_config.dart';
 import 'package:now_chat/providers/chat_provider.dart';
 import 'package:provider/provider.dart';
 
@@ -68,6 +69,7 @@ class _DefaultChatParamsPageState extends State<DefaultChatParamsPage> {
       backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
       builder: (sheetContext) {
         return ModelSelectorBottomSheet(
+          allowedModelTypes: const {ModelType.text},
           providerId: _providerId,
           model: _model,
           onModelSelected: (providerId, model) {

@@ -1,4 +1,5 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:now_chat/core/models/ai_provider_config.dart';
 import 'package:now_chat/core/models/agent_profile.dart';
 import 'package:now_chat/providers/agent_provider.dart';
 import 'package:now_chat/providers/chat_provider.dart';
@@ -105,6 +106,7 @@ class _AgentFormPageState extends State<AgentFormPage> {
       backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
       builder: (sheetContext) {
         return ModelSelectorBottomSheet(
+          allowedModelTypes: const {ModelType.text},
           providerId: initialProviderId,
           model: initialModel,
           onModelSelected: (providerId, model) {

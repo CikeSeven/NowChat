@@ -74,6 +74,7 @@ Future<Map<String, dynamic>> _sendOpenAIChatRequest({
     headers['Authorization'] = 'Bearer $apiKey';
   }
   final shouldUseTools = _isToolCallingEnabledForSession(provider, session);
+  final requiresReasoningContent = _requiresReasoningContentForOpenAI(provider);
   var remainingToolCalls = session.maxToolCalls <= 0 ? 0 : session.maxToolCalls;
   final toolLogs = <Map<String, dynamic>>[];
   // 会话级消息上下文，后续会在工具调用循环中持续追加 assistant/tool 消息。
@@ -81,6 +82,7 @@ Future<Map<String, dynamic>> _sendOpenAIChatRequest({
     filteredMessages,
     allowVision: allowVision,
     systemPrompt: systemPrompt,
+    includeAssistantReasoning: requiresReasoningContent,
   );
   final responseTextBuffer = StringBuffer();
 
@@ -93,21 +95,18 @@ Future<Map<String, dynamic>> _sendOpenAIChatRequest({
       if (_isAbortTriggered(abortController)) {
         throw const GenerationAbortedException();
       }
+      final runtimeTools =
+          shouldUseTools && remainingToolCalls > 0
+              ? await AIToolRuntime.buildOpenAIToolsSchema()
+              : const <Map<String, dynamic>>[];
       final body = <String, dynamic>{
         'model': model,
         'messages': conversation,
         'temperature': session.temperature,
         'top_p': session.topP,
         if (session.maxTokens > 0) 'max_tokens': session.maxTokens,
-        if (shouldUseTools && remainingToolCalls > 0)
-          ...() {
-            final runtimeTools = AIToolRuntime.buildOpenAIToolsSchema();
-            if (runtimeTools.isEmpty) return const <String, dynamic>{};
-            return <String, dynamic>{
-              'tools': runtimeTools,
-              'tool_choice': 'auto',
-            };
-          }(),
+        if (runtimeTools.isNotEmpty) 'tools': runtimeTools,
+        if (runtimeTools.isNotEmpty) 'tool_choice': 'auto',
       };
 
       final response = await client.post(
@@ -137,6 +136,9 @@ Future<Map<String, dynamic>> _sendOpenAIChatRequest({
       final content = _extractOpenAIMessageContentText(
         message is Map ? Map<String, dynamic>.from(message) : null,
       );
+      final reasoning = _extractOpenAIMessageReasoningText(
+        message is Map ? Map<String, dynamic>.from(message) : null,
+      );
       if (content.isNotEmpty) {
         responseTextBuffer.write(content);
       }
@@ -160,6 +162,7 @@ Future<Map<String, dynamic>> _sendOpenAIChatRequest({
       conversation.add(<String, dynamic>{
         'role': 'assistant',
         if (content.isNotEmpty) 'content': content,
+        if (requiresReasoningContent) 'reasoning_content': reasoning,
         'tool_calls': toolCalls
             .map((call) => _toOpenAIToolCallPayload(call))
             .toList(growable: false),
@@ -408,6 +411,7 @@ Future<List<String>> _fetchModelsInternal(
   switch (provider.type) {
     case ProviderType.openai:
     case ProviderType.deepseek:
+    case ProviderType.ollama:
     case ProviderType.openaiCompatible:
       urlPath = _buildOpenAIStyleModelsEndpoint(baseUrl);
       break;

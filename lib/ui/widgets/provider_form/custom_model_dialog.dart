@@ -7,12 +7,16 @@ class CustomModelDialogResult {
   final String remark;
   final bool supportsVision;
   final bool supportsTools;
+  final ModelType modelType;
+  final ImageRequestMode imageRequestMode;
 
   const CustomModelDialogResult({
     required this.model,
     required this.remark,
     required this.supportsVision,
     required this.supportsTools,
+    required this.modelType,
+    required this.imageRequestMode,
   });
 }
 
@@ -29,6 +33,9 @@ Future<CustomModelDialogResult?> showCustomModelDialog({
   final remarkController = TextEditingController(text: initialRemark ?? '');
   bool supportsVision = initialFeatures?.supportsVision ?? false;
   bool supportsTools = initialFeatures?.supportsTools ?? false;
+  ModelType modelType = initialFeatures?.modelType ?? ModelType.text;
+  ImageRequestMode imageRequestMode =
+      initialFeatures?.imageRequestMode ?? ImageRequestMode.inheritProvider;
   String? errorText;
 
   // 统一在弹窗内完成校验，返回结果只包含有效输入。
@@ -60,6 +67,62 @@ Future<CustomModelDialogResult?> showCustomModelDialog({
                     hintText: '例如：主力模型',
                     border: OutlineInputBorder(),
                   ),
+                ),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<ModelType>(
+                  value: modelType,
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    labelText: '模型类型',
+                    border: OutlineInputBorder(),
+                  ),
+                  items:
+                      ModelType.values
+                          .map(
+                            (item) => DropdownMenuItem<ModelType>(
+                              value: item,
+                              child: Text(item.label),
+                            ),
+                          )
+                          .toList(),
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setDialogState(() {
+                      modelType = value;
+                      // 文本模型默认回退“继承 Provider”，避免保留无意义图像协议覆盖。
+                      if (modelType == ModelType.text) {
+                        imageRequestMode = ImageRequestMode.inheritProvider;
+                      }
+                    });
+                  },
+                ),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<ImageRequestMode>(
+                  value: imageRequestMode,
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    labelText: '图像协议',
+                    border: OutlineInputBorder(),
+                    helperText: '仅生图/图片编辑模型生效',
+                  ),
+                  items:
+                      ImageRequestMode.values
+                          .map(
+                            (item) => DropdownMenuItem<ImageRequestMode>(
+                              value: item,
+                              child: Text(item.label),
+                            ),
+                          )
+                          .toList(),
+                  onChanged:
+                      modelType == ModelType.text
+                          ? null
+                          : (value) {
+                            if (value == null) return;
+                            setDialogState(() {
+                              imageRequestMode = value;
+                            });
+                          },
                 ),
                 const SizedBox(height: 10),
                 Row(
@@ -142,6 +205,8 @@ Future<CustomModelDialogResult?> showCustomModelDialog({
                       remark: remark,
                       supportsVision: supportsVision,
                       supportsTools: supportsTools,
+                      modelType: modelType,
+                      imageRequestMode: imageRequestMode,
                     ),
                   );
                 },

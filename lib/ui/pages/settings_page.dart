@@ -123,6 +123,16 @@ class SettingsPage extends StatelessWidget {
           ),
           const Divider(),
           ListTile(
+            leading: const Icon(Icons.image_search_outlined),
+            title: const Text('生图设置'),
+            subtitle: const Text('配置默认生图/图片编辑模型与工具暴露开关'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () {
+              Navigator.pushNamed(context, AppRoutes.imageGenerationSettings);
+            },
+          ),
+          const Divider(),
+          ListTile(
             leading: const Icon(Icons.folder_copy_outlined),
             title: const Text('应用数据管理'),
             subtitle: const Text('导入/导出会话、工具和 API 数据（不含插件）'),

@@ -1,9 +1,14 @@
 import 'dart:convert';
 
+import 'package:now_chat/core/image/image_generation_queue_bridge.dart';
+import 'package:now_chat/core/image/image_tool_settings.dart';
+import 'package:now_chat/core/models/ai_provider_config.dart';
+import 'package:now_chat/core/models/image_generation_task.dart';
 import 'package:now_chat/core/plugin/plugin_hook_bus.dart';
 import 'package:now_chat/core/plugin/plugin_registry.dart';
 import 'package:now_chat/core/plugin/plugin_runtime_executor.dart';
 import 'package:now_chat/util/app_logger.dart';
+import 'package:now_chat/util/storage.dart';
 
 const int _defaultPythonTimeoutSeconds = 20;
 const int _maxPythonTimeoutSeconds = 90;
@@ -61,13 +66,17 @@ class AIToolExecutionResult {
 class AIToolRuntime {
   const AIToolRuntime._();
 
+  static const String _toolGenerateImage = 'generate_image';
+  static const String _toolEditImage = 'edit_image';
+
   /// 构建 OpenAI `tools` 参数（基于插件开关与工具开关）。
   ///
   /// 返回值会直接放入聊天请求体，因此必须确保结构稳定且字段完整。
-  static List<Map<String, dynamic>> buildOpenAIToolsSchema() {
+  static Future<List<Map<String, dynamic>>> buildOpenAIToolsSchema() async {
+    final settings = await ImageToolSettingsStore.load();
     final tools = PluginRegistry.instance.resolveEnabledTools();
-    if (tools.isEmpty) return const <Map<String, dynamic>>[];
-    return tools
+    final schemas =
+        tools
         .map((binding) {
           return <String, dynamic>{
             'type': 'function',
@@ -78,7 +87,12 @@ class AIToolRuntime {
             },
           };
         })
-        .toList(growable: false);
+        // 后续会按设置动态追加内置生图工具，因此必须使用可增长列表。
+        .toList(growable: true);
+    if (settings.exposeImageToolsToChat) {
+      schemas.addAll(_buildBuiltinImageToolsSchema());
+    }
+    return schemas;
   }
 
   /// 执行单个工具调用。
@@ -91,6 +105,17 @@ class AIToolRuntime {
   /// 5. 返回可回填给模型的工具结果。
   static Future<AIToolExecutionResult> execute(AIToolCall call) async {
     final started = DateTime.now();
+    if (call.name == _toolGenerateImage || call.name == _toolEditImage) {
+      final builtInResult = await _executeBuiltinImageTool(call, started);
+      _logToolExecutionEnd(
+        call: call,
+        pluginId: 'builtin',
+        runtime: 'builtin_image',
+        result: builtInResult,
+      );
+      return builtInResult;
+    }
+
     final binding = PluginRegistry.instance.resolveToolByName(call.name);
     if (binding == null) {
       AppLogger.w('ToolUsage SKIP unsupported tool=${call.name}');
@@ -206,6 +231,249 @@ class AIToolRuntime {
     }
   }
 
+  /// 构建内置图片工具 schema。
+  static List<Map<String, dynamic>> _buildBuiltinImageToolsSchema() {
+    return <Map<String, dynamic>>[
+      <String, dynamic>{
+        'type': 'function',
+        'function': <String, dynamic>{
+          'name': _toolGenerateImage,
+          'description':
+              '将“图片生成”任务加入生图队列（使用生图设置中的默认生图模型），'
+                  '立即返回入队结果，不等待图片生成完成',
+          'parameters': <String, dynamic>{
+            'type': 'object',
+            'properties': <String, dynamic>{
+              'prompt': <String, dynamic>{
+                'type': 'string',
+                'description': '生图提示词',
+              },
+              'size': <String, dynamic>{
+                'type': 'string',
+                'description': '可选尺寸，例如 1024x1024；不传则使用默认设置',
+              },
+            },
+            'required': ['prompt'],
+          },
+        },
+      },
+      <String, dynamic>{
+        'type': 'function',
+        'function': <String, dynamic>{
+          'name': _toolEditImage,
+          'description':
+              '将“图片编辑”任务加入生图队列（使用生图设置中的默认图片编辑模型），'
+                  '立即返回入队结果，不等待图片生成完成',
+          'parameters': <String, dynamic>{
+            'type': 'object',
+            'properties': <String, dynamic>{
+              'prompt': <String, dynamic>{
+                'type': 'string',
+                'description': '图片编辑指令',
+              },
+              'image_path': <String, dynamic>{
+                'type': 'string',
+                'description': '待编辑图片的本地绝对路径',
+              },
+              'size': <String, dynamic>{
+                'type': 'string',
+                'description': '可选尺寸，例如 1024x1024；不传则使用默认设置',
+              },
+            },
+            'required': ['prompt', 'image_path'],
+          },
+        },
+      },
+    ];
+  }
+
+  /// 执行内置图片工具（生图/图片编辑）。
+  static Future<AIToolExecutionResult> _executeBuiltinImageTool(
+    AIToolCall call,
+    DateTime started,
+  ) async {
+    try {
+      final args = _safeParseJsonObject(call.rawArguments);
+      final settings = await ImageToolSettingsStore.load();
+      if (!settings.exposeImageToolsToChat) {
+        return _withDuration(
+          AIToolExecutionResult(
+            status: 'error',
+            summary: '生图工具未开启',
+            toolMessageContent: jsonEncode(<String, dynamic>{
+              'ok': false,
+              'error': 'image tools disabled',
+            }),
+            error: 'image tools disabled',
+          ),
+          started,
+        );
+      }
+      final providers = await Storage.loadProviders();
+      final isGenerate = call.name == _toolGenerateImage;
+      final targetProviderId =
+          isGenerate ? settings.generationProviderId : settings.editProviderId;
+      final targetModel = isGenerate ? settings.generationModel : settings.editModel;
+      if (targetProviderId == null || targetModel == null) {
+        return _withDuration(
+          AIToolExecutionResult(
+            status: 'error',
+            summary: '未配置默认${isGenerate ? '生图' : '图片编辑'}模型',
+            toolMessageContent: jsonEncode(<String, dynamic>{
+              'ok': false,
+              'error': 'default image model not configured',
+            }),
+            error: 'default image model not configured',
+          ),
+          started,
+        );
+      }
+
+      AIProviderConfig? provider;
+      for (final item in providers) {
+        if (item.id == targetProviderId) {
+          provider = item;
+          break;
+        }
+      }
+      if (provider == null) {
+        return _withDuration(
+          AIToolExecutionResult(
+            status: 'error',
+            summary: '默认图片模型对应的 Provider 不存在',
+            toolMessageContent: jsonEncode(<String, dynamic>{
+              'ok': false,
+              'error': 'provider not found',
+            }),
+            error: 'provider not found',
+          ),
+          started,
+        );
+      }
+
+      final modelFeatures = provider.featuresForModel(targetModel);
+      final prompt = (args['prompt'] ?? '').toString().trim();
+      if (prompt.isEmpty) {
+        return _withDuration(
+          AIToolExecutionResult(
+            status: 'error',
+            summary: '参数缺失：prompt',
+            toolMessageContent: jsonEncode(<String, dynamic>{
+              'ok': false,
+              'error': 'missing prompt',
+            }),
+            error: 'missing prompt',
+          ),
+          started,
+        );
+      }
+
+      final sizeArg = _normalizeOptionalText(args['size']);
+      late final ImageGenerationTask task;
+      if (isGenerate) {
+        if (modelFeatures.modelType != ModelType.imageGeneration) {
+          return _withDuration(
+            AIToolExecutionResult(
+              status: 'error',
+              summary: '默认生图模型类型不正确',
+              toolMessageContent: jsonEncode(<String, dynamic>{
+                'ok': false,
+                'error': 'default model is not image-generation model',
+              }),
+              error: 'default model is not image-generation model',
+            ),
+            started,
+          );
+        }
+        task = ImageGenerationTask.createQueued(
+          mode: ImageGenerationTaskMode.generate,
+          providerId: provider.id,
+          model: targetModel,
+          requestMode: modelFeatures.imageRequestMode,
+          prompt: prompt,
+          size: sizeArg,
+          requestCount: settings.generationCount,
+        );
+      } else {
+        if (modelFeatures.modelType != ModelType.imageEdit) {
+          return _withDuration(
+            AIToolExecutionResult(
+              status: 'error',
+              summary: '默认图片编辑模型类型不正确',
+              toolMessageContent: jsonEncode(<String, dynamic>{
+                'ok': false,
+                'error': 'default model is not image-edit model',
+              }),
+              error: 'default model is not image-edit model',
+            ),
+            started,
+          );
+        }
+        final imagePath = (args['image_path'] ?? '').toString().trim();
+        if (imagePath.isEmpty) {
+          return _withDuration(
+            AIToolExecutionResult(
+              status: 'error',
+              summary: '参数缺失：image_path',
+              toolMessageContent: jsonEncode(<String, dynamic>{
+                'ok': false,
+                'error': 'missing image_path',
+              }),
+              error: 'missing image_path',
+            ),
+            started,
+          );
+        }
+        task = ImageGenerationTask.createQueued(
+          mode: ImageGenerationTaskMode.edit,
+          providerId: provider.id,
+          model: targetModel,
+          requestMode: modelFeatures.imageRequestMode,
+          prompt: prompt,
+          sourceImagePath: imagePath,
+          size: sizeArg,
+        );
+      }
+
+      await ImageGenerationQueueBridge.enqueueTask(task);
+      final payload = <String, dynamic>{
+        'ok': true,
+        'queued': true,
+        'tool': call.name,
+        'taskId': task.id,
+        'taskStatus': task.status.name,
+        'mode': task.mode.name,
+        'providerId': provider.id,
+        'model': targetModel,
+        'requestCount': task.requestCount,
+        'message': '任务已加入生图队列，请稍后在工作台查看结果',
+      };
+      return _withDuration(
+        AIToolExecutionResult(
+          status: 'success',
+          summary: '${call.name} 入队成功，task=${task.id}',
+          toolMessageContent: jsonEncode(payload),
+          error: null,
+        ),
+        started,
+      );
+    } catch (error, stackTrace) {
+      AppLogger.e('内置图片工具执行失败', error, stackTrace);
+      return _withDuration(
+        AIToolExecutionResult(
+          status: 'error',
+          summary: '${call.name} 执行失败: $error',
+          toolMessageContent: jsonEncode(<String, dynamic>{
+            'ok': false,
+            'error': error.toString(),
+          }),
+          error: error.toString(),
+        ),
+        started,
+      );
+    }
+  }
+
   static AIToolExecutionResult _withDuration(
     AIToolExecutionResult result,
     DateTime startedAt,
@@ -316,6 +584,13 @@ class AIToolRuntime {
     if (value == null) return fallback;
     if (value < min) return min;
     if (value > max) return max;
+    return value;
+  }
+
+  /// 将动态参数标准化为可选文本，空白字符串会转换为 null。
+  static String? _normalizeOptionalText(dynamic raw) {
+    final value = raw?.toString().trim();
+    if (value == null || value.isEmpty) return null;
     return value;
   }
 
