@@ -9,6 +9,7 @@ import 'package:now_chat/providers/chat_provider.dart';
 import 'package:now_chat/providers/settings_provider.dart';
 import 'package:now_chat/ui/pages/image_preview_page.dart';
 import 'package:now_chat/ui/widgets/model_selector_bottom_sheet.dart.dart';
+import 'package:now_chat/util/app_logger.dart';
 import 'package:now_chat/util/storage.dart';
 import 'package:provider/provider.dart';
 
@@ -312,6 +313,9 @@ class _WorkbenchImagePageState extends State<WorkbenchImagePage> {
       _submitting = true;
     });
     try {
+      AppLogger.i(
+        'WorkbenchImage.submit start: mode=${_mode.name}, provider=${provider.id}, model=$model, promptLength=${prompt.length}, hasSourceImage=${(_sourceImagePath ?? '').trim().isNotEmpty}',
+      );
       late final Map<String, dynamic> response;
       if (_mode == _ImageWorkbenchMode.generate) {
         response = await ApiService.generateImage(
@@ -355,8 +359,16 @@ class _WorkbenchImagePageState extends State<WorkbenchImagePage> {
       setState(() {
         _history = next;
       });
+      AppLogger.i(
+        'WorkbenchImage.submit success: mode=${_mode.name}, provider=${provider.id}, model=$model, images=${imageUris.length}',
+      );
       _showSnackBar('处理完成，共返回 ${imageUris.length} 张图片');
-    } catch (error) {
+    } catch (error, stackTrace) {
+      AppLogger.e(
+        'WorkbenchImage.submit failed: mode=${_mode.name}, provider=${provider.id}, model=$model',
+        error,
+        stackTrace,
+      );
       _showSnackBar('请求失败: $error');
     } finally {
       if (mounted) {
@@ -421,10 +433,13 @@ class _WorkbenchImagePageState extends State<WorkbenchImagePage> {
               InkWell(
                 borderRadius: BorderRadius.circular(10),
                 onTap: () {
+                  final previewUri = Uri.parse(
+                    _normalizeDisplayImageUri(firstUri),
+                  );
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => ImagePreviewPage(imageUri: Uri.parse(firstUri)),
+                      builder: (_) => ImagePreviewPage(imageUri: previewUri),
                     ),
                   );
                 },
@@ -442,12 +457,13 @@ class _WorkbenchImagePageState extends State<WorkbenchImagePage> {
 
   /// 根据 URI 类型构建缩略图组件。
   Widget _buildImageByUri(String rawUri) {
-    final uri = Uri.tryParse(rawUri);
+    final normalizedRawUri = _normalizeDisplayImageUri(rawUri);
+    final uri = Uri.tryParse(normalizedRawUri);
     final isHttp = uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
     final isFile = uri != null && uri.scheme == 'file';
     if (isHttp) {
       return Image.network(
-        rawUri,
+        normalizedRawUri,
         height: 180,
         width: double.infinity,
         fit: BoxFit.cover,
@@ -462,11 +478,25 @@ class _WorkbenchImagePageState extends State<WorkbenchImagePage> {
       );
     }
     return Image.file(
-      File(rawUri),
+      File(normalizedRawUri),
       height: 180,
       width: double.infinity,
       fit: BoxFit.cover,
     );
+  }
+
+  /// 兼容历史里缺少协议头的远程图片地址（例如 `host/path`）。
+  String _normalizeDisplayImageUri(String rawUri) {
+    final value = rawUri.trim();
+    if (value.isEmpty) return value;
+    final parsed = Uri.tryParse(value);
+    if (parsed != null && parsed.hasScheme) return value;
+    if (value.startsWith('//')) return 'https:$value';
+    final looksLikeHostPath = RegExp(
+      r'^[A-Za-z0-9.-]+\.[A-Za-z]{2,}(:\d+)?/.+',
+    ).hasMatch(value);
+    if (looksLikeHostPath) return 'https://$value';
+    return value;
   }
 
   void _showSnackBar(String text) {

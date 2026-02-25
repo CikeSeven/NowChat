@@ -12,51 +12,71 @@ Future<Map<String, dynamic>> _generateImageInternal({
   String? quality,
   int n = 1,
 }) async {
-  final normalizedPrompt = prompt.trim();
-  if (normalizedPrompt.isEmpty) {
-    throw Exception('提示词不能为空');
+  try {
+    final normalizedPrompt = prompt.trim();
+    if (normalizedPrompt.isEmpty) {
+      throw Exception('提示词不能为空');
+    }
+
+    final uri = _resolveImageEndpointUri(
+      provider: provider,
+      requestMode: requestMode,
+      operation: _imageOperationGenerate,
+    );
+    final headers = <String, String>{
+      ..._buildImageRequestHeaders(provider),
+      // 图像生成请求体是 JSON，必须显式声明 Content-Type，部分服务端否则会按空表单解析。
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+    final body = <String, dynamic>{
+      'model': model.trim(),
+      'prompt': normalizedPrompt,
+      'n': n <= 0 ? 1 : n,
+      if ((size ?? '').trim().isNotEmpty) 'size': size!.trim(),
+      if ((quality ?? '').trim().isNotEmpty) 'quality': quality!.trim(),
+    };
+
+    AppLogger.i('ImageAPI.generate -> $uri, model=${model.trim()}');
+    final response = await http.post(
+      uri,
+      headers: headers,
+      body: jsonEncode(body),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      AppLogger.w(
+        'ImageAPI.generate failed: status=${response.statusCode}, body=${_truncateImageResponseLog(response.body)}',
+      );
+      throw Exception('生图请求失败(${response.statusCode}): ${response.body}');
+    }
+
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map<String, dynamic>) {
+      throw const FormatException('图片生成响应格式错误');
+    }
+
+    final imageUris = await _extractImageUrisFromResponse(decoded, uri);
+    if (imageUris.isEmpty) {
+      throw Exception('生图响应中未包含可用图片');
+    }
+
+    final revisedPrompt = _extractRevisedPrompt(decoded);
+    AppLogger.i(
+      'ImageAPI.generate success: model=${model.trim()}, images=${imageUris.length}',
+    );
+    return <String, dynamic>{
+      'imageUris': imageUris,
+      'revisedPrompt': revisedPrompt,
+      'operation': _imageOperationGenerate,
+    };
+  } catch (error, stackTrace) {
+    AppLogger.e(
+      'ImageAPI.generate exception: model=${model.trim()}, mode=${requestMode.name}',
+      error,
+      stackTrace,
+    );
+    rethrow;
   }
-
-  final uri = _resolveImageEndpointUri(
-    provider: provider,
-    requestMode: requestMode,
-    operation: _imageOperationGenerate,
-  );
-  final headers = _buildImageRequestHeaders(provider);
-  final body = <String, dynamic>{
-    'model': model.trim(),
-    'prompt': normalizedPrompt,
-    'n': n <= 0 ? 1 : n,
-    if ((size ?? '').trim().isNotEmpty) 'size': size!.trim(),
-    if ((quality ?? '').trim().isNotEmpty) 'quality': quality!.trim(),
-  };
-
-  AppLogger.i('ImageAPI.generate -> $uri, model=${model.trim()}');
-  final response = await http.post(
-    uri,
-    headers: headers,
-    body: jsonEncode(body),
-  );
-  if (response.statusCode < 200 || response.statusCode >= 300) {
-    throw Exception('生图请求失败(${response.statusCode}): ${response.body}');
-  }
-
-  final decoded = jsonDecode(response.body);
-  if (decoded is! Map<String, dynamic>) {
-    throw const FormatException('图片生成响应格式错误');
-  }
-
-  final imageUris = await _extractImageUrisFromResponse(decoded);
-  if (imageUris.isEmpty) {
-    throw Exception('生图响应中未包含可用图片');
-  }
-
-  final revisedPrompt = _extractRevisedPrompt(decoded);
-  return <String, dynamic>{
-    'imageUris': imageUris,
-    'revisedPrompt': revisedPrompt,
-    'operation': _imageOperationGenerate,
-  };
 }
 
 /// 图片编辑内部入口（image-to-image）。
@@ -69,62 +89,87 @@ Future<Map<String, dynamic>> _editImageInternal({
   String? size,
   int n = 1,
 }) async {
-  final normalizedPrompt = prompt.trim();
-  if (normalizedPrompt.isEmpty) {
-    throw Exception('编辑提示词不能为空');
-  }
-  final normalizedPath = imagePath.trim();
-  if (normalizedPath.isEmpty) {
-    throw Exception('请先选择待编辑图片');
-  }
-  final inputFile = File(normalizedPath);
-  if (!await inputFile.exists()) {
-    throw Exception('待编辑图片不存在: $normalizedPath');
-  }
+  try {
+    final normalizedPrompt = prompt.trim();
+    if (normalizedPrompt.isEmpty) {
+      throw Exception('编辑提示词不能为空');
+    }
+    final normalizedPath = imagePath.trim();
+    if (normalizedPath.isEmpty) {
+      throw Exception('请先选择待编辑图片');
+    }
+    final inputFile = File(normalizedPath);
+    if (!await inputFile.exists()) {
+      throw Exception('待编辑图片不存在: $normalizedPath');
+    }
 
-  final uri = _resolveImageEndpointUri(
-    provider: provider,
-    requestMode: requestMode,
-    operation: _imageOperationEdit,
-  );
-  final headers = _buildImageRequestHeaders(provider);
-  final request = http.MultipartRequest('POST', uri)
-    ..headers.addAll(headers)
-    ..fields['model'] = model.trim()
-    ..fields['prompt'] = normalizedPrompt
-    ..fields['n'] = (n <= 0 ? 1 : n).toString()
-    ..files.add(await http.MultipartFile.fromPath('image', normalizedPath));
-  if ((size ?? '').trim().isNotEmpty) {
-    request.fields['size'] = size!.trim();
-  }
+    final uri = _resolveImageEndpointUri(
+      provider: provider,
+      requestMode: requestMode,
+      operation: _imageOperationEdit,
+    );
+    final headers = <String, String>{
+      ..._buildImageRequestHeaders(provider),
+      'Accept': 'application/json',
+    };
+    final request = http.MultipartRequest('POST', uri)
+      ..headers.addAll(headers)
+      ..fields['model'] = model.trim()
+      ..fields['prompt'] = normalizedPrompt
+      ..fields['n'] = (n <= 0 ? 1 : n).toString()
+      ..files.add(await http.MultipartFile.fromPath('image', normalizedPath));
+    if ((size ?? '').trim().isNotEmpty) {
+      request.fields['size'] = size!.trim();
+    }
 
-  AppLogger.i('ImageAPI.edit -> $uri, model=${model.trim()}');
-  final streamed = await request.send();
-  final responseText = await streamed.stream.bytesToString();
-  if (streamed.statusCode < 200 || streamed.statusCode >= 300) {
-    throw Exception('图片编辑请求失败(${streamed.statusCode}): $responseText');
-  }
+    AppLogger.i('ImageAPI.edit -> $uri, model=${model.trim()}');
+    final streamed = await request.send();
+    final responseText = await streamed.stream.bytesToString();
+    if (streamed.statusCode < 200 || streamed.statusCode >= 300) {
+      AppLogger.w(
+        'ImageAPI.edit failed: status=${streamed.statusCode}, body=${_truncateImageResponseLog(responseText)}',
+      );
+      throw Exception('图片编辑请求失败(${streamed.statusCode}): $responseText');
+    }
 
-  final decoded = jsonDecode(responseText);
-  if (decoded is! Map<String, dynamic>) {
-    throw const FormatException('图片编辑响应格式错误');
-  }
+    final decoded = jsonDecode(responseText);
+    if (decoded is! Map<String, dynamic>) {
+      throw const FormatException('图片编辑响应格式错误');
+    }
 
-  final imageUris = await _extractImageUrisFromResponse(decoded);
-  if (imageUris.isEmpty) {
-    throw Exception('图片编辑响应中未包含可用图片');
-  }
+    final imageUris = await _extractImageUrisFromResponse(decoded, uri);
+    if (imageUris.isEmpty) {
+      throw Exception('图片编辑响应中未包含可用图片');
+    }
 
-  final revisedPrompt = _extractRevisedPrompt(decoded);
-  return <String, dynamic>{
-    'imageUris': imageUris,
-    'revisedPrompt': revisedPrompt,
-    'operation': _imageOperationEdit,
-  };
+    final revisedPrompt = _extractRevisedPrompt(decoded);
+    AppLogger.i(
+      'ImageAPI.edit success: model=${model.trim()}, images=${imageUris.length}',
+    );
+    return <String, dynamic>{
+      'imageUris': imageUris,
+      'revisedPrompt': revisedPrompt,
+      'operation': _imageOperationEdit,
+    };
+  } catch (error, stackTrace) {
+    AppLogger.e(
+      'ImageAPI.edit exception: model=${model.trim()}, mode=${requestMode.name}',
+      error,
+      stackTrace,
+    );
+    rethrow;
+  }
 }
 
 const String _imageOperationGenerate = 'generate';
 const String _imageOperationEdit = 'edit';
+
+/// 控制日志体积，避免响应体过大导致日志污染。
+String _truncateImageResponseLog(String rawBody) {
+  const maxLength = 1000;
+  if (rawBody.length <= maxLength) return rawBody;
+  return '${rawBody.substring(0, maxLength)}...';
+}
 
 /// 解析图像接口地址（当前支持 OpenAI Images 协议族）。
 Uri _resolveImageEndpointUri({
@@ -183,6 +228,7 @@ Map<String, String> _buildImageRequestHeaders(AIProviderConfig provider) {
 /// 从图片响应中抽取可展示图片地址（URL 或落地后的本地路径）。
 Future<List<String>> _extractImageUrisFromResponse(
   Map<String, dynamic> payload,
+  Uri? requestUri,
 ) async {
   final data = payload['data'];
   if (data is! List || data.isEmpty) return const <String>[];
@@ -191,7 +237,7 @@ Future<List<String>> _extractImageUrisFromResponse(
     if (item is! Map) continue;
     final url = item['url']?.toString().trim();
     if (url != null && url.isNotEmpty) {
-      imageUris.add(url);
+      imageUris.add(_normalizeRemoteImageUrl(url, requestUri: requestUri));
       continue;
     }
     final b64 = item['b64_json']?.toString().trim();
@@ -203,6 +249,39 @@ Future<List<String>> _extractImageUrisFromResponse(
     }
   }
   return imageUris;
+}
+
+/// 规范化服务端返回的图片 URL，兼容“缺少协议头”的返回格式。
+String _normalizeRemoteImageUrl(String rawUrl, {Uri? requestUri}) {
+  final value = rawUrl.trim();
+  if (value.isEmpty) return value;
+  final parsed = Uri.tryParse(value);
+  if (parsed != null && parsed.hasScheme) {
+    return value;
+  }
+
+  final scheme = (requestUri?.scheme.isNotEmpty ?? false)
+      ? requestUri!.scheme
+      : 'https';
+
+  // `//host/path` -> `https://host/path`
+  if (value.startsWith('//')) {
+    return '$scheme:$value';
+  }
+
+  // `/path/to/image.png` -> `https://host/path/to/image.png`
+  if (value.startsWith('/') && requestUri != null) {
+    return '${requestUri.scheme}://${requestUri.host}${requestUri.hasPort ? ':${requestUri.port}' : ''}$value';
+  }
+
+  // `host/path` -> `https://host/path`
+  final looksLikeHostPath = RegExp(
+    r'^[A-Za-z0-9.-]+\.[A-Za-z]{2,}(:\d+)?/.+',
+  ).hasMatch(value);
+  if (looksLikeHostPath) {
+    return '$scheme://$value';
+  }
+  return value;
 }
 
 /// 读取响应中的 revised_prompt（若有）。
