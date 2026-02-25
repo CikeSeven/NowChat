@@ -19,7 +19,13 @@ enum _ImageWorkbenchMode { generate, edit }
 /// - 上部显示任务队列（排队中 / 生成中 / 已完成 / 失败）
 /// - 下部固定输入区（模式、选图、提示词、加入队列）
 class WorkbenchImagePage extends StatefulWidget {
-  const WorkbenchImagePage({super.key});
+  const WorkbenchImagePage({
+    super.key,
+    this.listColumns = 1,
+  });
+
+  /// 图片记录列表列数：支持 1 列或 2 列。
+  final int listColumns;
 
   @override
   State<WorkbenchImagePage> createState() => WorkbenchImagePageState();
@@ -116,12 +122,10 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
                     ),
                   )
                 else
-                  ...tasks.map(
-                    (task) => _buildTaskCard(
-                      context: context,
-                      task: task,
-                      queueProvider: queueProvider,
-                    ),
+                  _buildTaskList(
+                    context: context,
+                    tasks: tasks,
+                    queueProvider: queueProvider,
                   ),
               ],
             ),
@@ -450,6 +454,7 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
     required BuildContext context,
     required ImageGenerationTask task,
     required ImageGenerationQueueProvider queueProvider,
+    EdgeInsetsGeometry margin = const EdgeInsets.only(bottom: 8),
   }) {
     final color = Theme.of(context).colorScheme;
     final isSelected = _selectedTaskIds.contains(task.id);
@@ -462,7 +467,8 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
       onLongPress: () => _onTaskLongPress(task),
       onTap: () => _onTaskTap(task, firstUri),
       child: Card(
-        margin: const EdgeInsets.only(bottom: 8),
+        margin: margin,
+        color: color.secondaryContainer,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
           side:
@@ -593,6 +599,55 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
           ),
         ),
       ),
+    );
+  }
+
+  /// 根据列数构建记录列表：
+  /// - 1 列：标准纵向卡片列表
+  /// - 2 列：自适应双列卡片列表
+  Widget _buildTaskList({
+    required BuildContext context,
+    required List<ImageGenerationTask> tasks,
+    required ImageGenerationQueueProvider queueProvider,
+  }) {
+    final columns = widget.listColumns == 2 ? 2 : 1;
+    if (columns == 1) {
+      return Column(
+        children:
+            tasks
+                .map(
+                  (task) => _buildTaskCard(
+                    context: context,
+                    task: task,
+                    queueProvider: queueProvider,
+                  ),
+                )
+                .toList(),
+      );
+    }
+    return LayoutBuilder(
+      builder: (layoutContext, constraints) {
+        const spacing = 8.0;
+        final itemWidth = (constraints.maxWidth - spacing) / 2;
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children:
+              tasks
+                  .map(
+                    (task) => SizedBox(
+                      width: itemWidth,
+                      child: _buildTaskCard(
+                        context: context,
+                        task: task,
+                        queueProvider: queueProvider,
+                        margin: EdgeInsets.zero,
+                      ),
+                    ),
+                  )
+                  .toList(),
+        );
+      },
     );
   }
 

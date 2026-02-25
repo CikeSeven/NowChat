@@ -16,6 +16,7 @@ class WorkbenchPageState extends State<WorkbenchPage>
   late final TabController _tabController;
   final GlobalKey<WorkbenchImagePageState> _imagePageKey =
       GlobalKey<WorkbenchImagePageState>();
+  int _imageListColumns = 1;
 
   @override
   void initState() {
@@ -61,6 +62,41 @@ class WorkbenchPageState extends State<WorkbenchPage>
                     },
                     icon: const Icon(Icons.add),
                   ),
+                if (_tabController.index == 1)
+                  PopupMenuButton<int>(
+                    tooltip: '列表布局',
+                    icon: const Icon(Icons.view_list_rounded),
+                    onSelected: (value) {
+                      if (value != _imageListColumns) {
+                        setState(() {
+                          _imageListColumns = value;
+                        });
+                      }
+                    },
+                    itemBuilder:
+                        (menuContext) => [
+                          PopupMenuItem(
+                            value: 1,
+                            child: Row(
+                              children: [
+                                const Expanded(child: Text('一行一张')),
+                                if (_imageListColumns == 1)
+                                  const Icon(Icons.check, size: 18),
+                              ],
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: 2,
+                            child: Row(
+                              children: [
+                                const Expanded(child: Text('一行两张')),
+                                if (_imageListColumns == 2)
+                                  const Icon(Icons.check, size: 18),
+                              ],
+                            ),
+                          ),
+                        ],
+                  ),
               ],
               bottom: TabBar(
                 controller: _tabController,
@@ -76,7 +112,10 @@ class WorkbenchPageState extends State<WorkbenchPage>
           controller: _tabController,
           children: [
             const AgentPageBody(),
-            WorkbenchImagePage(key: _imagePageKey),
+            WorkbenchImagePage(
+              key: _imagePageKey,
+              listColumns: _imageListColumns,
+            ),
           ],
         ),
       ),
