@@ -640,7 +640,9 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
               ),
               SelectableText(
                 prompt,
-                maxLines: isLongPrompt && !isPromptExpanded ? 3 : null,
+                // 折叠态只展示两行，且禁用文本内部滚动，避免抢占外层列表手势。
+                maxLines: isLongPrompt && !isPromptExpanded ? 2 : null,
+                scrollPhysics: const NeverScrollableScrollPhysics(),
                 style: TextStyle(
                   color: color.onSurface,
                   fontSize: 13.5,
