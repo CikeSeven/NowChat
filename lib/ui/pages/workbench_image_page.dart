@@ -195,6 +195,7 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
         _mode == _ImageWorkbenchMode.generate
             ? settings.defaultImageGenerateSize
             : settings.defaultImageEditSize;
+    final countSummary = settings.defaultImageGenerateCount;
     return SafeArea(
       top: false,
       child: Container(
@@ -208,7 +209,9 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '模型：$modelSummary  ·  尺寸：$sizeSummary',
+              _mode == _ImageWorkbenchMode.generate
+                  ? '模型：$modelSummary  ·  尺寸：$sizeSummary  ·  数量：$countSummary'
+                  : '模型：$modelSummary  ·  尺寸：$sizeSummary',
               style: TextStyle(
                 fontSize: 12.2,
                 color: color.onSurfaceVariant,
@@ -429,6 +432,10 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
           _mode == _ImageWorkbenchMode.generate
               ? settings.defaultImageGenerateSize
               : settings.defaultImageEditSize,
+      requestCount:
+          _mode == _ImageWorkbenchMode.generate
+              ? settings.defaultImageGenerateCount
+              : 1,
     );
     await queueProvider.enqueueTask(task);
     if (!mounted) return;
@@ -463,7 +470,9 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
     );
     final isSelected = _selectedTaskIds.contains(task.id);
     final deletable = _isTaskDeletable(task);
-    final firstUri = task.resultImageUris.isEmpty ? null : task.resultImageUris.first;
+    final firstUri = task.resultImageUris.isEmpty
+        ? null
+        : task.resultImageUris.first;
     final prompt = task.prompt.trim();
     final isLongPrompt = prompt.length > 120;
     final isPromptExpanded = _expandedPromptTaskIds.contains(task.id);
@@ -603,12 +612,9 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
                     ),
                   ),
                 ),
-              if (firstUri != null) ...[
+              if (task.resultImageUris.isNotEmpty) ...[
                 const SizedBox(height: 8),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: _buildImageByUri(firstUri),
-                ),
+                _buildTaskImagesGrid(task.resultImageUris),
               ],
             ],
           ),
@@ -713,6 +719,56 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
     );
   }
 
+  /// 同一任务的结果图宫格展示。
+  Widget _buildTaskImagesGrid(List<String> imageUris) {
+    if (imageUris.length == 1) {
+      final only = imageUris.first;
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: _buildImageTile(only, height: 108),
+      );
+    }
+    final displayUris = imageUris.take(4).toList(growable: false);
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 6,
+        mainAxisSpacing: 6,
+        childAspectRatio: 1.15,
+      ),
+      itemCount: displayUris.length,
+      itemBuilder: (context, index) {
+        final uri = displayUris[index];
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: _buildImageTile(uri, height: 84),
+        );
+      },
+    );
+  }
+
+  /// 单张缩略图渲染并承载点击预览。
+  Widget _buildImageTile(String rawUri, {required double height}) {
+    final normalizedUri = _normalizeDisplayImageUri(rawUri);
+    final previewUri = Uri.parse(normalizedUri);
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ImagePreviewPage(imageUri: previewUri),
+          ),
+        );
+      },
+      child: _buildImageByUriWithHeight(
+        rawUri: rawUri,
+        forcedHeight: height,
+      ),
+    );
+  }
+
   /// 卡片长按行为：进入多选并切换当前项。
   void _onTaskLongPress(ImageGenerationTask task) {
     if (!_isTaskDeletable(task)) {
@@ -810,6 +866,14 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
 
   /// 根据 URI 类型构建缩略图。
   Widget _buildImageByUri(String rawUri) {
+    return _buildImageByUriWithHeight(rawUri: rawUri, forcedHeight: 108);
+  }
+
+  /// 根据 URI 类型构建缩略图（可指定高度，供单图/宫格共用）。
+  Widget _buildImageByUriWithHeight({
+    required String rawUri,
+    required double forcedHeight,
+  }) {
     final normalizedRawUri = _normalizeDisplayImageUri(rawUri);
     final uri = Uri.tryParse(normalizedRawUri);
     final isHttp = uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
@@ -818,11 +882,11 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
       return CachedNetworkImage(
         imageUrl: normalizedRawUri,
         fit: BoxFit.cover,
-        height: 108,
+        height: forcedHeight,
         width: double.infinity,
         placeholder:
             (_, __) => Container(
-              height: 108,
+              height: forcedHeight,
               color: Theme.of(context).colorScheme.surfaceContainerHighest,
               alignment: Alignment.center,
               child: const SizedBox(
@@ -833,7 +897,7 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
             ),
         errorWidget:
             (_, __, ___) => Container(
-              height: 108,
+              height: forcedHeight,
               color: Theme.of(context).colorScheme.surfaceContainerHighest,
               alignment: Alignment.center,
               child: const Icon(Icons.broken_image_outlined),
@@ -843,14 +907,14 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
     if (isFile) {
       return Image.file(
         File(uri.toFilePath()),
-        height: 108,
+        height: forcedHeight,
         width: double.infinity,
         fit: BoxFit.cover,
       );
     }
     return Image.file(
       File(normalizedRawUri),
-      height: 108,
+      height: forcedHeight,
       width: double.infinity,
       fit: BoxFit.cover,
     );

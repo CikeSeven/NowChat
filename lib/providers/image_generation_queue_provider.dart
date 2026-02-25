@@ -192,15 +192,46 @@ class ImageGenerationQueueProvider extends ChangeNotifier {
         throw Exception('Provider 不存在: ${task.providerId}');
       }
 
-      late final Map<String, dynamic> response;
+      Map<String, dynamic>? response;
+      final mergedImageUris = <String>[];
+      String? revisedPrompt;
       if (task.mode == ImageGenerationTaskMode.generate) {
-        response = await ApiService.generateImage(
-          provider: provider,
-          model: task.model,
-          prompt: task.prompt,
-          requestMode: task.requestMode,
-          size: task.size,
-        );
+        // 生图任务支持按 requestCount 连续生成多张图，结果聚合在同一任务中。
+        final targetCount = task.requestCount <= 1 ? 1 : task.requestCount;
+        for (var i = 0; i < targetCount; i++) {
+          try {
+            response = await ApiService.generateImage(
+              provider: provider,
+              model: task.model,
+              prompt: task.prompt,
+              requestMode: task.requestMode,
+              size: task.size,
+            );
+            final imageUris =
+                (response['imageUris'] as List?)
+                    ?.map((item) => item.toString().trim())
+                    .where((item) => item.isNotEmpty)
+                    .toList() ??
+                <String>[];
+            if (imageUris.isNotEmpty) {
+              mergedImageUris.addAll(imageUris);
+            }
+            final revised = response['revisedPrompt']?.toString().trim();
+            if (revised != null && revised.isNotEmpty) {
+              revisedPrompt = revised;
+            }
+          } catch (error, stackTrace) {
+            AppLogger.w('生图批次请求失败: task=$taskId, batch=${i + 1}/$targetCount');
+            AppLogger.e('生图批次异常详情', error, stackTrace);
+            // 保留已成功的结果；若尚无结果，循环结束后会统一抛错。
+          }
+          if (mergedImageUris.length >= targetCount) {
+            break;
+          }
+        }
+        if (mergedImageUris.length > targetCount) {
+          mergedImageUris.removeRange(targetCount, mergedImageUris.length);
+        }
       } else {
         final source = (task.sourceImagePath ?? '').trim();
         if (source.isEmpty) {
@@ -214,21 +245,23 @@ class ImageGenerationQueueProvider extends ChangeNotifier {
           requestMode: task.requestMode,
           size: task.size,
         );
+        final imageUris =
+            (response['imageUris'] as List?)
+                ?.map((item) => item.toString().trim())
+                .where((item) => item.isNotEmpty)
+                .toList() ??
+            <String>[];
+        mergedImageUris.addAll(imageUris);
+        revisedPrompt = response['revisedPrompt']?.toString().trim();
       }
-      final imageUris =
-          (response['imageUris'] as List?)
-              ?.map((item) => item.toString().trim())
-              .where((item) => item.isNotEmpty)
-              .toList() ??
-          <String>[];
-      if (imageUris.isEmpty) {
+      if (mergedImageUris.isEmpty) {
         throw Exception('接口未返回图片');
       }
 
       final succeeded = task.copyWith(
         status: ImageGenerationTaskStatus.succeeded,
-        resultImageUris: imageUris,
-        revisedPrompt: response['revisedPrompt']?.toString(),
+        resultImageUris: mergedImageUris,
+        revisedPrompt: revisedPrompt,
         finishedAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );
@@ -358,6 +391,7 @@ class ImageGenerationQueueProvider extends ChangeNotifier {
           model: record.model,
           requestMode: ImageRequestMode.inheritProvider,
           size: null,
+          requestCount: 1,
           prompt: record.prompt,
           sourceImagePath: record.sourceImagePath,
           resultImageUris: record.imageUris,

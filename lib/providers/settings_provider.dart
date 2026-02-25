@@ -14,6 +14,7 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
   static const bool defaultExposeImageToolsToChatValue = false;
   static const String defaultImageGenerateSizeValue = '1024x1024';
   static const String defaultImageEditSizeValue = '1024x1024';
+  static const int defaultImageGenerateCountValue = 1;
   static const int defaultImageQueueConcurrencyValue = 2;
 
   static const _themeKey = 'theme_mode';
@@ -36,6 +37,7 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
   static const _defaultImageEditModelKey = 'default_image_edit_model';
   static const _defaultImageGenerateSizeKey = 'default_image_generate_size';
   static const _defaultImageEditSizeKey = 'default_image_edit_size';
+  static const _defaultImageGenerateCountKey = 'default_image_generate_count';
   static const _imageQueueConcurrencyKey = 'image_queue_concurrency';
 
   ThemeMode _themeMode = ThemeMode.system;
@@ -55,6 +57,7 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
   String? _defaultImageEditModel;
   String _defaultImageGenerateSize = defaultImageGenerateSizeValue;
   String _defaultImageEditSize = defaultImageEditSizeValue;
+  int _defaultImageGenerateCount = defaultImageGenerateCountValue;
   int _imageQueueConcurrency = defaultImageQueueConcurrencyValue;
 
   ThemeMode get themeMode => _themeMode;
@@ -75,6 +78,7 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
   String? get defaultImageEditModel => _defaultImageEditModel;
   String get defaultImageGenerateSize => _defaultImageGenerateSize;
   String get defaultImageEditSize => _defaultImageEditSize;
+  int get defaultImageGenerateCount => _defaultImageGenerateCount;
   int get imageQueueConcurrency => _imageQueueConcurrency;
 
   ThemeMode get effectiveThemeMode {
@@ -152,6 +156,9 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
           prefs.getString(_defaultImageEditSizeKey),
         ) ??
         defaultImageEditSizeValue;
+    _defaultImageGenerateCount = _normalizeGenerateCount(
+      prefs.getInt(_defaultImageGenerateCountKey),
+    );
     _imageQueueConcurrency = _normalizeQueueConcurrency(
       prefs.getInt(_imageQueueConcurrencyKey),
     );
@@ -322,6 +329,15 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
     await prefs.setString(_defaultImageEditSizeKey, normalized);
   }
 
+  /// 设置默认每次生图任务生成数量（仅允许 1/2/4）。
+  Future<void> setDefaultImageGenerateCount(int value) async {
+    final normalized = _normalizeGenerateCount(value);
+    _defaultImageGenerateCount = normalized;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_defaultImageGenerateCountKey, normalized);
+  }
+
   /// 设置生图队列并发数。
   Future<void> setImageQueueConcurrency(int value) async {
     final normalized = _normalizeQueueConcurrency(value);
@@ -387,6 +403,18 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (next < 1) return 1;
     if (next > 4) return 4;
     return next;
+  }
+
+  /// 规范化生图数量，仅允许 1/2/4。
+  int _normalizeGenerateCount(int? value) {
+    switch (value) {
+      case 2:
+      case 4:
+        return value!;
+      case 1:
+      default:
+        return 1;
+    }
   }
 
   /// 持久化“provider + model”成对配置。

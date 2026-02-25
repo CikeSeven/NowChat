@@ -45,6 +45,7 @@ class ImageGenerationTask {
   final String model;
   final ImageRequestMode requestMode;
   final String? size;
+  final int requestCount;
   final String prompt;
   final String? sourceImagePath;
   final List<String> resultImageUris;
@@ -64,6 +65,7 @@ class ImageGenerationTask {
     required this.model,
     required this.requestMode,
     required this.size,
+    required this.requestCount,
     required this.prompt,
     required this.sourceImagePath,
     required this.resultImageUris,
@@ -81,8 +83,12 @@ class ImageGenerationTask {
     required String prompt,
     String? sourceImagePath,
     String? size,
+    int requestCount = 1,
   }) {
     final now = DateTime.now();
+    final normalizedCount = (requestCount <= 1)
+        ? 1
+        : (requestCount == 2 ? 2 : (requestCount == 4 ? 4 : 1));
     return ImageGenerationTask(
       id: const Uuid().v4(),
       createdAt: now,
@@ -95,6 +101,7 @@ class ImageGenerationTask {
       model: model,
       requestMode: requestMode,
       size: size?.trim().isEmpty == true ? null : size?.trim(),
+      requestCount: mode == ImageGenerationTaskMode.edit ? 1 : normalizedCount,
       prompt: prompt,
       sourceImagePath:
           sourceImagePath?.trim().isEmpty == true ? null : sourceImagePath?.trim(),
@@ -120,6 +127,7 @@ class ImageGenerationTask {
     String? model,
     ImageRequestMode? requestMode,
     String? size,
+    int? requestCount,
     String? prompt,
     String? sourceImagePath,
     List<String>? resultImageUris,
@@ -139,6 +147,7 @@ class ImageGenerationTask {
       model: model ?? this.model,
       requestMode: requestMode ?? this.requestMode,
       size: size ?? this.size,
+      requestCount: requestCount ?? this.requestCount,
       prompt: prompt ?? this.prompt,
       sourceImagePath: sourceImagePath ?? this.sourceImagePath,
       resultImageUris: resultImageUris ?? this.resultImageUris,
@@ -161,6 +170,7 @@ class ImageGenerationTask {
       'model': model,
       'requestMode': requestMode.name,
       'size': size,
+      'requestCount': requestCount,
       'prompt': prompt,
       'sourceImagePath': sourceImagePath,
       'resultImageUris': resultImageUris,
@@ -199,6 +209,7 @@ class ImageGenerationTask {
       model: json['model']?.toString() ?? '',
       requestMode: requestMode,
       size: json['size']?.toString(),
+      requestCount: (json['requestCount'] as num?)?.toInt() ?? 1,
       prompt: json['prompt']?.toString() ?? '',
       sourceImagePath: json['sourceImagePath']?.toString(),
       resultImageUris:

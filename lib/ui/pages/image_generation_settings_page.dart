@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 /// - 默认图片编辑模型
 /// - 是否向聊天模型暴露生图工具
 /// - 默认图片尺寸
+/// - 每次生图数量（1/2/4）
 /// - 队列并发数
 class ImageGenerationSettingsPage extends StatelessWidget {
   const ImageGenerationSettingsPage({super.key});
@@ -91,6 +92,24 @@ class ImageGenerationSettingsPage extends StatelessWidget {
                 currentValue: settings.defaultImageEditSize,
                 onSelected: (size) async {
                   await context.read<SettingsProvider>().setDefaultImageEditSize(size);
+                },
+              );
+            },
+          ),
+          const Divider(height: 1),
+          ListTile(
+            leading: const Icon(Icons.collections_outlined),
+            title: const Text('每次生图数量'),
+            subtitle: Text('${settings.defaultImageGenerateCount} 张'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () {
+              _showGenerateCountSelector(
+                context,
+                currentValue: settings.defaultImageGenerateCount,
+                onSelected: (value) async {
+                  await context.read<SettingsProvider>().setDefaultImageGenerateCount(
+                    value,
+                  );
                 },
               );
             },
@@ -299,6 +318,48 @@ class ImageGenerationSettingsPage extends StatelessWidget {
               for (final value in <int>[1, 2, 3, 4])
                 ListTile(
                   title: Text('$value'),
+                  trailing:
+                      value == currentValue
+                          ? Icon(
+                            Icons.check_rounded,
+                            color: Theme.of(context).colorScheme.primary,
+                          )
+                          : null,
+                  onTap: () async {
+                    Navigator.of(sheetContext).pop();
+                    await onSelected(value);
+                  },
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// 选择默认每次生图数量（仅 1/2/4）。
+  void _showGenerateCountSelector(
+    BuildContext context, {
+    required int currentValue,
+    required Future<void> Function(int value) onSelected,
+  }) {
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              const ListTile(
+                title: Text('选择每次生图数量'),
+                subtitle: Text('该数量会合并到同一个任务卡片展示'),
+                dense: true,
+                enabled: false,
+              ),
+              for (final value in <int>[1, 2, 4])
+                ListTile(
+                  title: Text('$value 张'),
                   trailing:
                       value == currentValue
                           ? Icon(

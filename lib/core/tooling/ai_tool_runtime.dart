@@ -392,6 +392,7 @@ class AIToolRuntime {
           requestMode: modelFeatures.imageRequestMode,
           prompt: prompt,
           size: sizeArg,
+          requestCount: settings.generationCount,
         );
       } else {
         if (modelFeatures.modelType != ModelType.imageEdit) {
@@ -444,6 +445,7 @@ class AIToolRuntime {
         'mode': task.mode.name,
         'providerId': provider.id,
         'model': targetModel,
+        'requestCount': task.requestCount,
         'message': '任务已加入生图队列，请稍后在工作台查看结果',
       };
       return _withDuration(

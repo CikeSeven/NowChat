@@ -8,6 +8,7 @@ class ImageToolSettingsSnapshot {
   /// 默认生图模型（text-to-image）。
   final String? generationProviderId;
   final String? generationModel;
+  final int generationCount;
 
   /// 默认图片编辑模型（image-to-image）。
   final String? editProviderId;
@@ -17,6 +18,7 @@ class ImageToolSettingsSnapshot {
     required this.exposeImageToolsToChat,
     required this.generationProviderId,
     required this.generationModel,
+    required this.generationCount,
     required this.editProviderId,
     required this.editModel,
   });
@@ -33,6 +35,7 @@ class ImageToolSettingsStore {
       'default_image_generation_provider_id';
   static const _defaultImageGenerationModelKey =
       'default_image_generation_model';
+  static const _defaultImageGenerateCountKey = 'default_image_generate_count';
   static const _defaultImageEditProviderIdKey = 'default_image_edit_provider_id';
   static const _defaultImageEditModelKey = 'default_image_edit_model';
 
@@ -43,6 +46,9 @@ class ImageToolSettingsStore {
       prefs.getString(_defaultImageGenerationProviderIdKey),
     );
     final genModel = _normalize(prefs.getString(_defaultImageGenerationModelKey));
+    final genCount = _normalizeGenerateCount(
+      prefs.getInt(_defaultImageGenerateCountKey),
+    );
     final editProvider = _normalize(
       prefs.getString(_defaultImageEditProviderIdKey),
     );
@@ -52,6 +58,7 @@ class ImageToolSettingsStore {
           prefs.getBool(_exposeImageToolsToChatKey) ?? false,
       generationProviderId: genProvider,
       generationModel: genModel,
+      generationCount: genCount,
       editProviderId: editProvider,
       editModel: editModel,
     );
@@ -62,5 +69,17 @@ class ImageToolSettingsStore {
     final trimmed = value?.trim();
     if (trimmed == null || trimmed.isEmpty) return null;
     return trimmed;
+  }
+
+  /// 规范化生图数量，仅允许 1/2/4。
+  static int _normalizeGenerateCount(int? value) {
+    switch (value) {
+      case 2:
+      case 4:
+        return value!;
+      case 1:
+      default:
+        return 1;
+    }
   }
 }
