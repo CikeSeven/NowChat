@@ -178,6 +178,8 @@ enum ImageRequestMode {
 
 /// 单个模型可选能力配置。
 class ModelFeatureOptions {
+  static const Object _unset = Object();
+
   /// 是否支持视觉输入。
   final bool supportsVision;
 
@@ -190,15 +192,39 @@ class ModelFeatureOptions {
   /// 图像请求协议（可覆盖 Provider 默认）。
   final ImageRequestMode imageRequestMode;
 
+  /// 模型级图像接口 Base URL 覆盖（可选）。
+  final String? imageBaseUrl;
+
+  /// 模型级生图请求路径覆盖（可选）。
+  final String? imageGeneratePath;
+
+  /// 模型级图片编辑请求路径覆盖（可选）。
+  final String? imageEditPath;
+
   const ModelFeatureOptions({
     this.supportsVision = false,
     this.supportsTools = false,
     this.modelType = ModelType.text,
     this.imageRequestMode = ImageRequestMode.inheritProvider,
+    this.imageBaseUrl,
+    this.imageGeneratePath,
+    this.imageEditPath,
   });
 
   /// 是否至少开启了一项能力。
   bool get hasAnyCapability => supportsVision || supportsTools;
+
+  /// 是否包含任一图像路由覆盖字段。
+  bool get hasImageRouteOverrides =>
+      (imageBaseUrl ?? '').trim().isNotEmpty ||
+      (imageGeneratePath ?? '').trim().isNotEmpty ||
+      (imageEditPath ?? '').trim().isNotEmpty;
+
+  /// 是否包含任一图像相关配置（类型、协议、路由覆盖）。
+  bool get hasAnyImageConfig =>
+      modelType != ModelType.text ||
+      imageRequestMode != ImageRequestMode.inheritProvider ||
+      hasImageRouteOverrides;
 
   /// 返回带有部分字段变更的新实例。
   ModelFeatureOptions copyWith({
@@ -206,12 +232,30 @@ class ModelFeatureOptions {
     bool? supportsTools,
     ModelType? modelType,
     ImageRequestMode? imageRequestMode,
+    Object? imageBaseUrl = _unset,
+    Object? imageGeneratePath = _unset,
+    Object? imageEditPath = _unset,
   }) {
+    final nextImageBaseUrl =
+        imageBaseUrl == _unset
+            ? this.imageBaseUrl
+            : _normalizeOptional(imageBaseUrl as String?);
+    final nextImageGeneratePath =
+        imageGeneratePath == _unset
+            ? this.imageGeneratePath
+            : _normalizePath(imageGeneratePath as String?);
+    final nextImageEditPath =
+        imageEditPath == _unset
+            ? this.imageEditPath
+            : _normalizePath(imageEditPath as String?);
     return ModelFeatureOptions(
       supportsVision: supportsVision ?? this.supportsVision,
       supportsTools: supportsTools ?? this.supportsTools,
       modelType: modelType ?? this.modelType,
       imageRequestMode: imageRequestMode ?? this.imageRequestMode,
+      imageBaseUrl: nextImageBaseUrl,
+      imageGeneratePath: nextImageGeneratePath,
+      imageEditPath: nextImageEditPath,
     );
   }
 
@@ -221,6 +265,10 @@ class ModelFeatureOptions {
     'supportsTools': supportsTools,
     'modelType': modelType.name,
     'imageRequestMode': imageRequestMode.name,
+    if ((imageBaseUrl ?? '').trim().isNotEmpty) 'imageBaseUrl': imageBaseUrl,
+    if ((imageGeneratePath ?? '').trim().isNotEmpty)
+      'imageGeneratePath': imageGeneratePath,
+    if ((imageEditPath ?? '').trim().isNotEmpty) 'imageEditPath': imageEditPath,
   };
 
   /// 从动态对象解析能力配置，兼容多种历史字段名。
@@ -242,14 +290,41 @@ class ModelFeatureOptions {
           raw['imageRequestMode']?.toString() ??
           raw['imageProtocol']?.toString() ??
           raw['imageMode']?.toString();
+      final imageBaseUrlRaw =
+          raw['imageBaseUrl']?.toString() ??
+          raw['image_base_url']?.toString() ??
+          raw['baseUrl']?.toString();
+      final imageGeneratePathRaw =
+          raw['imageGeneratePath']?.toString() ??
+          raw['image_generate_path']?.toString() ??
+          raw['imagesGeneratePath']?.toString();
+      final imageEditPathRaw =
+          raw['imageEditPath']?.toString() ??
+          raw['image_edit_path']?.toString() ??
+          raw['imagesEditPath']?.toString();
       return ModelFeatureOptions(
         supportsVision: supportsVision,
         supportsTools: supportsTools,
         modelType: _parseModelType(modelTypeRaw),
         imageRequestMode: _parseImageRequestMode(imageModeRaw),
+        imageBaseUrl: _normalizeOptional(imageBaseUrlRaw),
+        imageGeneratePath: _normalizePath(imageGeneratePathRaw),
+        imageEditPath: _normalizePath(imageEditPathRaw),
       );
     }
     return const ModelFeatureOptions();
+  }
+
+  static String? _normalizeOptional(String? value) {
+    final normalized = value?.trim();
+    if (normalized == null || normalized.isEmpty) return null;
+    return normalized;
+  }
+
+  static String? _normalizePath(String? value) {
+    final normalized = _normalizeOptional(value);
+    if (normalized == null) return null;
+    return normalized.startsWith('/') ? normalized : '/$normalized';
   }
 
   /// 解析模型类型，异常或未知值回退为文本模型。
@@ -551,11 +626,8 @@ class AIProviderConfig {
       final key = entry.key.trim();
       if (key.isEmpty || !modelSet.contains(key)) continue;
       final value = entry.value;
-      // 兼容新字段：即便视觉/工具都关闭，只要模型类型或图像协议有定制也要保留。
-      final hasImageConfig =
-          value.modelType != ModelType.text ||
-          value.imageRequestMode != ImageRequestMode.inheritProvider;
-      if (!value.hasAnyCapability && !hasImageConfig) continue;
+      // 即便视觉/工具都关闭，只要存在任一图像配置也要保留。
+      if (!value.hasAnyCapability && !value.hasAnyImageConfig) continue;
       result[key] = value;
     }
     return result;

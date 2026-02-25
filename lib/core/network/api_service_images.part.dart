@@ -20,6 +20,7 @@ Future<Map<String, dynamic>> _generateImageInternal({
 
     final uri = _resolveImageEndpointUri(
       provider: provider,
+      model: model,
       requestMode: requestMode,
       operation: _imageOperationGenerate,
     );
@@ -120,6 +121,7 @@ Future<Map<String, dynamic>> _editImageInternal({
 
     final uri = _resolveImageEndpointUri(
       provider: provider,
+      model: model,
       requestMode: requestMode,
       operation: _imageOperationEdit,
     );
@@ -204,12 +206,25 @@ String _truncateImageResponseLog(String rawBody) {
 /// 解析图像接口地址（当前支持 OpenAI Images 协议族）。
 Uri _resolveImageEndpointUri({
   required AIProviderConfig provider,
+  required String model,
   required ImageRequestMode requestMode,
   required String operation,
 }) {
-  final base = _normalizeBaseUrl(provider.baseUrl);
+  final modelFeatures = provider.featuresForModel(model);
+  final providerBase = _normalizeBaseUrl(provider.baseUrl);
+  final modelBase = _normalizeBaseUrl(modelFeatures.imageBaseUrl);
+  final base = modelBase.isNotEmpty ? modelBase : providerBase;
   if (base.isEmpty) {
     throw Exception('Provider Base URL 为空，无法请求图片接口');
+  }
+
+  // 模型级路径覆盖优先：允许每个模型单独配置图片接口路径。
+  final modelPath =
+      operation == _imageOperationEdit
+          ? modelFeatures.imageEditPath
+          : modelFeatures.imageGeneratePath;
+  if ((modelPath ?? '').trim().isNotEmpty) {
+    return _buildUri(base, modelPath!.trim());
   }
 
   final effectiveMode = _resolveEffectiveImageMode(

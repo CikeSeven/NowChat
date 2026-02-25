@@ -156,6 +156,27 @@ class ImageGenerationSettingsPage extends StatelessWidget {
           ),
           const Divider(height: 1),
           ListTile(
+            leading: const Icon(Icons.route_outlined),
+            title: const Text('生图模型协议'),
+            subtitle: Text(
+              _buildProtocolSummary(
+                provider: genProvider,
+                model: settings.defaultImageGenerationModel,
+                modelType: ModelType.imageGeneration,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () async {
+              await _openProtocolEditorForDefaultModel(
+                context,
+                isGeneration: true,
+              );
+            },
+          ),
+          const Divider(height: 1),
+          ListTile(
             leading: const Icon(Icons.auto_fix_high_outlined),
             title: const Text('默认图片编辑模型'),
             subtitle: Text(editDisplay),
@@ -188,6 +209,27 @@ class ImageGenerationSettingsPage extends StatelessWidget {
                     model: model,
                   );
                 },
+              );
+            },
+          ),
+          const Divider(height: 1),
+          ListTile(
+            leading: const Icon(Icons.settings_ethernet_outlined),
+            title: const Text('图片编辑模型协议'),
+            subtitle: Text(
+              _buildProtocolSummary(
+                provider: editProvider,
+                model: settings.defaultImageEditModel,
+                modelType: ModelType.imageEdit,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () async {
+              await _openProtocolEditorForDefaultModel(
+                context,
+                isGeneration: false,
               );
             },
           ),
@@ -375,7 +417,7 @@ class ImageGenerationSettingsPage extends StatelessWidget {
     final divisor = _gcd(width, height);
     final ratioW = width ~/ divisor;
     final ratioH = height ~/ divisor;
-    return '${width}x${height} · $ratioW:$ratioH';
+    return '${width}x$height · $ratioW:$ratioH';
   }
 
   /// 计算最大公约数，用于归一化宽高比例。
@@ -388,5 +430,207 @@ class ImageGenerationSettingsPage extends StatelessWidget {
       y = temp;
     }
     return x == 0 ? 1 : x;
+  }
+
+  /// 打开默认模型的协议编辑弹窗（生图/图片编辑）。
+  Future<void> _openProtocolEditorForDefaultModel(
+    BuildContext context, {
+    required bool isGeneration,
+  }) async {
+    final settings = context.read<SettingsProvider>();
+    final chatProvider = context.read<ChatProvider>();
+    final providerId =
+        isGeneration
+            ? settings.defaultImageGenerationProviderId
+            : settings.defaultImageEditProviderId;
+    final model =
+        isGeneration
+            ? settings.defaultImageGenerationModel
+            : settings.defaultImageEditModel;
+    if ((providerId ?? '').trim().isEmpty || (model ?? '').trim().isEmpty) {
+      _showSnackBar(context, '请先选择默认${isGeneration ? '生图' : '图片编辑'}模型');
+      return;
+    }
+    final provider = chatProvider.getProviderById(providerId!.trim());
+    if (provider == null) {
+      _showSnackBar(context, '默认模型对应 Provider 不存在');
+      return;
+    }
+    final normalizedModel = model!.trim();
+    final features = provider.featuresForModel(normalizedModel);
+    final modelType =
+        isGeneration ? ModelType.imageGeneration : ModelType.imageEdit;
+    final defaultPath = _defaultImagePathForModelType(modelType);
+    final pathController = TextEditingController(
+      text:
+          (isGeneration ? features.imageGeneratePath : features.imageEditPath) ??
+          defaultPath,
+    );
+    final baseController = TextEditingController(
+      text: features.imageBaseUrl ?? '',
+    );
+    String? errorText;
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            return AlertDialog(
+              title: Text('模型协议：$normalizedModel'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DropdownButtonFormField<String>(
+                    value: 'openai',
+                    decoration: InputDecoration(
+                      isDense: true,
+                      labelText: '协议预设',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: [
+                      DropdownMenuItem<String>(
+                        value: 'openai',
+                        child: Text('OpenAI Images'),
+                      ),
+                    ],
+                    onChanged: null,
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: baseController,
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      labelText: '自定义 Base URL（可选）',
+                      hintText: '留空则继承 Provider Base URL',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: pathController,
+                    decoration: InputDecoration(
+                      isDense: true,
+                      labelText: '请求路径',
+                      hintText: defaultPath,
+                      border: const OutlineInputBorder(),
+                    ),
+                  ),
+                  if (errorText != null) ...[
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        errorText!,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('取消'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    final normalizedPath = _normalizePath(
+                      pathController.text.trim(),
+                    );
+                    if (normalizedPath == null) {
+                      setDialogState(() {
+                        errorText = '请求路径不能为空';
+                      });
+                      return;
+                    }
+                    Navigator.of(dialogContext).pop(true);
+                  },
+                  child: const Text('保存'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (saved != true) {
+      pathController.dispose();
+      baseController.dispose();
+      return;
+    }
+    final normalizedPath = _normalizePath(pathController.text.trim())!;
+    final normalizedBase = baseController.text.trim();
+    pathController.dispose();
+    baseController.dispose();
+
+    final capabilities = Map<String, ModelFeatureOptions>.from(
+      provider.modelCapabilities,
+    );
+    final next = features.copyWith(
+      modelType: modelType,
+      imageRequestMode:
+          isGeneration
+              ? ImageRequestMode.openaiImagesGenerate
+              : ImageRequestMode.openaiImagesEdit,
+      imageBaseUrl: normalizedBase,
+      imageGeneratePath: isGeneration ? normalizedPath : null,
+      imageEditPath: isGeneration ? null : normalizedPath,
+    );
+    if (next.hasAnyCapability || next.hasAnyImageConfig) {
+      capabilities[normalizedModel] = next;
+    } else {
+      capabilities.remove(normalizedModel);
+    }
+    await chatProvider.updateProvider(
+      provider.id,
+      modelCapabilities: capabilities,
+    );
+    if (!context.mounted) return;
+    _showSnackBar(context, '模型协议已保存');
+  }
+
+  /// 构建模型协议摘要文案。
+  String _buildProtocolSummary({
+    required AIProviderConfig? provider,
+    required String? model,
+    required ModelType modelType,
+  }) {
+    final normalizedModel = (model ?? '').trim();
+    if (provider == null || normalizedModel.isEmpty) return '请先选择默认模型';
+    final features = provider.featuresForModel(normalizedModel);
+    final path =
+        modelType == ModelType.imageGeneration
+            ? features.imageGeneratePath
+            : features.imageEditPath;
+    final normalizedPath = _normalizePath(path) ?? _defaultImagePathForModelType(modelType);
+    final base = (features.imageBaseUrl ?? '').trim();
+    final baseText = base.isEmpty ? 'Base: 继承 Provider' : 'Base: $base';
+    return 'OpenAI · $baseText · Path: $normalizedPath';
+  }
+
+  /// 返回模型类型对应的默认 OpenAI Images 路径。
+  String _defaultImagePathForModelType(ModelType modelType) {
+    return modelType == ModelType.imageEdit
+        ? '/images/edits'
+        : '/images/generations';
+  }
+
+  /// 规范化路径：保证以 `/` 开头。
+  String? _normalizePath(String? value) {
+    final normalized = value?.trim() ?? '';
+    if (normalized.isEmpty) return null;
+    return normalized.startsWith('/') ? normalized : '/$normalized';
+  }
+
+  /// 页面内轻量提示。
+  void _showSnackBar(BuildContext context, String message) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(SnackBar(content: Text(message)));
   }
 }

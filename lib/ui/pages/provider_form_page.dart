@@ -300,10 +300,7 @@ class _ProviderFormPageState extends State<ProviderFormPage> {
         modelType: modelType,
         imageRequestMode: imageRequestMode,
       );
-      final hasImageConfig =
-          next.modelType != ModelType.text ||
-          next.imageRequestMode != ImageRequestMode.inheritProvider;
-      if (next.hasAnyCapability || hasImageConfig) {
+      if (next.hasAnyCapability || next.hasAnyImageConfig) {
         _modelCapabilities[normalizedModel] = next;
       } else {
         _modelCapabilities.remove(normalizedModel);
@@ -334,10 +331,7 @@ class _ProviderFormPageState extends State<ProviderFormPage> {
       supportsTools: supportsTools,
     );
     setState(() {
-      final hasImageConfig =
-          next.modelType != ModelType.text ||
-          next.imageRequestMode != ImageRequestMode.inheritProvider;
-      if (next.hasAnyCapability || hasImageConfig) {
+      if (next.hasAnyCapability || next.hasAnyImageConfig) {
         _modelCapabilities[model] = next;
       } else {
         _modelCapabilities.remove(model);
