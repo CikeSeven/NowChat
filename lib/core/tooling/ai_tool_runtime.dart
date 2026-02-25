@@ -75,8 +75,7 @@ class AIToolRuntime {
   static Future<List<Map<String, dynamic>>> buildOpenAIToolsSchema() async {
     final settings = await ImageToolSettingsStore.load();
     final tools = PluginRegistry.instance.resolveEnabledTools();
-    final schemas =
-        tools
+    final schemas = tools
         .map((binding) {
           return <String, dynamic>{
             'type': 'function',
@@ -240,13 +239,17 @@ class AIToolRuntime {
           'name': _toolGenerateImage,
           'description':
               '将“图片生成”任务加入生图队列（使用生图设置中的默认生图模型），'
-                  '立即返回入队结果，不等待图片生成完成',
+              '立即返回入队结果，不等待图片生成完成',
           'parameters': <String, dynamic>{
             'type': 'object',
             'properties': <String, dynamic>{
               'prompt': <String, dynamic>{
                 'type': 'string',
                 'description': '生图提示词',
+              },
+              'size': <String, dynamic>{
+                'type': 'string',
+                'description': '可选，生图尺寸，例如 1024x1024、1280x720、720x1280',
               },
             },
             'required': ['prompt'],
@@ -259,7 +262,7 @@ class AIToolRuntime {
           'name': _toolEditImage,
           'description':
               '将“图片编辑”任务加入生图队列（使用生图设置中的默认图片编辑模型），'
-                  '立即返回入队结果，不等待图片生成完成',
+              '立即返回入队结果，不等待图片生成完成',
           'parameters': <String, dynamic>{
             'type': 'object',
             'properties': <String, dynamic>{
@@ -270,6 +273,10 @@ class AIToolRuntime {
               'image_path': <String, dynamic>{
                 'type': 'string',
                 'description': '待编辑图片的本地绝对路径',
+              },
+              'size': <String, dynamic>{
+                'type': 'string',
+                'description': '可选，编辑后图片尺寸，例如 1024x1024、1280x720、720x1280',
               },
             },
             'required': ['prompt', 'image_path'],
@@ -305,7 +312,8 @@ class AIToolRuntime {
       final isGenerate = call.name == _toolGenerateImage;
       final targetProviderId =
           isGenerate ? settings.generationProviderId : settings.editProviderId;
-      final targetModel = isGenerate ? settings.generationModel : settings.editModel;
+      final targetModel =
+          isGenerate ? settings.generationModel : settings.editModel;
       if (targetProviderId == null || targetModel == null) {
         return _withDuration(
           AIToolExecutionResult(
@@ -360,8 +368,30 @@ class AIToolRuntime {
         );
       }
 
-      // 对聊天工具调用，尺寸统一跟随生图设置页，避免模型携带旧 size 导致配置不生效。
+      // 工具可显式指定 size；未指定时回退到生图设置页默认尺寸。
       final sizeFromSettings = settings.generationSize;
+      final requestedSize = (args['size'] ?? '').toString().trim();
+      final normalizedRequestedSize = _normalizeImageSizeArg(requestedSize);
+      if (requestedSize.isNotEmpty && normalizedRequestedSize == null) {
+        return _withDuration(
+          AIToolExecutionResult(
+            status: 'error',
+            summary: '参数错误：size 格式应为 宽x高（如 1280x720）',
+            toolMessageContent: jsonEncode(<String, dynamic>{
+              'ok': false,
+              'error': 'invalid size format',
+              'size': requestedSize,
+            }),
+            error: 'invalid size format',
+          ),
+          started,
+        );
+      }
+      final sizeFromArgs = normalizedRequestedSize;
+      final effectiveSize =
+          (sizeFromArgs != null && sizeFromArgs.isNotEmpty)
+              ? sizeFromArgs
+              : sizeFromSettings;
       late final ImageGenerationTask task;
       if (isGenerate) {
         if (modelFeatures.modelType != ModelType.imageGeneration) {
@@ -384,7 +414,7 @@ class AIToolRuntime {
           model: targetModel,
           requestMode: modelFeatures.imageRequestMode,
           prompt: prompt,
-          size: sizeFromSettings,
+          size: effectiveSize,
           requestCount: settings.generationCount,
         );
       } else {
@@ -424,7 +454,7 @@ class AIToolRuntime {
           requestMode: modelFeatures.imageRequestMode,
           prompt: prompt,
           sourceImagePath: imagePath,
-          size: sizeFromSettings,
+          size: effectiveSize,
         );
       }
 
@@ -438,6 +468,8 @@ class AIToolRuntime {
         'mode': task.mode.name,
         'providerId': provider.id,
         'model': targetModel,
+        'requestedSize': requestedSize,
+        'effectiveSize': task.size,
         'size': task.size,
         'requestCount': task.requestCount,
         'message': '任务已加入生图队列，请稍后在工作台查看结果',
@@ -684,5 +716,19 @@ class AIToolRuntime {
   static String _truncateForLog(String text, int maxLength) {
     if (text.length <= maxLength) return text;
     return '${text.substring(0, maxLength)}...';
+  }
+
+  /// 规范化工具传入尺寸，要求 `宽x高` 且宽高为正整数。
+  static String? _normalizeImageSizeArg(String raw) {
+    final value = raw.trim().toLowerCase();
+    if (value.isEmpty) return null;
+    final match = RegExp(r'^([1-9]\d{1,4})x([1-9]\d{1,4})$').firstMatch(value);
+    if (match == null) return null;
+    final width = int.tryParse(match.group(1)!);
+    final height = int.tryParse(match.group(2)!);
+    if (width == null || height == null || width <= 0 || height <= 0) {
+      return null;
+    }
+    return '${width}x${height}';
   }
 }
