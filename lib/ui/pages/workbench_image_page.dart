@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:now_chat/app/router.dart';
 import 'package:now_chat/core/models/ai_provider_config.dart';
@@ -30,6 +31,7 @@ class _WorkbenchImagePageState extends State<WorkbenchImagePage> {
   _ImageWorkbenchMode _mode = _ImageWorkbenchMode.generate;
   String? _sourceImagePath;
   final Set<String> _selectedTaskIds = <String>{};
+  final Set<String> _expandedPromptTaskIds = <String>{};
 
   bool get _isSelectionMode => _selectedTaskIds.isNotEmpty;
 
@@ -441,6 +443,9 @@ class _WorkbenchImagePageState extends State<WorkbenchImagePage> {
     final isSelected = _selectedTaskIds.contains(task.id);
     final deletable = _isTaskDeletable(task);
     final firstUri = task.resultImageUris.isEmpty ? null : task.resultImageUris.first;
+    final prompt = task.prompt.trim();
+    final isLongPrompt = prompt.length > 120;
+    final isPromptExpanded = _expandedPromptTaskIds.contains(task.id);
     return GestureDetector(
       onLongPress: () => _onTaskLongPress(task),
       onTap: () => _onTaskTap(task, firstUri),
@@ -491,13 +496,58 @@ class _WorkbenchImagePageState extends State<WorkbenchImagePage> {
                 ],
               ),
               const SizedBox(height: 6),
-              Text(
-                task.prompt,
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '提示词',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: color.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: '复制提示词',
+                    onPressed: () => _copyPrompt(prompt),
+                    icon: const Icon(Icons.content_copy_rounded, size: 18),
+                  ),
+                ],
+              ),
+              SelectableText(
+                prompt,
+                maxLines: isLongPrompt && !isPromptExpanded ? 3 : null,
                 style: TextStyle(
                   color: color.onSurface,
                   fontSize: 13.5,
                 ),
               ),
+              if (isLongPrompt)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      onPressed: () => _togglePromptExpand(task.id),
+                      icon: Icon(
+                        isPromptExpanded
+                            ? Icons.expand_less_rounded
+                            : Icons.expand_more_rounded,
+                        size: 16,
+                      ),
+                      label: Text(isPromptExpanded ? '收起提示词' : '展开提示词'),
+                    ),
+                  ),
+                ),
               if ((task.revisedPrompt ?? '').trim().isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
@@ -617,6 +667,7 @@ class _WorkbenchImagePageState extends State<WorkbenchImagePage> {
     );
     if (!ok) return;
     await queueProvider.deleteTasks(<String>{task.id});
+    _expandedPromptTaskIds.remove(task.id);
     _showSnackBar('已删除 1 条记录');
   }
 
@@ -644,6 +695,7 @@ class _WorkbenchImagePageState extends State<WorkbenchImagePage> {
     if (!mounted) return;
     setState(() {
       _selectedTaskIds.removeAll(deletableIds);
+      _expandedPromptTaskIds.removeAll(deletableIds);
     });
     _showSnackBar('已删除 ${deletableIds.length} 条记录');
   }
@@ -740,6 +792,41 @@ class _WorkbenchImagePageState extends State<WorkbenchImagePage> {
     final messenger = ScaffoldMessenger.of(context);
     messenger.hideCurrentSnackBar();
     messenger.showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  /// 切换提示词折叠状态，默认长文本折叠显示，按需展开完整内容。
+  void _togglePromptExpand(String taskId) {
+    setState(() {
+      if (_expandedPromptTaskIds.contains(taskId)) {
+        _expandedPromptTaskIds.remove(taskId);
+      } else {
+        _expandedPromptTaskIds.add(taskId);
+      }
+    });
+  }
+
+  /// 复制提示词，并显示可手动关闭的提示，避免挡住底部操作区域。
+  Future<void> _copyPrompt(String prompt) async {
+    final value = prompt.trim();
+    if (value.isEmpty) {
+      _showSnackBar('提示词为空，无法复制');
+      return;
+    }
+    await Clipboard.setData(ClipboardData(text: value));
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: const Text('提示词已复制'),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 6),
+        action: SnackBarAction(
+          label: '关闭',
+          onPressed: () => messenger.hideCurrentSnackBar(),
+        ),
+      ),
+    );
   }
 
   String _formatTime(DateTime time) {
