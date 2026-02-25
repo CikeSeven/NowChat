@@ -3,6 +3,7 @@ import 'package:isar/isar.dart';
 import 'package:now_chat/app/ChatApp.dart';
 import 'package:now_chat/providers/agent_provider.dart';
 import 'package:now_chat/providers/chat_provider.dart';
+import 'package:now_chat/providers/image_generation_queue_provider.dart';
 import 'package:now_chat/providers/plugin_provider.dart';
 import 'package:now_chat/providers/settings_provider.dart';
 import 'package:path_provider/path_provider.dart';
@@ -32,6 +33,14 @@ void main() async {
         ChangeNotifierProvider(create: (_) => ChatProvider(isar)),
         ChangeNotifierProvider(create: (_) => AgentProvider(isar)),
         ChangeNotifierProvider(create: (_) => SettingsProvider()),
+        ChangeNotifierProxyProvider<SettingsProvider, ImageGenerationQueueProvider>(
+          create: (_) => ImageGenerationQueueProvider(),
+          update: (_, settings, queueProvider) {
+            final provider = queueProvider ?? ImageGenerationQueueProvider();
+            provider.bindSettings(settings);
+            return provider;
+          },
+        ),
         ChangeNotifierProvider(create: (_) => PluginProvider()),
       ],
       child: const ChatApp(),

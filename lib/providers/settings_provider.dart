@@ -12,6 +12,9 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
   static const bool defaultToolCallingEnabledValue = true;
   static const int defaultMaxToolCallsValue = 10;
   static const bool defaultExposeImageToolsToChatValue = false;
+  static const String defaultImageGenerateSizeValue = '1024x1024';
+  static const String defaultImageEditSizeValue = '1024x1024';
+  static const int defaultImageQueueConcurrencyValue = 2;
 
   static const _themeKey = 'theme_mode';
   static const _defaultProviderIdKey = 'default_provider_id';
@@ -31,6 +34,9 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
       'default_image_generation_model';
   static const _defaultImageEditProviderIdKey = 'default_image_edit_provider_id';
   static const _defaultImageEditModelKey = 'default_image_edit_model';
+  static const _defaultImageGenerateSizeKey = 'default_image_generate_size';
+  static const _defaultImageEditSizeKey = 'default_image_edit_size';
+  static const _imageQueueConcurrencyKey = 'image_queue_concurrency';
 
   ThemeMode _themeMode = ThemeMode.system;
   String? _defaultProviderId;
@@ -47,6 +53,9 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
   String? _defaultImageGenerationModel;
   String? _defaultImageEditProviderId;
   String? _defaultImageEditModel;
+  String _defaultImageGenerateSize = defaultImageGenerateSizeValue;
+  String _defaultImageEditSize = defaultImageEditSizeValue;
+  int _imageQueueConcurrency = defaultImageQueueConcurrencyValue;
 
   ThemeMode get themeMode => _themeMode;
   String? get defaultProviderId => _defaultProviderId;
@@ -64,6 +73,9 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
   String? get defaultImageGenerationModel => _defaultImageGenerationModel;
   String? get defaultImageEditProviderId => _defaultImageEditProviderId;
   String? get defaultImageEditModel => _defaultImageEditModel;
+  String get defaultImageGenerateSize => _defaultImageGenerateSize;
+  String get defaultImageEditSize => _defaultImageEditSize;
+  int get imageQueueConcurrency => _imageQueueConcurrency;
 
   ThemeMode get effectiveThemeMode {
     // 跟随系统模式下实时读取平台亮度，避免缓存导致主题不同步。
@@ -130,6 +142,19 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
             : imageEditProvider;
     _defaultImageEditModel =
         (imageEditModel == null || imageEditModel.isEmpty) ? null : imageEditModel;
+    _defaultImageGenerateSize =
+        _normalizeImageSize(
+          prefs.getString(_defaultImageGenerateSizeKey),
+        ) ??
+        defaultImageGenerateSizeValue;
+    _defaultImageEditSize =
+        _normalizeImageSize(
+          prefs.getString(_defaultImageEditSizeKey),
+        ) ??
+        defaultImageEditSizeValue;
+    _imageQueueConcurrency = _normalizeQueueConcurrency(
+      prefs.getInt(_imageQueueConcurrencyKey),
+    );
     notifyListeners();
   }
 
@@ -279,6 +304,33 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
     );
   }
 
+  /// 设置默认生图尺寸（text-to-image）。
+  Future<void> setDefaultImageGenerateSize(String value) async {
+    final normalized = _normalizeImageSize(value) ?? defaultImageGenerateSizeValue;
+    _defaultImageGenerateSize = normalized;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_defaultImageGenerateSizeKey, normalized);
+  }
+
+  /// 设置默认图片编辑尺寸（image-to-image）。
+  Future<void> setDefaultImageEditSize(String value) async {
+    final normalized = _normalizeImageSize(value) ?? defaultImageEditSizeValue;
+    _defaultImageEditSize = normalized;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_defaultImageEditSizeKey, normalized);
+  }
+
+  /// 设置生图队列并发数。
+  Future<void> setImageQueueConcurrency(int value) async {
+    final normalized = _normalizeQueueConcurrency(value);
+    _imageQueueConcurrency = normalized;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_imageQueueConcurrencyKey, normalized);
+  }
+
   /// 恢复所有默认对话参数并清理本地覆盖项。
   Future<void> restoreDefaultChatParams() async {
     _defaultProviderId = null;
@@ -320,6 +372,21 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
     final normalized = value?.trim();
     if (normalized == null || normalized.isEmpty) return null;
     return normalized;
+  }
+
+  /// 规范化图片尺寸：空值回退为 null，非空直接返回 trim 文本。
+  String? _normalizeImageSize(String? value) {
+    final normalized = value?.trim();
+    if (normalized == null || normalized.isEmpty) return null;
+    return normalized;
+  }
+
+  /// 规范化队列并发数，限制在 1~4。
+  int _normalizeQueueConcurrency(int? value) {
+    final next = value ?? defaultImageQueueConcurrencyValue;
+    if (next < 1) return 1;
+    if (next > 4) return 4;
+    return next;
   }
 
   /// 持久化“provider + model”成对配置。

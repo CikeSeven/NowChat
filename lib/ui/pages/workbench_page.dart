@@ -35,32 +35,41 @@ class _WorkbenchPageState extends State<WorkbenchPage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('工作台'),
-        actions: [
-          if (_tabController.index == 0)
-            IconButton(
-              tooltip: '新建工具',
-              onPressed: () {
-                Navigator.pushNamed(context, AppRoutes.agentForm);
-              },
-              icon: const Icon(Icons.add),
+      body: NestedScrollView(
+        headerSliverBuilder: (context, innerBoxIsScrolled) {
+          return [
+            SliverAppBar(
+              floating: true,
+              snap: true,
+              pinned: false,
+              title: const Text('工作台'),
+              actions: [
+                if (_tabController.index == 0)
+                  IconButton(
+                    tooltip: '新建工具',
+                    onPressed: () {
+                      Navigator.pushNamed(context, AppRoutes.agentForm);
+                    },
+                    icon: const Icon(Icons.add),
+                  ),
+              ],
+              bottom: TabBar(
+                controller: _tabController,
+                tabs: const [
+                  Tab(icon: Icon(Icons.handyman_outlined), text: '工具'),
+                  Tab(icon: Icon(Icons.image_outlined), text: '生图'),
+                ],
+              ),
             ),
-        ],
-        bottom: TabBar(
+          ];
+        },
+        body: TabBarView(
           controller: _tabController,
-          tabs: const [
-            Tab(icon: Icon(Icons.handyman_outlined), text: '工具'),
-            Tab(icon: Icon(Icons.image_outlined), text: '生图'),
+          children: const [
+            AgentPageBody(),
+            WorkbenchImagePage(),
           ],
         ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: const [
-          AgentPageBody(),
-          WorkbenchImagePage(),
-        ],
       ),
     );
   }

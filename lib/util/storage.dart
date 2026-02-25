@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:now_chat/core/models/ai_provider_config.dart';
 import 'package:now_chat/core/models/agent_profile.dart';
 import 'package:now_chat/core/models/image_generation_record.dart';
+import 'package:now_chat/core/models/image_generation_task.dart';
 import 'package:now_chat/util/app_logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -19,6 +20,7 @@ class Storage {
   /// 智能体列表 JSON 存储键。
   static const _kAgentProfiles = 'agent_profiles';
   static const _kImageGenerationHistory = 'image_generation_history';
+  static const _kImageGenerationQueueTasks = 'image_generation_queue_tasks';
 
   /// 首次示例智能体是否已注入标记。
   static const _kAgentExampleSeeded = 'agent_example_seeded';
@@ -138,5 +140,41 @@ class Storage {
     final trimmed = sorted.take(200).toList(growable: false);
     final payload = trimmed.map((item) => item.toJson()).toList();
     await prefs.setString(_kImageGenerationHistory, json.encode(payload));
+  }
+
+  /// 读取生图队列任务列表（含排队/进行中/已完成状态）。
+  static Future<List<ImageGenerationTask>> loadImageGenerationQueueTasks() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_kImageGenerationQueueTasks);
+    if (raw == null || raw.trim().isEmpty) return <ImageGenerationTask>[];
+    try {
+      final decoded = json.decode(raw);
+      if (decoded is! List) return <ImageGenerationTask>[];
+      return decoded
+          .whereType<Map>()
+          .map(
+            (item) => ImageGenerationTask.fromJson(
+              Map<String, dynamic>.from(item),
+            ),
+          )
+          .toList();
+    } catch (error) {
+      AppLogger.e('读取生图队列失败', error);
+      return <ImageGenerationTask>[];
+    }
+  }
+
+  /// 保存生图队列任务列表。
+  ///
+  /// 为避免本地数据持续膨胀，仅保留最近 300 条记录。
+  static Future<void> saveImageGenerationQueueTasks(
+    List<ImageGenerationTask> tasks,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    final sorted = List<ImageGenerationTask>.from(tasks)
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    final trimmed = sorted.take(300).toList(growable: false);
+    final payload = trimmed.map((item) => item.toJson()).toList();
+    await prefs.setString(_kImageGenerationQueueTasks, json.encode(payload));
   }
 }
