@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:now_chat/core/repository/app_data_transfer_service.dart';
 import 'package:now_chat/providers/agent_provider.dart';
 import 'package:now_chat/providers/chat_provider.dart';
+import 'package:now_chat/providers/image_generation_queue_provider.dart';
+import 'package:now_chat/providers/settings_provider.dart';
 import 'package:provider/provider.dart';
 
-/// 应用数据管理页：导入/导出会话、工具（智能体）和 API 配置。
+  /// 应用数据管理页：导入/导出会话、工具（智能体）和 API 配置。
 class AppDataManagementPage extends StatefulWidget {
   const AppDataManagementPage({super.key});
 
@@ -92,6 +94,8 @@ class _AppDataManagementPageState extends State<AppDataManagementPage> {
     try {
       final chatProvider = context.read<ChatProvider>();
       final agentProvider = context.read<AgentProvider>();
+      final settingsProvider = context.read<SettingsProvider>();
+      final imageQueueProvider = context.read<ImageGenerationQueueProvider>();
       final service = AppDataTransferService(isar: chatProvider.isar);
       final importedName = await service.importFromUserSelectedFileAndReplaceAll();
       if (!mounted) return;
@@ -104,6 +108,8 @@ class _AppDataManagementPageState extends State<AppDataManagementPage> {
 
       await chatProvider.reloadFromStorage();
       await agentProvider.reloadFromStorage();
+      await settingsProvider.reloadFromStorage();
+      await imageQueueProvider.reloadFromStorage();
 
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -142,7 +148,7 @@ class _AppDataManagementPageState extends State<AppDataManagementPage> {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    '导出会话、工具（智能体）和 API 配置。暂不包含插件数据。',
+                    '导出会话、工具（智能体）、API 配置与生图数据（队列/记录/设置）。暂不包含插件数据。',
                   ),
                   const SizedBox(height: 6),
                   SwitchListTile(
@@ -192,7 +198,7 @@ class _AppDataManagementPageState extends State<AppDataManagementPage> {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    '从备份文件导入会话、工具（智能体）和 API 配置。导入会执行清空覆盖；备份里包含的 API key 会直接导入。',
+                    '从备份文件导入会话、工具（智能体）、API 配置与生图数据。导入会执行清空覆盖；备份里包含的 API key 会直接导入。',
                   ),
                   const SizedBox(height: 8),
                   Container(
@@ -203,7 +209,7 @@ class _AppDataManagementPageState extends State<AppDataManagementPage> {
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
-                      '注意：导入会清空当前会话、工具和 API 配置，且无法撤销。',
+                      '注意：导入会清空当前会话、工具、API 与生图数据，且无法撤销。',
                       style: TextStyle(
                         color: Theme.of(context).colorScheme.onErrorContainer,
                       ),

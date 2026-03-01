@@ -4,15 +4,18 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:isar/isar.dart';
+import 'package:now_chat/core/image/image_tool_settings.dart';
 import 'package:now_chat/core/models/agent_profile.dart';
 import 'package:now_chat/core/models/ai_provider_config.dart';
 import 'package:now_chat/core/models/chat_session.dart';
+import 'package:now_chat/core/models/image_generation_record.dart';
+import 'package:now_chat/core/models/image_generation_task.dart';
 import 'package:now_chat/core/models/message.dart';
 import 'package:now_chat/util/storage.dart';
 
 /// 应用数据导入导出服务（不包含插件数据）。
 class AppDataTransferService {
-  static const int backupFormatVersion = 1;
+  static const int backupFormatVersion = 2;
 
   final Isar isar;
 
@@ -28,6 +31,9 @@ class AppDataTransferService {
     final agents = await Storage.loadAgentProfiles();
     final chats = await isar.chatSessions.where().sortByLastUpdatedDesc().findAll();
     final messages = await isar.messages.where().sortByTimestamp().findAll();
+    final imageHistory = await Storage.loadImageGenerationHistory();
+    final imageQueueTasks = await Storage.loadImageGenerationQueueTasks();
+    final imageSettings = await ImageToolSettingsStore.exportAsJson();
 
     final providerPayload =
         providers.map((item) {
@@ -45,6 +51,11 @@ class AppDataTransferService {
         'agents': agents.map((item) => item.toJson()).toList(),
         'chatSessions': chats.map((item) => item.toJson()).toList(),
         'messages': messages.map((item) => item.toJson()).toList(),
+        'imageGenerationHistory': imageHistory.map((item) => item.toJson()).toList(),
+        'imageGenerationQueueTasks': imageQueueTasks
+            .map((item) => item.toJson())
+            .toList(),
+        'imageGenerationSettings': imageSettings,
       },
     };
   }
@@ -122,11 +133,19 @@ class AppDataTransferService {
     final agents = _parseAgents(data['agents']);
     final importedChats = _parseChats(data['chatSessions']);
     final messages = _parseMessages(data['messages']);
+    final imageHistory = _parseImageHistory(data['imageGenerationHistory']);
+    final imageQueueTasks = _parseImageQueueTasks(data['imageGenerationQueueTasks']);
+    final imageSettings = _parseImageSettings(data['imageGenerationSettings']);
 
     // 先写非 Isar 数据，保证导入完成后 Provider 重载即可读到新配置。
     await Storage.saveProviders(providers);
     await Storage.saveAgentProfiles(agents);
     await Storage.markAgentExampleSeeded();
+    await Storage.saveImageGenerationHistory(imageHistory);
+    await Storage.saveImageGenerationQueueTasks(imageQueueTasks);
+    if (imageSettings != null) {
+      await ImageToolSettingsStore.importFromJson(imageSettings);
+    }
 
     // 再在单事务内替换会话与消息。
     await isar.writeTxn(() async {
@@ -162,9 +181,10 @@ class AppDataTransferService {
     }
     final versionRaw = decoded['formatVersion'];
     final version = versionRaw is num ? versionRaw.toInt() : -1;
-    if (version != backupFormatVersion) {
+    // 兼容导入历史 v1 备份，缺失字段会走空值回退逻辑。
+    if (version != 1 && version != backupFormatVersion) {
       throw FormatException(
-        '备份版本不支持：$version（当前仅支持 v$backupFormatVersion）',
+        '备份版本不支持：$version（当前支持 v1 和 v$backupFormatVersion）',
       );
     }
     final dataRaw = decoded['data'];
@@ -222,6 +242,46 @@ class AppDataTransferService {
         .whereType<Map>()
         .map((item) => Message.fromJson(Map<String, dynamic>.from(item)))
         .toList();
+  }
+
+  List<ImageGenerationRecord> _parseImageHistory(dynamic raw) {
+    if (raw == null) return <ImageGenerationRecord>[];
+    if (raw is! List) {
+      throw const FormatException('备份文件格式错误：imageGenerationHistory 必须是数组');
+    }
+    return raw
+        .whereType<Map>()
+        .map(
+          (item) => ImageGenerationRecord.fromJson(
+            Map<String, dynamic>.from(item),
+          ),
+        )
+        .toList();
+  }
+
+  List<ImageGenerationTask> _parseImageQueueTasks(dynamic raw) {
+    if (raw == null) return <ImageGenerationTask>[];
+    if (raw is! List) {
+      throw const FormatException(
+        '备份文件格式错误：imageGenerationQueueTasks 必须是数组',
+      );
+    }
+    return raw
+        .whereType<Map>()
+        .map(
+          (item) => ImageGenerationTask.fromJson(
+            Map<String, dynamic>.from(item),
+          ),
+        )
+        .toList();
+  }
+
+  Map<String, dynamic>? _parseImageSettings(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is! Map) {
+      throw const FormatException('备份文件格式错误：imageGenerationSettings 必须是对象');
+    }
+    return Map<String, dynamic>.from(raw);
   }
 }
 

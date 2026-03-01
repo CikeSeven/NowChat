@@ -111,6 +111,34 @@ class ImageGenerationQueueProvider extends ChangeNotifier {
     _schedule();
   }
 
+  /// 从本地存储重载任务列表。
+  ///
+  /// 主要用于“应用数据导入”后立即刷新工作台展示与队列状态。
+  Future<void> reloadFromStorage() async {
+    final loaded = await Storage.loadImageGenerationQueueTasks();
+    final normalized =
+        loaded.map((task) {
+          // 重载时将 running 回退为 queued，避免历史运行态卡死。
+          if (task.status == ImageGenerationTaskStatus.running) {
+            return task.copyWith(
+              status: ImageGenerationTaskStatus.queued,
+              startedAt: null,
+              updatedAt: DateTime.now(),
+            );
+          }
+          return task;
+        }).toList(growable: true);
+    await _mergeLegacyHistory(normalized);
+    _tasks
+      ..clear()
+      ..addAll(normalized);
+    _activeWorkers = 0;
+    _initialized = true;
+    await _persistTasks();
+    notifyListeners();
+    _schedule();
+  }
+
   /// 批量删除任务（运行中的任务会被忽略，避免出现状态竞争）。
   Future<void> deleteTasks(Set<String> taskIds) async {
     if (taskIds.isEmpty) return;

@@ -80,6 +80,79 @@ class ImageToolSettingsStore {
     );
   }
 
+  /// 导出生图相关设置为可序列化 JSON。
+  ///
+  /// 用于应用数据备份，避免仅导入会话后丢失生图默认模型与尺寸配置。
+  static Future<Map<String, dynamic>> exportAsJson() async {
+    final snapshot = await load();
+    return <String, dynamic>{
+      'exposeImageToolsToChat': snapshot.exposeImageToolsToChat,
+      'generationProviderId': snapshot.generationProviderId,
+      'generationModel': snapshot.generationModel,
+      'generationSize': snapshot.generationSize,
+      'generationCount': snapshot.generationCount,
+      'editProviderId': snapshot.editProviderId,
+      'editModel': snapshot.editModel,
+      'editSize': snapshot.editSize,
+    };
+  }
+
+  /// 从备份 JSON 恢复生图设置到 SharedPreferences。
+  ///
+  /// 约束：
+  /// 1. 仅写入生图相关键，不触碰其他全局设置；
+  /// 2. 尺寸仍保持“生图/编辑统一”策略；
+  /// 3. 空值会清理对应键，避免产生半配置状态。
+  static Future<void> importFromJson(Map<String, dynamic> raw) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final expose = raw['exposeImageToolsToChat'];
+    if (expose is bool) {
+      await prefs.setBool(_exposeImageToolsToChatKey, expose);
+    } else {
+      await prefs.remove(_exposeImageToolsToChatKey);
+    }
+
+    final generationProviderId = _normalize(raw['generationProviderId']?.toString());
+    final generationModel = _normalize(raw['generationModel']?.toString());
+    final editProviderId = _normalize(raw['editProviderId']?.toString());
+    final editModel = _normalize(raw['editModel']?.toString());
+
+    if (generationProviderId == null) {
+      await prefs.remove(_defaultImageGenerationProviderIdKey);
+    } else {
+      await prefs.setString(_defaultImageGenerationProviderIdKey, generationProviderId);
+    }
+    if (generationModel == null) {
+      await prefs.remove(_defaultImageGenerationModelKey);
+    } else {
+      await prefs.setString(_defaultImageGenerationModelKey, generationModel);
+    }
+    if (editProviderId == null) {
+      await prefs.remove(_defaultImageEditProviderIdKey);
+    } else {
+      await prefs.setString(_defaultImageEditProviderIdKey, editProviderId);
+    }
+    if (editModel == null) {
+      await prefs.remove(_defaultImageEditModelKey);
+    } else {
+      await prefs.setString(_defaultImageEditModelKey, editModel);
+    }
+
+    final generationSize =
+        _normalizeImageSize(raw['generationSize']?.toString()) ??
+        _normalizeImageSize(raw['editSize']?.toString()) ??
+        '1024x1024';
+    await prefs.setString(_defaultImageGenerateSizeKey, generationSize);
+    // 历史兼容：旧逻辑仍可能读取 edit size key。
+    await prefs.setString(_defaultImageEditSizeKey, generationSize);
+
+    final generationCount = _normalizeGenerateCount(
+      (raw['generationCount'] as num?)?.toInt(),
+    );
+    await prefs.setInt(_defaultImageGenerateCountKey, generationCount);
+  }
+
   /// 规范化可选字符串。
   static String? _normalize(String? value) {
     final trimmed = value?.trim();

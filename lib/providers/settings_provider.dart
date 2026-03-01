@@ -165,6 +165,13 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
+  /// 从本地存储强制重载设置。
+  ///
+  /// 导入应用备份后需要显式调用，确保内存态与磁盘数据一致。
+  Future<void> reloadFromStorage() async {
+    await _loadSettings();
+  }
+
   /// 更新主题模式并持久化。
   Future<void> setThemeMode(ThemeMode mode) async {
     _themeMode = mode;
