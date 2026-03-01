@@ -44,6 +44,9 @@ class WorkbenchPageState extends State<WorkbenchPage>
 
   @override
   Widget build(BuildContext context) {
+    final imageState = _imagePageKey.currentState;
+    final imageSelectionMode = _tabController.index == 1 &&
+        (imageState?.isSelectionMode ?? false);
     return Scaffold(
       appBar: AppBar(
         title: const Text('工作台'),
@@ -56,7 +59,30 @@ class WorkbenchPageState extends State<WorkbenchPage>
               },
               icon: const Icon(Icons.add),
             ),
-          if (_tabController.index == 1)
+          if (_tabController.index == 1 && imageSelectionMode) ...[
+            TextButton(
+              onPressed: () {
+                _imagePageKey.currentState?.clearSelectionFromToolbar();
+                setState(() {});
+              },
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: () {
+                _imagePageKey.currentState?.selectAllFromToolbar();
+                setState(() {});
+              },
+              child: const Text('全选'),
+            ),
+            TextButton(
+              onPressed: () async {
+                await _imagePageKey.currentState?.deleteSelectionFromToolbar();
+                if (!mounted) return;
+                setState(() {});
+              },
+              child: const Text('删除'),
+            ),
+          ] else if (_tabController.index == 1)
             PopupMenuButton<int>(
               tooltip: '更多',
               icon: const Icon(Icons.more_vert),
@@ -119,6 +145,10 @@ class WorkbenchPageState extends State<WorkbenchPage>
             WorkbenchImagePage(
               key: _imagePageKey,
               listColumns: _imageListColumns,
+              onSelectionStateChanged: () {
+                if (!mounted) return;
+                setState(() {});
+              },
             ),
           ],
         ),

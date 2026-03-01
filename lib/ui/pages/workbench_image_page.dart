@@ -23,10 +23,14 @@ class WorkbenchImagePage extends StatefulWidget {
   const WorkbenchImagePage({
     super.key,
     this.listColumns = 1,
+    this.onSelectionStateChanged,
   });
 
   /// 图片记录列表列数：支持 1 列或 2 列。
   final int listColumns;
+
+  /// 多选状态变化回调，用于通知父级（顶部 AppBar）刷新操作按钮。
+  final VoidCallback? onSelectionStateChanged;
 
   @override
   State<WorkbenchImagePage> createState() => WorkbenchImagePageState();
@@ -42,6 +46,16 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
   final Set<String> _expandedPromptTaskIds = <String>{};
 
   bool get _isSelectionMode => _selectedTaskIds.isNotEmpty;
+  bool get isSelectionMode => _isSelectionMode;
+  int get selectedCount => _selectedTaskIds.length;
+
+  /// 当前是否已全选“可删除项”（运行中的任务不计入）。
+  bool get isAllSelectableSelected {
+    final selectableIds = _currentSelectableTaskIds();
+    if (selectableIds.isEmpty) return false;
+    return _selectedTaskIds.length == selectableIds.length &&
+        _selectedTaskIds.containsAll(selectableIds);
+  }
 
   @override
   void dispose() {
@@ -88,31 +102,6 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
                   ],
                 ),
                 const SizedBox(height: 8),
-                if (_isSelectionMode) ...[
-                  Row(
-                    children: [
-                      Text(
-                        '已选 ${_selectedTaskIds.length}',
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          color: color.onSurfaceVariant,
-                        ),
-                      ),
-                      const Spacer(),
-                      TextButton(
-                        onPressed: _clearSelection,
-                        child: const Text('取消'),
-                      ),
-                      const SizedBox(width: 6),
-                      FilledButton.tonalIcon(
-                        onPressed: () => _deleteSelectedTasks(queueProvider, tasks),
-                        icon: const Icon(Icons.delete_outline_rounded, size: 18),
-                        label: const Text('删除'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                ],
                 if (tasks.isEmpty)
                   Card(
                     child: Padding(
@@ -869,6 +858,7 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
         _selectedTaskIds.add(taskId);
       }
     });
+    _notifySelectionStateChanged();
   }
 
   void _clearSelection() {
@@ -876,6 +866,7 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
     setState(() {
       _selectedTaskIds.clear();
     });
+    _notifySelectionStateChanged();
   }
 
   Future<void> _deleteSingleTask(
@@ -918,7 +909,47 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
       _selectedTaskIds.removeAll(deletableIds);
       _expandedPromptTaskIds.removeAll(deletableIds);
     });
+    _notifySelectionStateChanged();
     _showSnackBar('已删除 ${deletableIds.length} 条记录');
+  }
+
+  /// 顶部工具栏：取消多选。
+  void clearSelectionFromToolbar() {
+    _clearSelection();
+  }
+
+  /// 顶部工具栏：全选可删除任务。
+  void selectAllFromToolbar() {
+    final selectableIds = _currentSelectableTaskIds();
+    if (selectableIds.isEmpty) {
+      _showSnackBar('没有可选择的记录');
+      return;
+    }
+    setState(() {
+      _selectedTaskIds
+        ..clear()
+        ..addAll(selectableIds);
+    });
+    _notifySelectionStateChanged();
+  }
+
+  /// 顶部工具栏：删除已选任务。
+  Future<void> deleteSelectionFromToolbar() async {
+    final queueProvider = context.read<ImageGenerationQueueProvider>();
+    final tasks = _sortedTasks(queueProvider.tasks);
+    await _deleteSelectedTasks(queueProvider, tasks);
+  }
+
+  /// 计算当前可选择（可删除）的任务 ID 集合。
+  Set<String> _currentSelectableTaskIds() {
+    final queueProvider = context.read<ImageGenerationQueueProvider>();
+    final tasks = _sortedTasks(queueProvider.tasks);
+    return tasks.where(_isTaskDeletable).map((item) => item.id).toSet();
+  }
+
+  /// 向父组件广播多选状态变化。
+  void _notifySelectionStateChanged() {
+    widget.onSelectionStateChanged?.call();
   }
 
   Future<bool> _confirmDelete({
