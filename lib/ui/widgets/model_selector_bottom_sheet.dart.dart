@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:now_chat/core/models/ai_provider_config.dart';
 import 'package:now_chat/providers/chat_provider.dart';
 import 'package:provider/provider.dart';
@@ -19,13 +19,15 @@ class ModelSelectorBottomSheet extends StatefulWidget {
   });
 
   @override
-  State<ModelSelectorBottomSheet> createState() => _ModelSelectorBottomSheetState();
+  State<ModelSelectorBottomSheet> createState() =>
+      _ModelSelectorBottomSheetState();
 }
 
 /// _ModelSelectorBottomSheetState 视图状态。
 class _ModelSelectorBottomSheetState extends State<ModelSelectorBottomSheet> {
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
+
   /// 当前激活的提供方，用于右侧模型列表过滤。
   String? _activeProviderId;
 
@@ -85,34 +87,36 @@ class _ModelSelectorBottomSheetState extends State<ModelSelectorBottomSheet> {
                 )
                 .toList()
             : providers.where((provider) {
-                return provider.models.any((model) {
-                  if (!_isModelAllowedByType(provider, model)) return false;
-                  return _modelMatches(provider, model, normalizedQuery);
-                });
-              }).toList();
+              return provider.models.any((model) {
+                if (!_isModelAllowedByType(provider, model)) return false;
+                return _modelMatches(provider, model, normalizedQuery);
+              });
+            }).toList();
 
     // 若当前激活 provider 在过滤后不存在，回退到首个可见 provider。
     final activeProviderId =
         _activeProviderId != null &&
-            visibleProviders.any((provider) => provider.id == _activeProviderId)
-        ? _activeProviderId
-        : (visibleProviders.isNotEmpty ? visibleProviders.first.id : null);
+                visibleProviders.any(
+                  (provider) => provider.id == _activeProviderId,
+                )
+            ? _activeProviderId
+            : (visibleProviders.isNotEmpty ? visibleProviders.first.id : null);
 
     final activeProvider =
         activeProviderId == null
             ? null
             : visibleProviders.firstWhere(
-                (provider) => provider.id == activeProviderId,
-              );
+              (provider) => provider.id == activeProviderId,
+            );
 
     final modelsForActiveProvider =
         activeProvider == null
             ? <String>[]
             : activeProvider.models.where((model) {
-                if (!_isModelAllowedByType(activeProvider, model)) return false;
-                if (normalizedQuery.isEmpty) return true;
-                return _modelMatches(activeProvider, model, normalizedQuery);
-              }).toList();
+              if (!_isModelAllowedByType(activeProvider, model)) return false;
+              if (normalizedQuery.isEmpty) return true;
+              return _modelMatches(activeProvider, model, normalizedQuery);
+            }).toList();
 
     return SafeArea(
       child: Padding(
@@ -157,18 +161,19 @@ class _ModelSelectorBottomSheetState extends State<ModelSelectorBottomSheet> {
                 hintText: '搜索模型',
                 isDense: true,
                 prefixIcon: const Icon(Icons.search_rounded, size: 18),
-                suffixIcon: _query.trim().isEmpty
-                    ? null
-                    : IconButton(
-                        tooltip: '清空',
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() {
-                            _query = '';
-                          });
-                        },
-                        icon: const Icon(Icons.close_rounded, size: 16),
-                      ),
+                suffixIcon:
+                    _query.trim().isEmpty
+                        ? null
+                        : IconButton(
+                          tooltip: '清空',
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() {
+                              _query = '';
+                            });
+                          },
+                          icon: const Icon(Icons.close_rounded, size: 16),
+                        ),
                 border: const OutlineInputBorder(),
               ),
             ),
@@ -219,106 +224,117 @@ class _ModelSelectorBottomSheetState extends State<ModelSelectorBottomSheet> {
               ),
             const SizedBox(height: 10),
             Expanded(
-              child: activeProvider == null || modelsForActiveProvider.isEmpty
-                  ? Center(
-                      child: Text(
-                        '没有匹配的模型',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: color.onSurfaceVariant,
+              child:
+                  activeProvider == null || modelsForActiveProvider.isEmpty
+                      ? Center(
+                        child: Text(
+                          '没有匹配的模型',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: color.onSurfaceVariant,
+                          ),
                         ),
-                      ),
-                    )
-                  : ListView.separated(
-                      itemCount: modelsForActiveProvider.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 8),
-                      itemBuilder: (context, index) {
-                        final rawModel = modelsForActiveProvider[index];
-                        final displayModel = activeProvider.displayNameForModel(
-                          rawModel,
-                        );
-                        final isSelected =
-                            activeProvider.id == widget.providerId &&
-                            rawModel == widget.model;
-                        final features = activeProvider.featuresForModel(
-                          rawModel,
-                        );
-                        return Material(
-                          color: isSelected
-                              ? color.primaryContainer.withAlpha(95)
-                              : color.surfaceContainerLow,
-                          borderRadius: BorderRadius.circular(12),
-                          child: InkWell(
+                      )
+                      : ListView.separated(
+                        itemCount: modelsForActiveProvider.length,
+                        separatorBuilder: (_, _) => const SizedBox(height: 8),
+                        itemBuilder: (context, index) {
+                          final rawModel = modelsForActiveProvider[index];
+                          final displayModel = activeProvider
+                              .displayNameForModel(rawModel);
+                          final isSelected =
+                              activeProvider.id == widget.providerId &&
+                              rawModel == widget.model;
+                          final features = activeProvider.featuresForModel(
+                            rawModel,
+                          );
+                          return Material(
+                            color:
+                                isSelected
+                                    ? color.primaryContainer.withAlpha(95)
+                                    : color.surfaceContainerLow,
                             borderRadius: BorderRadius.circular(12),
-                            onTap: () =>
-                                widget.onModelSelected(activeProvider.id, rawModel),
-                            child: Padding(
-                              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          displayModel,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w600,
-                                            color: color.onSurface,
-                                          ),
-                                        ),
-                                        if (displayModel != rawModel) ...[
-                                          const SizedBox(height: 2),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap:
+                                  () => widget.onModelSelected(
+                                    activeProvider.id,
+                                    rawModel,
+                                  ),
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  12,
+                                  10,
+                                  12,
+                                  10,
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
                                           Text(
-                                            rawModel,
+                                            displayModel,
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
                                             style: TextStyle(
-                                              fontSize: 12.5,
-                                              color: color.onSurfaceVariant,
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w600,
+                                              color: color.onSurface,
                                             ),
                                           ),
+                                          if (displayModel != rawModel) ...[
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              rawModel,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                fontSize: 12.5,
+                                                color: color.onSurfaceVariant,
+                                              ),
+                                            ),
+                                          ],
                                         ],
-                                      ],
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  if (features.supportsVision)
-                                    _capabilityIcon(
-                                      context,
-                                      icon: Icons.visibility_outlined,
-                                      tooltip: '支持视觉',
+                                    const SizedBox(width: 8),
+                                    if (features.supportsVision)
+                                      _capabilityIcon(
+                                        context,
+                                        icon: Icons.visibility_outlined,
+                                        tooltip: '支持视觉',
+                                      ),
+                                    if (features.supportsVision &&
+                                        features.supportsTools)
+                                      const SizedBox(width: 6),
+                                    if (features.supportsTools)
+                                      _capabilityIcon(
+                                        context,
+                                        icon: Icons.build_outlined,
+                                        tooltip: '支持工具',
+                                      ),
+                                    const SizedBox(width: 8),
+                                    Icon(
+                                      isSelected
+                                          ? Icons.check_circle_rounded
+                                          : Icons.chevron_right_rounded,
+                                      size: 18,
+                                      color:
+                                          isSelected
+                                              ? color.primary
+                                              : color.onSurfaceVariant,
                                     ),
-                                  if (features.supportsVision &&
-                                      features.supportsTools)
-                                    const SizedBox(width: 6),
-                                  if (features.supportsTools)
-                                    _capabilityIcon(
-                                      context,
-                                      icon: Icons.build_outlined,
-                                      tooltip: '支持工具',
-                                    ),
-                                  const SizedBox(width: 8),
-                                  Icon(
-                                    isSelected
-                                        ? Icons.check_circle_rounded
-                                        : Icons.chevron_right_rounded,
-                                    size: 18,
-                                    color: isSelected
-                                        ? color.primary
-                                        : color.onSurfaceVariant,
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
-                        );
-                      },
-                    ),
+                          );
+                        },
+                      ),
             ),
           ],
         ),

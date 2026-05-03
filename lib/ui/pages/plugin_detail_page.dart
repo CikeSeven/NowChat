@@ -8,10 +8,7 @@ import 'package:provider/provider.dart';
 class PluginDetailPage extends StatefulWidget {
   final String pluginId;
 
-  const PluginDetailPage({
-    super.key,
-    required this.pluginId,
-  });
+  const PluginDetailPage({super.key, required this.pluginId});
 
   @override
   State<PluginDetailPage> createState() => _PluginDetailPageState();
@@ -22,6 +19,7 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
   /// 使用缓存可避免 DSL 页面刷新后输入内容被重置。
   final Map<String, TextEditingController> _uiTextControllers =
       <String, TextEditingController>{};
+
   /// Hook 日志预览单条最大长度，避免设置页被超长日志撑爆。
   static const int _hookLogPreviewMaxLength = 220;
   bool _isToolsExpanded = false;
@@ -33,7 +31,9 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
     // 页面进入后主动加载插件 DSL，避免用户先点交互才触发首次解析。
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      context.read<PluginProvider>().loadPluginUiPage(pluginId: widget.pluginId);
+      context.read<PluginProvider>().loadPluginUiPage(
+        pluginId: widget.pluginId,
+      );
     });
   }
 
@@ -122,9 +122,9 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
       value: value,
     );
     if (!mounted || message == null || message.isEmpty) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   /// 二次确认弹窗，返回 `true` 表示用户确认执行。
@@ -149,7 +149,8 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
               style:
                   isDanger
                       ? FilledButton.styleFrom(
-                        backgroundColor: Theme.of(dialogContext).colorScheme.error,
+                        backgroundColor:
+                            Theme.of(dialogContext).colorScheme.error,
                         foregroundColor:
                             Theme.of(dialogContext).colorScheme.onError,
                       )
@@ -183,15 +184,17 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
     final pluginUiState = provider.pluginUiPage(plugin.id);
     final pluginUiError = provider.pluginUiError(plugin.id);
     final isPluginUiLoading = provider.isPluginUiLoading(plugin.id);
-    final pluginPageTitle = (pluginUiState?.title ?? '').trim().isNotEmpty
-        ? pluginUiState!.title
-        : plugin.name;
-    final relatedHookLogs = provider.hookLogs
-        .where((item) => item.pluginId == plugin.id)
-        .toList()
-        .reversed
-        .take(10)
-        .toList();
+    final pluginPageTitle =
+        (pluginUiState?.title ?? '').trim().isNotEmpty
+            ? pluginUiState!.title
+            : plugin.name;
+    final relatedHookLogs =
+        provider.hookLogs
+            .where((item) => item.pluginId == plugin.id)
+            .toList()
+            .reversed
+            .take(10)
+            .toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -251,8 +254,7 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
                                   : () async {
                                     final confirmed = await _confirmAction(
                                       title: '重新安装插件',
-                                      content:
-                                          '将重新下载安装并覆盖当前插件文件，确定继续吗？',
+                                      content: '将重新下载安装并覆盖当前插件文件，确定继续吗？',
                                       confirmText: '重新安装',
                                     );
                                     if (!confirmed || !mounted) return;
@@ -275,8 +277,7 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
                                   : () async {
                                     final confirmed = await _confirmAction(
                                       title: '卸载插件',
-                                      content:
-                                          '卸载后将移除插件文件与本地状态，确定卸载吗？',
+                                      content: '卸载后将移除插件文件与本地状态，确定卸载吗？',
                                       confirmText: '卸载',
                                       isDanger: true,
                                     );
@@ -299,9 +300,11 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
                     title: const Text('启用插件'),
                     subtitle: Text(installed ? '插件启用后其工具与 Hook 生效' : '请先安装'),
                     value: installed && enabled,
-                    onChanged: (!installed || provider.isBusy)
-                        ? null
-                        : (value) => provider.togglePluginEnabled(plugin.id, value),
+                    onChanged:
+                        (!installed || provider.isBusy)
+                            ? null
+                            : (value) =>
+                                provider.togglePluginEnabled(plugin.id, value),
                   ),
                   Text(
                     '状态：${_stateText(state)}',
@@ -319,7 +322,8 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
             margin: EdgeInsets.zero,
             child: ExpansionTile(
               initiallyExpanded: _isToolsExpanded,
-              onExpansionChanged: (value) => setState(() => _isToolsExpanded = value),
+              onExpansionChanged:
+                  (value) => setState(() => _isToolsExpanded = value),
               tilePadding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
               childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
               title: Text(
@@ -344,22 +348,31 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
                   )
                 else
                   ...plugin.tools.map((tool) {
-                    final toolEnabled = provider.isToolEnabled(plugin.id, tool.name);
+                    final toolEnabled = provider.isToolEnabled(
+                      plugin.id,
+                      tool.name,
+                    );
                     return SwitchListTile(
                       contentPadding: EdgeInsets.zero,
                       title: Text(tool.name),
                       subtitle: Text(
-                        tool.description.isEmpty ? tool.runtime : tool.description,
+                        tool.description.isEmpty
+                            ? tool.runtime
+                            : tool.description,
                         style: TextStyle(
                           fontSize: 12.5,
                           color: color.onSurfaceVariant,
                         ),
                       ),
                       value: toolEnabled,
-                      onChanged: (!installed || !enabled || provider.isBusy)
-                          ? null
-                          : (value) =>
-                              provider.toggleToolEnabled(plugin.id, tool.name, value),
+                      onChanged:
+                          (!installed || !enabled || provider.isBusy)
+                              ? null
+                              : (value) => provider.toggleToolEnabled(
+                                plugin.id,
+                                tool.name,
+                                value,
+                              ),
                     );
                   }),
               ],
@@ -370,7 +383,8 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
             margin: EdgeInsets.zero,
             child: ExpansionTile(
               initiallyExpanded: _isHooksExpanded,
-              onExpansionChanged: (value) => setState(() => _isHooksExpanded = value),
+              onExpansionChanged:
+                  (value) => setState(() => _isHooksExpanded = value),
               tilePadding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
               childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
               title: Text(
@@ -472,7 +486,9 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
                   if (!isPluginUiLoading &&
                       (pluginUiError ?? '').trim().isEmpty &&
                       (pluginUiState == null ||
-                          pluginUiState.components.where((c) => c.visible).isEmpty))
+                          pluginUiState.components
+                              .where((c) => c.visible)
+                              .isEmpty))
                     Text(
                       '该插件未提供配置页（pythonNamespace/schema.py）或未声明可见组件',
                       style: TextStyle(
@@ -485,158 +501,178 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
                     ...pluginUiState.components
                         .where((component) => component.visible)
                         .map((component) {
-                      switch (component.type) {
-                        case PluginUiComponentType.button:
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: SizedBox(
-                              width: double.infinity,
-                              child: FilledButton(
-                                onPressed: (!installed ||
-                                        !enabled ||
-                                        provider.isBusy ||
-                                        !component.enabled)
-                                    ? null
-                                    : () => _dispatchUiEvent(
+                          switch (component.type) {
+                            case PluginUiComponentType.button:
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: SizedBox(
+                                  width: double.infinity,
+                                  child: FilledButton(
+                                    onPressed:
+                                        (!installed ||
+                                                !enabled ||
+                                                provider.isBusy ||
+                                                !component.enabled)
+                                            ? null
+                                            : () => _dispatchUiEvent(
+                                              provider: provider,
+                                              pluginId: plugin.id,
+                                              componentId: component.id,
+                                              eventType: 'button_click',
+                                            ),
+                                    child: Text(
+                                      component.label.isEmpty
+                                          ? component.id
+                                          : component.label,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            case PluginUiComponentType.textInput:
+                              final controller = _ensureUiTextController(
+                                component.id,
+                                component.textValue,
+                              );
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if (component.label.isNotEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.only(
+                                          bottom: 4,
+                                        ),
+                                        child: Text(
+                                          component.label,
+                                          style: TextStyle(
+                                            fontSize: 12.5,
+                                            color: color.onSurfaceVariant,
+                                          ),
+                                        ),
+                                      ),
+                                    TextField(
+                                      controller: controller,
+                                      minLines: component.multiline ? 3 : 1,
+                                      maxLines: component.multiline ? 6 : 1,
+                                      enabled:
+                                          installed &&
+                                          enabled &&
+                                          !provider.isBusy &&
+                                          component.enabled,
+                                      decoration: InputDecoration(
+                                        border: const OutlineInputBorder(),
+                                        isDense: true,
+                                        hintText:
+                                            component.placeholder ?? '请输入内容',
+                                        suffixIcon: IconButton(
+                                          onPressed:
+                                              (!installed ||
+                                                      !enabled ||
+                                                      provider.isBusy ||
+                                                      !component.enabled)
+                                                  ? null
+                                                  : () => _dispatchUiEvent(
+                                                    provider: provider,
+                                                    pluginId: plugin.id,
+                                                    componentId: component.id,
+                                                    eventType: 'input_submit',
+                                                    value: controller.text,
+                                                  ),
+                                          icon: const Icon(Icons.send_rounded),
+                                        ),
+                                      ),
+                                      onSubmitted:
+                                          (value) => _dispatchUiEvent(
+                                            provider: provider,
+                                            pluginId: plugin.id,
+                                            componentId: component.id,
+                                            eventType: 'input_submit',
+                                            value: value,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            case PluginUiComponentType.toggle:
+                              return SwitchListTile(
+                                contentPadding: EdgeInsets.zero,
+                                title: Text(
+                                  component.label.isEmpty
+                                      ? component.id
+                                      : component.label,
+                                ),
+                                subtitle:
+                                    component.description.isEmpty
+                                        ? null
+                                        : Text(
+                                          component.description,
+                                          style: TextStyle(
+                                            fontSize: 12.5,
+                                            color: color.onSurfaceVariant,
+                                          ),
+                                        ),
+                                value: component.boolValue,
+                                onChanged:
+                                    (!installed ||
+                                            !enabled ||
+                                            provider.isBusy ||
+                                            !component.enabled)
+                                        ? null
+                                        : (value) => _dispatchUiEvent(
                                           provider: provider,
                                           pluginId: plugin.id,
                                           componentId: component.id,
-                                          eventType: 'button_click',
+                                          eventType: 'switch_toggle',
+                                          value: value,
                                         ),
-                                child: Text(
-                                  component.label.isEmpty ? component.id : component.label,
-                                ),
-                              ),
-                            ),
-                          );
-                        case PluginUiComponentType.textInput:
-                          final controller = _ensureUiTextController(
-                            component.id,
-                            component.textValue,
-                          );
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                if (component.label.isNotEmpty)
-                                  Padding(
-                                    padding: const EdgeInsets.only(bottom: 4),
-                                    child: Text(
-                                      component.label,
-                                      style: TextStyle(
-                                        fontSize: 12.5,
-                                        color: color.onSurfaceVariant,
-                                      ),
-                                    ),
-                                  ),
-                                TextField(
-                                  controller: controller,
-                                  minLines: component.multiline ? 3 : 1,
-                                  maxLines: component.multiline ? 6 : 1,
-                                  enabled: installed &&
-                                      enabled &&
-                                      !provider.isBusy &&
-                                      component.enabled,
-                                  decoration: InputDecoration(
-                                    border: const OutlineInputBorder(),
-                                    isDense: true,
-                                    hintText: component.placeholder ?? '请输入内容',
-                                    suffixIcon: IconButton(
-                                      onPressed: (!installed ||
+                              );
+                            case PluginUiComponentType.select:
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: DropdownButtonFormField<String>(
+                                  value:
+                                      component.selectedValue.isEmpty
+                                          ? null
+                                          : component.selectedValue,
+                                  items:
+                                      component.options
+                                          .map(
+                                            (item) => DropdownMenuItem<String>(
+                                              value: item.value,
+                                              child: Text(item.label),
+                                            ),
+                                          )
+                                          .toList(),
+                                  onChanged:
+                                      (!installed ||
                                               !enabled ||
                                               provider.isBusy ||
                                               !component.enabled)
                                           ? null
-                                          : () => _dispatchUiEvent(
-                                                provider: provider,
-                                                pluginId: plugin.id,
-                                                componentId: component.id,
-                                                eventType: 'input_submit',
-                                                value: controller.text,
-                                              ),
-                                      icon: const Icon(Icons.send_rounded),
-                                    ),
-                                  ),
-                                  onSubmitted: (value) => _dispatchUiEvent(
-                                    provider: provider,
-                                    pluginId: plugin.id,
-                                    componentId: component.id,
-                                    eventType: 'input_submit',
-                                    value: value,
+                                          : (value) => _dispatchUiEvent(
+                                            provider: provider,
+                                            pluginId: plugin.id,
+                                            componentId: component.id,
+                                            eventType: 'select_change',
+                                            value: value ?? '',
+                                          ),
+                                  decoration: InputDecoration(
+                                    border: const OutlineInputBorder(),
+                                    isDense: true,
+                                    labelText:
+                                        component.label.isEmpty
+                                            ? component.id
+                                            : component.label,
+                                    helperText:
+                                        component.description.isEmpty
+                                            ? null
+                                            : component.description,
                                   ),
                                 ),
-                              ],
-                            ),
-                          );
-                        case PluginUiComponentType.toggle:
-                          return SwitchListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: Text(
-                              component.label.isEmpty ? component.id : component.label,
-                            ),
-                            subtitle: component.description.isEmpty
-                                ? null
-                                : Text(
-                                    component.description,
-                                    style: TextStyle(
-                                      fontSize: 12.5,
-                                      color: color.onSurfaceVariant,
-                                    ),
-                                  ),
-                            value: component.boolValue,
-                            onChanged: (!installed ||
-                                    !enabled ||
-                                    provider.isBusy ||
-                                    !component.enabled)
-                                ? null
-                                : (value) => _dispatchUiEvent(
-                                      provider: provider,
-                                      pluginId: plugin.id,
-                                      componentId: component.id,
-                                      eventType: 'switch_toggle',
-                                      value: value,
-                                    ),
-                          );
-                        case PluginUiComponentType.select:
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: DropdownButtonFormField<String>(
-                              value: component.selectedValue.isEmpty
-                                  ? null
-                                  : component.selectedValue,
-                              items: component.options
-                                  .map(
-                                    (item) => DropdownMenuItem<String>(
-                                      value: item.value,
-                                      child: Text(item.label),
-                                    ),
-                                  )
-                                  .toList(),
-                              onChanged: (!installed ||
-                                      !enabled ||
-                                      provider.isBusy ||
-                                      !component.enabled)
-                                  ? null
-                                  : (value) => _dispatchUiEvent(
-                                        provider: provider,
-                                        pluginId: plugin.id,
-                                        componentId: component.id,
-                                        eventType: 'select_change',
-                                        value: value ?? '',
-                                      ),
-                              decoration: InputDecoration(
-                                border: const OutlineInputBorder(),
-                                isDense: true,
-                                labelText:
-                                    component.label.isEmpty ? component.id : component.label,
-                                helperText:
-                                    component.description.isEmpty ? null : component.description,
-                              ),
-                            ),
-                          );
-                      }
-                    }),
+                              );
+                          }
+                        }),
                 ],
               ),
             ),
@@ -676,7 +712,8 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: 12,
-                            color: log.ok ? color.onSurfaceVariant : color.error,
+                            color:
+                                log.ok ? color.onSurfaceVariant : color.error,
                           ),
                         ),
                       ),
@@ -707,10 +744,7 @@ class _MetaChip extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: TextStyle(
-          fontSize: 11.5,
-          color: color.onSecondaryContainer,
-        ),
+        style: TextStyle(fontSize: 11.5, color: color.onSecondaryContainer),
       ),
     );
   }

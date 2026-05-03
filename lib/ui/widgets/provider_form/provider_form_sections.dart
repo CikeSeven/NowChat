@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:now_chat/core/models/ai_provider_config.dart';
 import 'package:now_chat/core/provider/provider_catalog.dart';
 import 'package:now_chat/ui/widgets/provider_form/model_list_items.dart';
@@ -81,7 +81,8 @@ class ProviderCatalogSection extends StatelessWidget {
                     );
                   }).toList(),
             ),
-            if (!isSearching && filteredPresets.length > collapsedPresetCount) ...[
+            if (!isSearching &&
+                filteredPresets.length > collapsedPresetCount) ...[
               const SizedBox(height: 4),
               Align(
                 alignment: Alignment.centerLeft,
@@ -392,9 +393,7 @@ class _FetchedModelsSectionState extends State<FetchedModelsSection> {
         normalizedQuery.isEmpty
             ? widget.addableModels
             : widget.addableModels
-                .where(
-                  (model) => model.toLowerCase().contains(normalizedQuery),
-                )
+                .where((model) => model.toLowerCase().contains(normalizedQuery))
                 .toList();
 
     return Card(
@@ -427,15 +426,15 @@ class _FetchedModelsSectionState extends State<FetchedModelsSection> {
                     _searchQuery.trim().isEmpty
                         ? null
                         : IconButton(
-                            tooltip: '清空',
-                            onPressed: () {
-                              _searchController.clear();
-                              setState(() {
-                                _searchQuery = '';
-                              });
-                            },
-                            icon: const Icon(Icons.close, size: 16),
-                          ),
+                          tooltip: '清空',
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() {
+                              _searchQuery = '';
+                            });
+                          },
+                          icon: const Icon(Icons.close, size: 16),
+                        ),
                 border: const OutlineInputBorder(),
               ),
             ),

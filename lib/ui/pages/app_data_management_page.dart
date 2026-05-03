@@ -6,7 +6,7 @@ import 'package:now_chat/providers/image_generation_queue_provider.dart';
 import 'package:now_chat/providers/settings_provider.dart';
 import 'package:provider/provider.dart';
 
-  /// 应用数据管理页：导入/导出会话、工具（智能体）和 API 配置。
+/// 应用数据管理页：导入/导出会话、工具（智能体）和 API 配置。
 class AppDataManagementPage extends StatefulWidget {
   const AppDataManagementPage({super.key});
 
@@ -97,7 +97,8 @@ class _AppDataManagementPageState extends State<AppDataManagementPage> {
       final settingsProvider = context.read<SettingsProvider>();
       final imageQueueProvider = context.read<ImageGenerationQueueProvider>();
       final service = AppDataTransferService(isar: chatProvider.isar);
-      final importedName = await service.importFromUserSelectedFileAndReplaceAll();
+      final importedName =
+          await service.importFromUserSelectedFileAndReplaceAll();
       if (!mounted) return;
       if (importedName == null) {
         ScaffoldMessenger.of(
@@ -147,9 +148,7 @@ class _AppDataManagementPageState extends State<AppDataManagementPage> {
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
-                    '导出会话、工具（智能体）、API 配置与生图数据（队列/记录/设置）。暂不包含插件数据。',
-                  ),
+                  const Text('导出会话、工具（智能体）、API 配置与生图数据（队列/记录/设置）。暂不包含插件数据。'),
                   const SizedBox(height: 6),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
@@ -175,7 +174,9 @@ class _AppDataManagementPageState extends State<AppDataManagementPage> {
                               ? const SizedBox(
                                 width: 16,
                                 height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
                               )
                               : const Icon(Icons.ios_share_rounded),
                       label: Text(_isExporting ? '导出中...' : '导出数据'),
@@ -225,7 +226,9 @@ class _AppDataManagementPageState extends State<AppDataManagementPage> {
                               ? const SizedBox(
                                 width: 16,
                                 height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
                               )
                               : const Icon(Icons.upload_file_rounded),
                       label: Text(_isImporting ? '导入中...' : '导入数据'),

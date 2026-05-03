@@ -18,12 +18,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// 插件安装状态。
-enum PluginInstallState {
-  notInstalled,
-  installing,
-  ready,
-  broken,
-}
+enum PluginInstallState { notInstalled, installing, ready, broken }
 
 /// 通用插件状态管理：安装、启用、工具开关、动作执行与 Hook 同步。
 class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
@@ -47,6 +42,7 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
   String _manifestUrl = defaultManifestUrl;
   String _githubMirrorId = PluginService.githubMirrorDirect;
   String _githubMirrorCustomBaseUrl = '';
+
   /// 远端清单（插件市场）快照。
   PluginManifestV2? _manifest;
   final Map<String, PluginDefinition> _localPluginsById =
@@ -104,7 +100,8 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
   String get githubMirrorId => _githubMirrorId;
   String get githubMirrorCustomBaseUrl => _githubMirrorCustomBaseUrl;
   Map<String, int?> get mirrorProbeLatenciesMs => _mirrorProbeLatenciesMs;
-  List<PluginGithubMirrorPreset> get githubMirrorPresets => PluginService.githubMirrorPresets;
+  List<PluginGithubMirrorPreset> get githubMirrorPresets =>
+      PluginService.githubMirrorPresets;
   int get localPluginCount => _localPluginsById.length;
   int get installedPluginCount => _installedRecords.length;
 
@@ -340,7 +337,9 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
           await installPackage(package);
         }
         final requirementsBaseTargetDir =
-            installedPackages.isNotEmpty ? installedPackages.first.targetDir : '';
+            installedPackages.isNotEmpty
+                ? installedPackages.first.targetDir
+                : '';
         final requirementsPackage = await _installRequirementsPackageIfNeeded(
           pluginId: pluginId,
           plugin: plugin,
@@ -371,7 +370,8 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
       _downloadProgress = 1;
       await _saveInstalledRecords();
       _syncRegistry();
-      final enabledTools = _installedRecords[pluginId]?.enabledTools ?? const [];
+      final enabledTools =
+          _installedRecords[pluginId]?.enabledTools ?? const [];
       AppLogger.i(
         '插件安装完成: id=$pluginId, enabledTools=${enabledTools.length}, tools=${enabledTools.join(', ')}',
       );
@@ -503,7 +503,8 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
           id: firstPackage?.id ?? 'main',
           version: firstPackage?.version ?? plugin.version,
           targetDir: mainTargetDir,
-          pythonPathEntries: firstPackage?.pythonPathEntries ?? const <String>['.'],
+          pythonPathEntries:
+              firstPackage?.pythonPathEntries ?? const <String>['.'],
           entryPoint: firstPackage?.entryPoint,
         ),
       ];
@@ -610,7 +611,9 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
   }) {
     Set<String> normalize(List<String> source) {
       return source
-          .map((item) => item.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ''))
+          .map(
+            (item) => item.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ''),
+          )
           .where((item) => item.isNotEmpty)
           .toSet();
     }
@@ -829,7 +832,9 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
       );
       final next = PluginUiPageState.fromJson(raw);
       _pluginUiPages[pluginId] = next;
-      AppLogger.i('插件 UI 事件已处理: plugin=$pluginId, component=$componentId, event=$eventType');
+      AppLogger.i(
+        '插件 UI 事件已处理: plugin=$pluginId, component=$componentId, event=$eventType',
+      );
       return next.message;
     } catch (e, st) {
       _pluginUiErrors[pluginId] = '插件 UI 交互失败: $e';
@@ -850,14 +855,17 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
     Duration timeout = const Duration(seconds: 20),
   }) async {
     final normalizedCode = code.trim();
-    if (normalizedCode.isEmpty || _runtimeWorkDir == null || _isExecuting) return;
+    if (normalizedCode.isEmpty || _runtimeWorkDir == null || _isExecuting)
+      return;
     _isExecuting = true;
     _lastError = null;
     _lastExecutionResult = null;
     _lastExecutionPluginId = pluginId;
     notifyListeners();
     try {
-      final extraPaths = PluginRegistry.instance.resolvePythonPathsForPlugin(pluginId);
+      final extraPaths = PluginRegistry.instance.resolvePythonPathsForPlugin(
+        pluginId,
+      );
       final result = await _pythonService.executeCode(
         code: normalizedCode,
         timeout: timeout,
@@ -872,7 +880,8 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
       if (result.timedOut) {
         _lastError = '执行超时（${timeout.inSeconds} 秒）';
       } else if (!result.isSuccess) {
-        _lastError = result.stderr.trim().isEmpty ? '执行失败' : result.stderr.trim();
+        _lastError =
+            result.stderr.trim().isEmpty ? '执行失败' : result.stderr.trim();
       }
     } catch (e, st) {
       _lastError = '执行失败: $e';
@@ -932,7 +941,9 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
     bool refreshManifestAfterChange = true,
   }) async {
     final normalizedId = mirrorId.trim();
-    final isValid = PluginService.githubMirrorPresets.any((item) => item.id == normalizedId);
+    final isValid = PluginService.githubMirrorPresets.any(
+      (item) => item.id == normalizedId,
+    );
     if (!isValid) return;
     final normalizedCustomBase = PluginService.normalizeCustomMirrorBaseUrl(
       customMirrorBaseUrl ?? _githubMirrorCustomBaseUrl,
@@ -1001,15 +1012,11 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
     AppLogger.i('开始初始化插件系统（本地插件阶段）');
     try {
       final supportDir = await getApplicationSupportDirectory();
-      _pluginRootDir = Directory(
-        p.join(supportDir.path, 'plugin_runtime'),
-      );
+      _pluginRootDir = Directory(p.join(supportDir.path, 'plugin_runtime'));
       if (!_pluginRootDir!.existsSync()) {
         await _pluginRootDir!.create(recursive: true);
       }
-      _runtimeWorkDir = Directory(
-        p.join(_pluginRootDir!.path, 'runtime'),
-      );
+      _runtimeWorkDir = Directory(p.join(_pluginRootDir!.path, 'runtime'));
       if (!_runtimeWorkDir!.existsSync()) {
         await _runtimeWorkDir!.create(recursive: true);
       }
@@ -1055,14 +1062,20 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
   /// 恢复清单地址、镜像配置与最近错误等基础状态。
   Future<void> _loadBasicState() async {
     final prefs = await SharedPreferences.getInstance();
-    _manifestUrl = (prefs.getString(_kManifestUrl) ?? defaultManifestUrl).trim();
+    _manifestUrl =
+        (prefs.getString(_kManifestUrl) ?? defaultManifestUrl).trim();
     if (_manifestUrl.isEmpty) {
       _manifestUrl = defaultManifestUrl;
     }
     _lastError = prefs.getString(_kLastError)?.trim();
-    final persistedMirrorId = (prefs.getString(_kGithubMirrorId) ?? PluginService.githubMirrorDirect).trim();
-    final hasPreset = PluginService.githubMirrorPresets.any((item) => item.id == persistedMirrorId);
-    _githubMirrorId = hasPreset ? persistedMirrorId : PluginService.githubMirrorDirect;
+    final persistedMirrorId =
+        (prefs.getString(_kGithubMirrorId) ?? PluginService.githubMirrorDirect)
+            .trim();
+    final hasPreset = PluginService.githubMirrorPresets.any(
+      (item) => item.id == persistedMirrorId,
+    );
+    _githubMirrorId =
+        hasPreset ? persistedMirrorId : PluginService.githubMirrorDirect;
     _githubMirrorCustomBaseUrl = PluginService.normalizeCustomMirrorBaseUrl(
       prefs.getString(_kGithubMirrorCustomBaseUrl) ?? '',
     );
@@ -1076,7 +1089,10 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
     if (_githubMirrorCustomBaseUrl.trim().isEmpty) {
       await prefs.remove(_kGithubMirrorCustomBaseUrl);
     } else {
-      await prefs.setString(_kGithubMirrorCustomBaseUrl, _githubMirrorCustomBaseUrl);
+      await prefs.setString(
+        _kGithubMirrorCustomBaseUrl,
+        _githubMirrorCustomBaseUrl,
+      );
     }
     if ((_lastError ?? '').trim().isEmpty) {
       await prefs.remove(_kLastError);
@@ -1112,7 +1128,8 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
 
   Future<void> _saveInstalledRecords() async {
     final prefs = await SharedPreferences.getInstance();
-    final payload = _installedRecords.values.map((item) => item.toJson()).toList();
+    final payload =
+        _installedRecords.values.map((item) => item.toJson()).toList();
     await prefs.setString(recordsStorageKey, jsonEncode(payload));
   }
 
@@ -1240,5 +1257,4 @@ class PluginProvider with ChangeNotifier, WidgetsBindingObserver {
         ) !=
         null;
   }
-
 }

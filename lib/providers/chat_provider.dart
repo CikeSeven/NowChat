@@ -151,8 +151,10 @@ class ChatProvider with ChangeNotifier {
 
   /// 追加一条消息对应的工具调用日志。
   void _appendToolLogForMessage(int messageId, ToolExecutionLog log) {
-    final logs =
-        _toolLogsByMessageId.putIfAbsent(messageId, () => <ToolExecutionLog>[]);
+    final logs = _toolLogsByMessageId.putIfAbsent(
+      messageId,
+      () => <ToolExecutionLog>[],
+    );
     logs.add(log);
     _notifyStateChanged();
   }
@@ -315,7 +317,9 @@ class ChatProvider with ChangeNotifier {
         ..clear()
         ..addAll(loadedProviders);
       _isLocalDataReady = true;
-      AppLogger.i('应用数据加载完成: chats=${_chatList.length}, providers=${_providers.length}');
+      AppLogger.i(
+        '应用数据加载完成: chats=${_chatList.length}, providers=${_providers.length}',
+      );
     } catch (e, st) {
       _initialized = false;
       _isLocalDataReady = false;

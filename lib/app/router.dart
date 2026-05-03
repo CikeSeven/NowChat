@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:now_chat/ui/pages/about_page.dart';
 import 'package:now_chat/ui/pages/app_data_management_page.dart';
 import 'package:now_chat/ui/pages/agent_detail_page.dart';
@@ -121,24 +121,16 @@ class AppRoutes {
         );
 
       case defaultChatParams:
-        return _buildSlideRoute(
-          builder: (_) => const DefaultChatParamsPage(),
-        );
+        return _buildSlideRoute(builder: (_) => const DefaultChatParamsPage());
 
       case appDataManagement:
-        return _buildSlideRoute(
-          builder: (_) => const AppDataManagementPage(),
-        );
+        return _buildSlideRoute(builder: (_) => const AppDataManagementPage());
 
       case about:
-        return _buildSlideRoute(
-          builder: (_) => const AboutPage(),
-        );
+        return _buildSlideRoute(builder: (_) => const AboutPage());
 
       case plugin:
-        return _buildSlideRoute(
-          builder: (_) => const PluginPage(),
-        );
+        return _buildSlideRoute(builder: (_) => const PluginPage());
 
       case imageGenerationSettings:
         return _buildSlideRoute(

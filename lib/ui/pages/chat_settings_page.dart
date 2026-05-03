@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:now_chat/core/models/chat_session.dart';
 import 'package:now_chat/providers/chat_provider.dart';
 import 'package:now_chat/providers/settings_provider.dart';
@@ -47,9 +47,11 @@ class _ChatSettingsPageState extends State<ChatSettingsPage> {
       // 0 表示“不传 maxTokens”；4096 兼容历史默认值场景，不视为手动覆盖。
       _useMaxTokens = chat.maxTokens > 0 && chat.maxTokens != 4096;
       _maxTokensController.text =
-          _useMaxTokens ? chat.maxTokens.toString() : SettingsProvider.defaultMaxTokensValue.toString();
-      _maxConversationTurnsController.text = chat.maxConversationTurns
-          .toString();
+          _useMaxTokens
+              ? chat.maxTokens.toString()
+              : SettingsProvider.defaultMaxTokensValue.toString();
+      _maxConversationTurnsController.text =
+          chat.maxConversationTurns.toString();
       _systemPromptController.text = chat.systemPrompt ?? '';
     }
   }
@@ -89,9 +91,7 @@ class _ChatSettingsPageState extends State<ChatSettingsPage> {
     final chat = _chat;
     final maxTokens = _useMaxTokens ? _maxTokens : 0;
     final maxConversationTurns = _maxConversationTurns;
-    if (chat == null ||
-        maxTokens == null ||
-        maxConversationTurns == null) {
+    if (chat == null || maxTokens == null || maxConversationTurns == null) {
       return;
     }
     final title = _titleController.text.trim();
@@ -290,7 +290,8 @@ class _ChatSettingsPageState extends State<ChatSettingsPage> {
                     contentPadding: EdgeInsets.zero,
                     dense: true,
                     title: const Text('启用最大输出tokens'),
-                    subtitle: Text('开启后生成内容超过上限时模型可能提前结束',
+                    subtitle: Text(
+                      '开启后生成内容超过上限时模型可能提前结束',
                       style: TextStyle(
                         fontSize: 12,
                         color: colors.onSurfaceVariant,
@@ -305,7 +306,9 @@ class _ChatSettingsPageState extends State<ChatSettingsPage> {
                             _maxTokensController.text.trim(),
                           );
                           if (parsed == null || parsed <= 0) {
-                            _maxTokensController.text = SettingsProvider.defaultMaxTokensValue.toString();
+                            _maxTokensController.text =
+                                SettingsProvider.defaultMaxTokensValue
+                                    .toString();
                           }
                         }
                       });
@@ -321,7 +324,9 @@ class _ChatSettingsPageState extends State<ChatSettingsPage> {
                       isDense: true,
                       labelText: 'max_tokens',
                       helperText:
-                          _useMaxTokens ? '请输入大于 0 的整数（默认 ${SettingsProvider.defaultMaxTokensValue}）' : '当前未启用',
+                          _useMaxTokens
+                              ? '请输入大于 0 的整数（默认 ${SettingsProvider.defaultMaxTokensValue}）'
+                              : '当前未启用',
                       errorText:
                           !_useMaxTokens ||
                                   _maxTokensController.text.isEmpty ||
@@ -365,7 +370,7 @@ class _ChatSettingsPageState extends State<ChatSettingsPage> {
                         streamingSupported
                             ? (value) {
                               setState(() {
-                            _isStreaming = value;
+                                _isStreaming = value;
                               });
                             }
                             : null,

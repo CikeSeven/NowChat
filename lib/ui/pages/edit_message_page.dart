@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:now_chat/core/models/message.dart';
 import 'package:now_chat/providers/chat_provider.dart';
 import 'package:provider/provider.dart';
@@ -53,9 +53,15 @@ class _EditMessagePageState extends State<EditMessagePage> {
         ),
         actions: [
           IconButton(
-            icon: Icon(Icons.check, color: _controller.text.trim().isEmpty ? color.onSurface.withAlpha(120) : color.primary),
+            icon: Icon(
+              Icons.check,
+              color:
+                  _controller.text.trim().isEmpty
+                      ? color.onSurface.withAlpha(120)
+                      : color.primary,
+            ),
             onPressed: _controller.text.trim().isEmpty ? null : _saveMessage,
-          )
+          ),
         ],
         backgroundColor: color.surface,
         elevation: 1,
@@ -65,9 +71,9 @@ class _EditMessagePageState extends State<EditMessagePage> {
           Expanded(
             child: TextField(
               controller: _controller,
-              expands: true,         // 占满父容器
-              maxLines: null,        // 必须设置为 null
-              minLines: null,        // 必须设置为 null
+              expands: true, // 占满父容器
+              maxLines: null, // 必须设置为 null
+              minLines: null, // 必须设置为 null
               decoration: const InputDecoration(
                 border: InputBorder.none, // 去掉边框
                 contentPadding: EdgeInsets.only(left: 16, right: 16, bottom: 8),

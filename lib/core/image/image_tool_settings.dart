@@ -41,7 +41,8 @@ class ImageToolSettingsStore {
       'default_image_generation_model';
   static const _defaultImageGenerateSizeKey = 'default_image_generate_size';
   static const _defaultImageGenerateCountKey = 'default_image_generate_count';
-  static const _defaultImageEditProviderIdKey = 'default_image_edit_provider_id';
+  static const _defaultImageEditProviderIdKey =
+      'default_image_edit_provider_id';
   static const _defaultImageEditModelKey = 'default_image_edit_model';
   static const _defaultImageEditSizeKey = 'default_image_edit_size';
 
@@ -51,7 +52,9 @@ class ImageToolSettingsStore {
     final genProvider = _normalize(
       prefs.getString(_defaultImageGenerationProviderIdKey),
     );
-    final genModel = _normalize(prefs.getString(_defaultImageGenerationModelKey));
+    final genModel = _normalize(
+      prefs.getString(_defaultImageGenerationModelKey),
+    );
     final genSize =
         _normalizeImageSize(prefs.getString(_defaultImageGenerateSizeKey)) ??
         '1024x1024';
@@ -113,7 +116,9 @@ class ImageToolSettingsStore {
       await prefs.remove(_exposeImageToolsToChatKey);
     }
 
-    final generationProviderId = _normalize(raw['generationProviderId']?.toString());
+    final generationProviderId = _normalize(
+      raw['generationProviderId']?.toString(),
+    );
     final generationModel = _normalize(raw['generationModel']?.toString());
     final editProviderId = _normalize(raw['editProviderId']?.toString());
     final editModel = _normalize(raw['editModel']?.toString());
@@ -121,7 +126,10 @@ class ImageToolSettingsStore {
     if (generationProviderId == null) {
       await prefs.remove(_defaultImageGenerationProviderIdKey);
     } else {
-      await prefs.setString(_defaultImageGenerationProviderIdKey, generationProviderId);
+      await prefs.setString(
+        _defaultImageGenerationProviderIdKey,
+        generationProviderId,
+      );
     }
     if (generationModel == null) {
       await prefs.remove(_defaultImageGenerationModelKey);

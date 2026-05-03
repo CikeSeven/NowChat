@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:now_chat/core/models/ai_provider_config.dart';
 import 'package:now_chat/providers/chat_provider.dart';
 import 'package:provider/provider.dart';
@@ -181,14 +181,8 @@ class _DefaultChatParamsPageState extends State<DefaultChatParamsPage> {
       appBar: AppBar(
         title: const Text('默认对话参数'),
         actions: [
-          TextButton(
-            onPressed: _restoreDefaults,
-            child: const Text('恢复默认'),
-          ),
-          TextButton(
-            onPressed: _save,
-            child: const Text('保存'),
-          ),
+          TextButton(onPressed: _restoreDefaults, child: const Text('恢复默认')),
+          TextButton(onPressed: _save, child: const Text('保存')),
         ],
       ),
       body: ListView(
@@ -303,7 +297,8 @@ class _DefaultChatParamsPageState extends State<DefaultChatParamsPage> {
               border: OutlineInputBorder(),
               isDense: true,
               labelText: '默认工具调用上限',
-              helperText: '单次请求最多允许工具调用次数，默认 ${SettingsProvider.defaultMaxToolCallsValue}',
+              helperText:
+                  '单次请求最多允许工具调用次数，默认 ${SettingsProvider.defaultMaxToolCallsValue}',
             ),
           ),
         ],

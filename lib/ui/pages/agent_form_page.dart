@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:now_chat/core/models/ai_provider_config.dart';
 import 'package:now_chat/core/models/agent_profile.dart';
 import 'package:now_chat/providers/agent_provider.dart';
@@ -162,7 +162,8 @@ class _AgentFormPageState extends State<AgentFormPage> {
 
     final agentProvider = context.read<AgentProvider>();
     if (_isEditing) {
-      final existing = _agentId == null ? null : agentProvider.getById(_agentId!);
+      final existing =
+          _agentId == null ? null : agentProvider.getById(_agentId!);
       if (existing == null) {
         _showSnackBar('工具不存在');
         return;
@@ -208,30 +209,33 @@ class _AgentFormPageState extends State<AgentFormPage> {
     final settings = context.watch<SettingsProvider>();
     final selectedProvider =
         _providerId == null ? null : chatProvider.getProviderById(_providerId!);
-    final selectedModelDisplay = selectedProvider != null && _model != null
-        ? selectedProvider.displayNameForModel(_model!)
-        : null;
+    final selectedModelDisplay =
+        selectedProvider != null && _model != null
+            ? selectedProvider.displayNameForModel(_model!)
+            : null;
     final defaultProviderId = settings.defaultProviderId;
     final defaultModel = settings.defaultModel;
-    final defaultProvider = defaultProviderId == null
-        ? null
-        : chatProvider.getProviderById(defaultProviderId);
-    final defaultModelDisplay = defaultProvider != null && defaultModel != null
-        ? defaultProvider.displayNameForModel(defaultModel)
-        : null;
-    final hasBoundModel = selectedProvider != null && selectedModelDisplay != null;
-    final modelSubtitle = hasBoundModel
-        ? '已绑定：${selectedProvider.name} · $selectedModelDisplay'
-        : (defaultProvider != null && defaultModelDisplay != null
-            ? '默认：${defaultProvider.name} · $defaultModelDisplay'
-            : '未设置（请先在设置中配置默认模型或在此绑定模型）');
+    final defaultProvider =
+        defaultProviderId == null
+            ? null
+            : chatProvider.getProviderById(defaultProviderId);
+    final defaultModelDisplay =
+        defaultProvider != null && defaultModel != null
+            ? defaultProvider.displayNameForModel(defaultModel)
+            : null;
+    final hasBoundModel =
+        selectedProvider != null && selectedModelDisplay != null;
+    final modelSubtitle =
+        hasBoundModel
+            ? '已绑定：${selectedProvider.name} · $selectedModelDisplay'
+            : (defaultProvider != null && defaultModelDisplay != null
+                ? '默认：${defaultProvider.name} · $defaultModelDisplay'
+                : '未设置（请先在设置中配置默认模型或在此绑定模型）');
 
     return Scaffold(
       appBar: AppBar(
         title: Text(_isEditing ? '编辑工具' : '新建工具'),
-        actions: [
-          TextButton(onPressed: _save, child: const Text('保存')),
-        ],
+        actions: [TextButton(onPressed: _save, child: const Text('保存'))],
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),

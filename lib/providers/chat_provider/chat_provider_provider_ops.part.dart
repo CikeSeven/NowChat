@@ -1,4 +1,4 @@
-﻿part of '../chat_provider.dart';
+part of '../chat_provider.dart';
 
 /// ChatProviderProviderOps 扩展方法集合。
 extension ChatProviderProviderOps on ChatProvider {

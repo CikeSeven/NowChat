@@ -1,14 +1,13 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../../core/models/message.dart';
-
 
 /// 执行 showModalBottomSheetMenu 逻辑。
 Future<void> showModalBottomSheetMenu({
   required BuildContext context,
   required List<SheetMenuItem> items,
   required Message message,
-}){
+}) {
   // 助手消息与用户消息菜单形态不同：助手菜单支持可拖拽展开全文。
   final isAssitant = message.role == 'assistant';
   final color = Theme.of(context).colorScheme;
@@ -19,18 +18,18 @@ Future<void> showModalBottomSheetMenu({
     useSafeArea: true,
     backgroundColor: color.surfaceContainerHigh,
     shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(24))
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
     builder: (context) {
-      if (isAssitant) return _AssistantMenuSheet(items: items, message: message);
+      if (isAssitant)
+        return _AssistantMenuSheet(items: items, message: message);
       return _buildUserMenu(context: context, items: items, message: message);
     },
   );
-
 }
 
 // 用户菜单
-Widget _buildUserMenu ({
+Widget _buildUserMenu({
   required BuildContext context,
   required List<SheetMenuItem> items,
   required Message message,
@@ -49,7 +48,7 @@ Widget _buildUserMenu ({
           margin: const EdgeInsets.only(bottom: 3),
           decoration: BoxDecoration(
             color: color.outlineVariant,
-            borderRadius: BorderRadius.circular(2)
+            borderRadius: BorderRadius.circular(2),
           ),
         ),
 
@@ -57,19 +56,17 @@ Widget _buildUserMenu ({
         ...items.map((item) {
           return ListTile(
             leading: item.icon,
-            title: Text(item.label,
-              style: TextStyle(color: color.onSurface),),
-              onTap: () {
-                Navigator.pop(context);
-                item.onTap?.call();
-              },
+            title: Text(item.label, style: TextStyle(color: color.onSurface)),
+            onTap: () {
+              Navigator.pop(context);
+              item.onTap?.call();
+            },
           );
-        })
+        }),
       ],
     ),
   );
 }
-
 
 // AI 消息菜单
 /// _AssistantMenuSheet 类型定义。
@@ -102,21 +99,22 @@ class _AssistantMenuSheetState extends State<_AssistantMenuSheet> {
   Widget build(BuildContext context) {
     // 全屏时减少菜单项，给正文阅读留出更多空间。
     final isFullScreen = sheetSize > 0.8;
-    final visibleItems = isFullScreen ? widget.items.take(2).toList() : widget.items;
+    final visibleItems =
+        isFullScreen ? widget.items.take(2).toList() : widget.items;
     final color = Theme.of(context).colorScheme;
 
     return DraggableScrollableSheet(
-        controller: controller,
-        expand: false,
-        initialChildSize: 0.5, // 初始高度
-        minChildSize: 0.5,     // 最小高度
-        maxChildSize: 1.0,     // 最大高度全屏
-        snapSizes: const [0.5, 1.0],
-        snap: true,
-        builder: (context, scrollController){
-          return SingleChildScrollView(
-            controller: scrollController,
-            child: Padding(
+      controller: controller,
+      expand: false,
+      initialChildSize: 0.5, // 初始高度
+      minChildSize: 0.5, // 最小高度
+      maxChildSize: 1.0, // 最大高度全屏
+      snapSizes: const [0.5, 1.0],
+      snap: true,
+      builder: (context, scrollController) {
+        return SingleChildScrollView(
+          controller: scrollController,
+          child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -128,10 +126,10 @@ class _AssistantMenuSheetState extends State<_AssistantMenuSheet> {
                   margin: const EdgeInsets.only(bottom: 3),
                   decoration: BoxDecoration(
                     color: color.outlineVariant,
-                    borderRadius: BorderRadius.circular(2)
+                    borderRadius: BorderRadius.circular(2),
                   ),
                 ),
-        
+
                 // 菜单项
                 AnimatedSize(
                   duration: const Duration(milliseconds: 200),
@@ -141,44 +139,39 @@ class _AssistantMenuSheetState extends State<_AssistantMenuSheet> {
                     children: [
                       ...visibleItems.map((item) {
                         return ListTile(
-                          leading:item.icon,
-                          title: Text(item.label,
-                              style: TextStyle(color: color.onSurface)),
+                          leading: item.icon,
+                          title: Text(
+                            item.label,
+                            style: TextStyle(color: color.onSurface),
+                          ),
                           onTap: () {
                             Navigator.pop(context);
                             item.onTap?.call();
                           },
                         );
                       }),
-                    ]
-                  )
+                    ],
+                  ),
                 ),
 
-                Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Divider(),
+                Padding(padding: const EdgeInsets.all(8.0), child: Divider()),
+                // 底部展示可选择复制的完整助手消息正文。
+                Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: SelectableText(widget.message.content),
+                    ),
+                  ],
                 ),
-                  // 底部展示可选择复制的完整助手消息正文。
-                  Column(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: SelectableText(
-                          widget.message.content
-                        ),
-                      ),
-                    ],
-                  )
               ],
             ),
           ),
-          );
-        } 
-      );
+        );
+      },
+    );
   }
 }
-
-
 
 /// 底部菜单项数据模型
 class SheetMenuItem {
@@ -186,9 +179,5 @@ class SheetMenuItem {
   final String label;
   final VoidCallback? onTap;
 
-  const SheetMenuItem({
-    required this.icon,
-    required this.label,
-    this.onTap,
-  });
+  const SheetMenuItem({required this.icon, required this.label, this.onTap});
 }

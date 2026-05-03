@@ -88,9 +88,7 @@ class _ImagePreviewPageState extends State<ImagePreviewPage> {
       );
       final uri = (result is Map) ? (result['uri']?.toString() ?? '') : '';
       if (!mounted) return;
-      _showClosableSnackBar(
-        uri.isEmpty ? '保存成功，已写入相册' : '保存成功：$uri',
-      );
+      _showClosableSnackBar(uri.isEmpty ? '保存成功，已写入相册' : '保存成功：$uri');
     } catch (error, stackTrace) {
       AppLogger.e('保存图片到相册失败', error, stackTrace);
       if (!mounted) return;
@@ -251,11 +249,8 @@ class _ImagePreviewPageState extends State<ImagePreviewPage> {
             );
           }
           final bytes = _imageBytes!;
-          final previewBackground = Color.lerp(
-            color.surface,
-            color.inverseSurface,
-            0.86,
-          )!;
+          final previewBackground =
+              Color.lerp(color.surface, color.inverseSurface, 0.86)!;
           return Column(
             children: [
               Expanded(
@@ -290,7 +285,10 @@ class _ImagePreviewPageState extends State<ImagePreviewPage> {
                   border: Border(top: BorderSide(color: color.outlineVariant)),
                 ),
                 child: DefaultTextStyle(
-                  style: TextStyle(color: color.onSurfaceVariant, fontSize: 12.5),
+                  style: TextStyle(
+                    color: color.onSurfaceVariant,
+                    fontSize: 12.5,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [

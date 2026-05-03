@@ -7,7 +7,7 @@ enum ImageGenerationTaskMode {
   generate,
 
   /// 基于已有图片编辑。
-  edit;
+  edit,
 }
 
 /// 生图任务状态。
@@ -25,7 +25,7 @@ enum ImageGenerationTaskStatus {
   failed,
 
   /// 已取消。
-  canceled;
+  canceled,
 }
 
 /// 工作台生图队列任务。
@@ -86,9 +86,10 @@ class ImageGenerationTask {
     int requestCount = 1,
   }) {
     final now = DateTime.now();
-    final normalizedCount = (requestCount <= 1)
-        ? 1
-        : (requestCount == 2 ? 2 : (requestCount == 4 ? 4 : 1));
+    final normalizedCount =
+        (requestCount <= 1)
+            ? 1
+            : (requestCount == 2 ? 2 : (requestCount == 4 ? 4 : 1));
     return ImageGenerationTask(
       id: const Uuid().v4(),
       createdAt: now,
@@ -104,7 +105,9 @@ class ImageGenerationTask {
       requestCount: mode == ImageGenerationTaskMode.edit ? 1 : normalizedCount,
       prompt: prompt,
       sourceImagePath:
-          sourceImagePath?.trim().isEmpty == true ? null : sourceImagePath?.trim(),
+          sourceImagePath?.trim().isEmpty == true
+              ? null
+              : sourceImagePath?.trim(),
       resultImageUris: const <String>[],
       revisedPrompt: null,
       errorMessage: null,

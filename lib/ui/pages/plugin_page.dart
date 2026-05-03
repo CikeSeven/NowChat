@@ -104,7 +104,8 @@ class _PluginPageState extends State<PluginPage> {
                       ...provider.githubMirrorPresets.map((preset) {
                         final isSelected = selectedMirrorId == preset.id;
                         final latency = latencies[preset.id];
-                        final isCustom = preset.id == PluginService.githubMirrorCustom;
+                        final isCustom =
+                            preset.id == PluginService.githubMirrorCustom;
                         final subtitleText =
                             isCustom && customMirrorBaseUrl.trim().isNotEmpty
                                 ? '${preset.description} · ${_mirrorLatencyText(latency)}\n当前：$customMirrorBaseUrl'
@@ -136,7 +137,8 @@ class _PluginPageState extends State<PluginPage> {
                           },
                         );
                       }),
-                      if (selectedMirrorId == PluginService.githubMirrorCustom) ...[
+                      if (selectedMirrorId ==
+                          PluginService.githubMirrorCustom) ...[
                         const SizedBox(height: 6),
                         TextField(
                           controller: customController,
@@ -196,8 +198,8 @@ class _PluginPageState extends State<PluginPage> {
                               (selectedMirrorId ==
                                       PluginService.githubMirrorCustom &&
                                   PluginService.normalizeCustomMirrorBaseUrl(
-                                        customController.text,
-                                      ).isEmpty)
+                                    customController.text,
+                                  ).isEmpty)
                           ? null
                           : () async {
                             Navigator.of(dialogContext).pop();
@@ -340,10 +342,7 @@ class _PluginPageState extends State<PluginPage> {
                         const SizedBox(width: 8),
                         Text(
                           statusText,
-                          style: TextStyle(
-                            color: statusColor,
-                            fontSize: 12,
-                          ),
+                          style: TextStyle(color: statusColor, fontSize: 12),
                         ),
                       ],
                     ),
@@ -365,7 +364,10 @@ class _PluginPageState extends State<PluginPage> {
                                 await provider.installPlugin(plugin.id);
                                 return;
                               }
-                              await provider.togglePluginEnabled(plugin.id, !enabled);
+                              await provider.togglePluginEnabled(
+                                plugin.id,
+                                !enabled,
+                              );
                             },
                     icon: Icon(
                       !installed
@@ -380,10 +382,7 @@ class _PluginPageState extends State<PluginPage> {
                     onPressed: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder:
-                              (_) => PluginReadmePage(
-                                pluginId: plugin.id,
-                              ),
+                          builder: (_) => PluginReadmePage(pluginId: plugin.id),
                         ),
                       );
                     },
@@ -412,10 +411,7 @@ class _PluginPageState extends State<PluginPage> {
       return Center(
         child: Text(
           emptyText,
-          style: TextStyle(
-            color: color.onSurfaceVariant,
-            fontSize: 13,
-          ),
+          style: TextStyle(color: color.onSurfaceVariant, fontSize: 13),
         ),
       );
     }
@@ -468,12 +464,7 @@ class _PluginPageState extends State<PluginPage> {
               icon: const Icon(Icons.refresh_rounded),
             ),
           ],
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: '已安装插件'),
-              Tab(text: '插件市场'),
-            ],
-          ),
+          bottom: const TabBar(tabs: [Tab(text: '已安装插件'), Tab(text: '插件市场')]),
         ),
         body:
             !provider.isInitialized
@@ -510,7 +501,10 @@ class _PluginPageState extends State<PluginPage> {
                                           context,
                                           provider,
                                         ),
-                                icon: const Icon(Icons.public_rounded, size: 16),
+                                icon: const Icon(
+                                  Icons.public_rounded,
+                                  size: 16,
+                                ),
                                 label: const Text('切换镜像'),
                               ),
                             ),

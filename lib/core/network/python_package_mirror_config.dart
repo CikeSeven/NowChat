@@ -54,9 +54,7 @@ class PythonPackageMirrorConfig {
   /// 自动回退顺序：默认只回退到官方源。
   ///
   /// 说明：自定义镜像是否启用由业务侧显式传入 mirrorId 控制。
-  static const List<String> automaticFallbackMirrorIds = <String>[
-    directId,
-  ];
+  static const List<String> automaticFallbackMirrorIds = <String>[directId];
 
   /// PyPI simple 回退链路（按顺序尝试）。
   ///

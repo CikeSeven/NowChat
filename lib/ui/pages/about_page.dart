@@ -49,8 +49,7 @@ class _AboutPageState extends State<AboutPage> {
             version.isEmpty
                 ? _fallbackVersion
                 : (buildNumber.isEmpty ? version : '$version+$buildNumber');
-        _packageName =
-            packageName.isEmpty ? _fallbackPackageName : packageName;
+        _packageName = packageName.isEmpty ? _fallbackPackageName : packageName;
       });
     } catch (_) {
       // 保持兜底信息，避免界面展示为空。
@@ -89,9 +88,9 @@ class _AboutPageState extends State<AboutPage> {
       setState(() {
         _updateStatusText = '检查失败';
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('检查更新失败：$e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('检查更新失败：$e')));
     } finally {
       if (!mounted) return;
       setState(() {
@@ -160,9 +159,9 @@ class _AboutPageState extends State<AboutPage> {
 
     final downloadUrl = result.resolvedDownloadUrl.trim();
     if (downloadUrl.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('未找到可安装 APK 资源')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('未找到可安装 APK 资源')));
       return;
     }
 
@@ -172,11 +171,7 @@ class _AboutPageState extends State<AboutPage> {
     );
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          success ? '已打开下载链接，请完成安装' : '无法打开下载链接',
-        ),
-      ),
+      SnackBar(content: Text(success ? '已打开下载链接，请完成安装' : '无法打开下载链接')),
     );
   }
 
@@ -281,9 +276,9 @@ class _AboutPageState extends State<AboutPage> {
                     mode: LaunchMode.externalApplication,
                   );
                   if (!success && mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('无法打开项目地址')),
-                    );
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(const SnackBar(content: Text('无法打开项目地址')));
                   }
                 },
               ),

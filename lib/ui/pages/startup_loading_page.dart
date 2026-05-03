@@ -9,10 +9,7 @@ import 'package:now_chat/util/app_logger.dart';
 import 'package:provider/provider.dart';
 
 /// 启动加载阶段。
-enum _StartupStage {
-  loadingPlugins,
-  loadingAppData,
-}
+enum _StartupStage { loadingPlugins, loadingAppData }
 
 /// 应用启动加载页：先加载本地插件，再加载应用数据，最后进入主页。
 class StartupLoadingPage extends StatefulWidget {
@@ -64,9 +61,7 @@ class _StartupLoadingPageState extends State<StartupLoadingPage> {
       AppLogger.i('启动流程[2/3] 触发 app_data_before_load Hook');
       await PluginHookBus.emit(
         'app_data_before_load',
-        payload: <String, dynamic>{
-          'source': 'startup',
-        },
+        payload: <String, dynamic>{'source': 'startup'},
       );
 
       if (!mounted) return;
@@ -108,9 +103,7 @@ class _StartupLoadingPageState extends State<StartupLoadingPage> {
   @override
   Widget build(BuildContext context) {
     final loadingText =
-        _stage == _StartupStage.loadingPlugins
-            ? '正在加载插件...'
-            : '正在加载应用数据...';
+        _stage == _StartupStage.loadingPlugins ? '正在加载插件...' : '正在加载应用数据...';
 
     return Scaffold(
       body: SafeArea(

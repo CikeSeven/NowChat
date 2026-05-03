@@ -107,7 +107,8 @@ class Storage {
   }
 
   /// 读取“工作台生图”独立历史列表。
-  static Future<List<ImageGenerationRecord>> loadImageGenerationHistory() async {
+  static Future<List<ImageGenerationRecord>>
+  loadImageGenerationHistory() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_kImageGenerationHistory);
     if (raw == null || raw.trim().isEmpty) return <ImageGenerationRecord>[];
@@ -117,9 +118,8 @@ class Storage {
       return decoded
           .whereType<Map>()
           .map(
-            (item) => ImageGenerationRecord.fromJson(
-              Map<String, dynamic>.from(item),
-            ),
+            (item) =>
+                ImageGenerationRecord.fromJson(Map<String, dynamic>.from(item)),
           )
           .toList();
     } catch (error) {
@@ -143,7 +143,8 @@ class Storage {
   }
 
   /// 读取生图队列任务列表（含排队/进行中/已完成状态）。
-  static Future<List<ImageGenerationTask>> loadImageGenerationQueueTasks() async {
+  static Future<List<ImageGenerationTask>>
+  loadImageGenerationQueueTasks() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_kImageGenerationQueueTasks);
     if (raw == null || raw.trim().isEmpty) return <ImageGenerationTask>[];
@@ -153,9 +154,8 @@ class Storage {
       return decoded
           .whereType<Map>()
           .map(
-            (item) => ImageGenerationTask.fromJson(
-              Map<String, dynamic>.from(item),
-            ),
+            (item) =>
+                ImageGenerationTask.fromJson(Map<String, dynamic>.from(item)),
           )
           .toList();
     } catch (error) {

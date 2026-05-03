@@ -1,4 +1,4 @@
-﻿part of '../chat_provider.dart';
+part of '../chat_provider.dart';
 
 /// ChatProviderMessageStore 扩展方法集合。
 extension ChatProviderMessageStore on ChatProvider {
@@ -10,10 +10,13 @@ extension ChatProviderMessageStore on ChatProvider {
     // 仅允许“已绑定的当前会话”写入内存列表。
     // 当 `_currentMessagesChatId == null`（例如新建会话尚未绑定）时，拒绝所有写入，
     // 防止后台会话的流式消息误入当前页面。
-    if (_currentMessagesChatId == null || _currentMessagesChatId != message.chatId) {
+    if (_currentMessagesChatId == null ||
+        _currentMessagesChatId != message.chatId) {
       return false;
     }
-    final index = _currentMessages.indexWhere((m) => m.isarId == message.isarId);
+    final index = _currentMessages.indexWhere(
+      (m) => m.isarId == message.isarId,
+    );
     if (index >= 0) {
       _currentMessages[index] = message;
     } else {
@@ -50,13 +53,16 @@ extension ChatProviderMessageStore on ChatProvider {
   /// 按固定间隔将流式脏数据批量刷入 Isar。
   void _scheduleStreamingFlush() {
     if (_streamingFlushTimer != null) return;
-    _streamingFlushTimer = Timer(ChatProvider._streamingFlushInterval, () async {
-      _streamingFlushTimer = null;
-      await _flushDirtyStreamingMessages();
-      if (_dirtyStreamingMessageIds.isNotEmpty) {
-        _scheduleStreamingFlush();
-      }
-    });
+    _streamingFlushTimer = Timer(
+      ChatProvider._streamingFlushInterval,
+      () async {
+        _streamingFlushTimer = null;
+        await _flushDirtyStreamingMessages();
+        if (_dirtyStreamingMessageIds.isNotEmpty) {
+          _scheduleStreamingFlush();
+        }
+      },
+    );
   }
 
   /// 批量持久化处于流式更新中的消息。
@@ -156,7 +162,8 @@ extension ChatProviderMessageStore on ChatProvider {
     _currentMessages.removeWhere((m) => m.isarId == isarId);
     _removeMessageStateById(isarId);
     _removeToolLogsForMessage(isarId);
-    if (_currentMessagesChatId != null && removedChatId == _currentMessagesChatId) {
+    if (_currentMessagesChatId != null &&
+        removedChatId == _currentMessagesChatId) {
       _loadedMessageCount = _currentMessages.length;
     }
     if (removedChatId != null) {
@@ -219,7 +226,9 @@ extension ChatProviderMessageStore on ChatProvider {
     final visibleMessages =
         _currentMessagesChatId == null
             ? const <Message>[]
-            : messages.where((m) => m.chatId == _currentMessagesChatId).toList();
+            : messages
+                .where((m) => m.chatId == _currentMessagesChatId)
+                .toList();
     if (visibleMessages.isEmpty) {
       return;
     }

@@ -29,7 +29,8 @@ class AppDataTransferService {
   }) async {
     final providers = await Storage.loadProviders();
     final agents = await Storage.loadAgentProfiles();
-    final chats = await isar.chatSessions.where().sortByLastUpdatedDesc().findAll();
+    final chats =
+        await isar.chatSessions.where().sortByLastUpdatedDesc().findAll();
     final messages = await isar.messages.where().sortByTimestamp().findAll();
     final imageHistory = await Storage.loadImageGenerationHistory();
     final imageQueueTasks = await Storage.loadImageGenerationQueueTasks();
@@ -51,10 +52,10 @@ class AppDataTransferService {
         'agents': agents.map((item) => item.toJson()).toList(),
         'chatSessions': chats.map((item) => item.toJson()).toList(),
         'messages': messages.map((item) => item.toJson()).toList(),
-        'imageGenerationHistory': imageHistory.map((item) => item.toJson()).toList(),
-        'imageGenerationQueueTasks': imageQueueTasks
-            .map((item) => item.toJson())
-            .toList(),
+        'imageGenerationHistory':
+            imageHistory.map((item) => item.toJson()).toList(),
+        'imageGenerationQueueTasks':
+            imageQueueTasks.map((item) => item.toJson()).toList(),
         'imageGenerationSettings': imageSettings,
       },
     };
@@ -134,7 +135,9 @@ class AppDataTransferService {
     final importedChats = _parseChats(data['chatSessions']);
     final messages = _parseMessages(data['messages']);
     final imageHistory = _parseImageHistory(data['imageGenerationHistory']);
-    final imageQueueTasks = _parseImageQueueTasks(data['imageGenerationQueueTasks']);
+    final imageQueueTasks = _parseImageQueueTasks(
+      data['imageGenerationQueueTasks'],
+    );
     final imageSettings = _parseImageSettings(data['imageGenerationSettings']);
 
     // 先写非 Isar 数据，保证导入完成后 Provider 重载即可读到新配置。
@@ -201,7 +204,9 @@ class AppDataTransferService {
     }
     return raw
         .whereType<Map>()
-        .map((item) => AIProviderConfig.fromJson(Map<String, dynamic>.from(item)))
+        .map(
+          (item) => AIProviderConfig.fromJson(Map<String, dynamic>.from(item)),
+        )
         .toList();
   }
 
@@ -225,7 +230,9 @@ class AppDataTransferService {
       final json = Map<String, dynamic>.from(item);
       final sourceIdRaw = json['id'];
       final sourceId =
-          sourceIdRaw is num ? sourceIdRaw.toInt() : int.tryParse('$sourceIdRaw');
+          sourceIdRaw is num
+              ? sourceIdRaw.toInt()
+              : int.tryParse('$sourceIdRaw');
       return _ImportedChat(
         sourceId: sourceId,
         session: ChatSession.fromJson(json),
@@ -252,9 +259,8 @@ class AppDataTransferService {
     return raw
         .whereType<Map>()
         .map(
-          (item) => ImageGenerationRecord.fromJson(
-            Map<String, dynamic>.from(item),
-          ),
+          (item) =>
+              ImageGenerationRecord.fromJson(Map<String, dynamic>.from(item)),
         )
         .toList();
   }
@@ -262,16 +268,13 @@ class AppDataTransferService {
   List<ImageGenerationTask> _parseImageQueueTasks(dynamic raw) {
     if (raw == null) return <ImageGenerationTask>[];
     if (raw is! List) {
-      throw const FormatException(
-        '备份文件格式错误：imageGenerationQueueTasks 必须是数组',
-      );
+      throw const FormatException('备份文件格式错误：imageGenerationQueueTasks 必须是数组');
     }
     return raw
         .whereType<Map>()
         .map(
-          (item) => ImageGenerationTask.fromJson(
-            Map<String, dynamic>.from(item),
-          ),
+          (item) =>
+              ImageGenerationTask.fromJson(Map<String, dynamic>.from(item)),
         )
         .toList();
   }

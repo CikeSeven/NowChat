@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:now_chat/core/models/ai_provider_config.dart';
 
 /// CustomModelDialogResult 类型定义。
@@ -132,7 +132,10 @@ Future<CustomModelDialogResult?> showCustomModelDialog({
                         dense: true,
                         contentPadding: EdgeInsets.zero,
                         visualDensity: VisualDensity.compact,
-                        title: const Text('支持视觉', style: TextStyle(fontSize: 13)),
+                        title: const Text(
+                          '支持视觉',
+                          style: TextStyle(fontSize: 13),
+                        ),
                         value: supportsVision,
                         onChanged: (value) {
                           setDialogState(() {
@@ -147,7 +150,10 @@ Future<CustomModelDialogResult?> showCustomModelDialog({
                         dense: true,
                         contentPadding: EdgeInsets.zero,
                         visualDensity: VisualDensity.compact,
-                        title: const Text('支持工具', style: TextStyle(fontSize: 13)),
+                        title: const Text(
+                          '支持工具',
+                          style: TextStyle(fontSize: 13),
+                        ),
                         value: supportsTools,
                         onChanged: (value) {
                           setDialogState(() {
@@ -191,7 +197,8 @@ Future<CustomModelDialogResult?> showCustomModelDialog({
                   }
 
                   // 编辑模式下允许“保留原模型名”而不触发重复校验。
-                  final isEditingCurrent = lockModelName && initialModel == model;
+                  final isEditingCurrent =
+                      lockModelName && initialModel == model;
                   if (existingModels.contains(model) && !isEditingCurrent) {
                     setDialogState(() {
                       errorText = '模型已存在';

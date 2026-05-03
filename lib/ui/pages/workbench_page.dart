@@ -45,8 +45,8 @@ class WorkbenchPageState extends State<WorkbenchPage>
   @override
   Widget build(BuildContext context) {
     final imageState = _imagePageKey.currentState;
-    final imageSelectionMode = _tabController.index == 1 &&
-        (imageState?.isSelectionMode ?? false);
+    final imageSelectionMode =
+        _tabController.index == 1 && (imageState?.isSelectionMode ?? false);
     return Scaffold(
       appBar: AppBar(
         title: const Text('工作台'),
@@ -129,10 +129,7 @@ class WorkbenchPageState extends State<WorkbenchPage>
                 context: context,
                 tabBar: TabBar(
                   controller: _tabController,
-                  tabs: const [
-                    Tab(text: '工具'),
-                    Tab(text: '生图'),
-                  ],
+                  tabs: const [Tab(text: '工具'), Tab(text: '生图')],
                 ),
               ),
             ),
@@ -160,10 +157,7 @@ class WorkbenchPageState extends State<WorkbenchPage>
 /// 工作台页签头部：
 /// 仅负责二级 Tab 导航的显隐，避免把主标题栏一起卷走。
 class _WorkbenchTabBarHeaderDelegate extends SliverPersistentHeaderDelegate {
-  _WorkbenchTabBarHeaderDelegate({
-    required this.context,
-    required this.tabBar,
-  });
+  _WorkbenchTabBarHeaderDelegate({required this.context, required this.tabBar});
 
   final BuildContext context;
   final TabBar tabBar;
@@ -184,9 +178,7 @@ class _WorkbenchTabBarHeaderDelegate extends SliverPersistentHeaderDelegate {
     return Container(
       decoration: BoxDecoration(
         color: color.surface,
-        border: Border(
-          bottom: BorderSide(color: color.outlineVariant),
-        ),
+        border: Border(bottom: BorderSide(color: color.outlineVariant)),
       ),
       child: tabBar,
     );

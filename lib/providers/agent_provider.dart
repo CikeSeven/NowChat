@@ -187,7 +187,8 @@ class AgentProvider with ChangeNotifier {
     var interrupted = false;
     String? error;
     try {
-      if (request.isStreaming && request.provider.requestMode.supportsStreaming) {
+      if (request.isStreaming &&
+          request.provider.requestMode.supportsStreaming) {
         await ApiService.sendChatRequestStreaming(
           provider: request.provider,
           session: tempSession,

@@ -40,17 +40,7 @@ Future<Map<String, dynamic>> _generateImageInternal({
 
     // 打印生图请求关键参数，便于排查“尺寸/数量未生效”等问题。
     AppLogger.i(
-      'ImageAPI.generate params: ${jsonEncode(<String, dynamic>{
-        'uri': uri.toString(),
-        'requestMode': requestMode.name,
-        'providerType': provider.type.name,
-        'model': model.trim(),
-        'prompt': normalizedPrompt,
-        'n': n <= 0 ? 1 : n,
-        'size': (size ?? '').trim(),
-        'quality': (quality ?? '').trim(),
-        'hasAuthorization': (provider.apiKey ?? '').trim().isNotEmpty,
-      })}',
+      'ImageAPI.generate params: ${jsonEncode(<String, dynamic>{'uri': uri.toString(), 'requestMode': requestMode.name, 'providerType': provider.type.name, 'model': model.trim(), 'prompt': normalizedPrompt, 'n': n <= 0 ? 1 : n, 'size': (size ?? '').trim(), 'quality': (quality ?? '').trim(), 'hasAuthorization': (provider.apiKey ?? '').trim().isNotEmpty})}',
     );
 
     AppLogger.i('ImageAPI.generate -> $uri, model=${model.trim()}');
@@ -129,29 +119,22 @@ Future<Map<String, dynamic>> _editImageInternal({
       ..._buildImageRequestHeaders(provider),
       'Accept': 'application/json',
     };
-    final request = http.MultipartRequest('POST', uri)
-      ..headers.addAll(headers)
-      ..fields['model'] = model.trim()
-      ..fields['prompt'] = normalizedPrompt
-      ..fields['n'] = (n <= 0 ? 1 : n).toString()
-      ..files.add(await http.MultipartFile.fromPath('image', normalizedPath));
+    final request =
+        http.MultipartRequest('POST', uri)
+          ..headers.addAll(headers)
+          ..fields['model'] = model.trim()
+          ..fields['prompt'] = normalizedPrompt
+          ..fields['n'] = (n <= 0 ? 1 : n).toString()
+          ..files.add(
+            await http.MultipartFile.fromPath('image', normalizedPath),
+          );
     if ((size ?? '').trim().isNotEmpty) {
       request.fields['size'] = size!.trim();
     }
 
     // 打印图片编辑请求参数（multipart 场景），便于核对 size/path/n 等字段。
     AppLogger.i(
-      'ImageAPI.edit params: ${jsonEncode(<String, dynamic>{
-        'uri': uri.toString(),
-        'requestMode': requestMode.name,
-        'providerType': provider.type.name,
-        'model': model.trim(),
-        'prompt': normalizedPrompt,
-        'n': n <= 0 ? 1 : n,
-        'size': (size ?? '').trim(),
-        'imagePath': normalizedPath,
-        'hasAuthorization': (provider.apiKey ?? '').trim().isNotEmpty,
-      })}',
+      'ImageAPI.edit params: ${jsonEncode(<String, dynamic>{'uri': uri.toString(), 'requestMode': requestMode.name, 'providerType': provider.type.name, 'model': model.trim(), 'prompt': normalizedPrompt, 'n': n <= 0 ? 1 : n, 'size': (size ?? '').trim(), 'imagePath': normalizedPath, 'hasAuthorization': (provider.apiKey ?? '').trim().isNotEmpty})}',
     );
 
     AppLogger.i('ImageAPI.edit -> $uri, model=${model.trim()}');
@@ -273,7 +256,7 @@ Map<String, String> _buildImageRequestHeaders(AIProviderConfig provider) {
 /// 从图片响应中抽取可展示图片地址（URL 或落地后的本地路径）。
 Future<List<String>> _extractImageUrisFromResponse(
   Map<String, dynamic> payload,
-  Uri? requestUri
+  Uri? requestUri,
 ) async {
   final data = payload['data'];
   if (data is! List || data.isEmpty) return const <String>[];
@@ -305,9 +288,8 @@ String _normalizeRemoteImageUrl(String rawUrl, {Uri? requestUri}) {
     return value;
   }
 
-  final scheme = (requestUri?.scheme.isNotEmpty ?? false)
-      ? requestUri!.scheme
-      : 'https';
+  final scheme =
+      (requestUri?.scheme.isNotEmpty ?? false) ? requestUri!.scheme : 'https';
 
   // `//host/path` -> `https://host/path`
   if (value.startsWith('//')) {

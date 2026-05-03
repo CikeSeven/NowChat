@@ -218,20 +218,23 @@ class PythonPluginService {
       await cacheDir.create(recursive: true);
     }
 
-    final preferredMirrorId = mirrorId.trim().isEmpty ? PythonPackageMirrorConfig.directId : mirrorId.trim();
-    final mirrorIds = <String>[
-      preferredMirrorId,
-      ...PythonPackageMirrorConfig.automaticFallbackMirrorIds,
-    ].toSet().toList();
-    final pypiFallbackSources = PythonPackageMirrorConfig.pypiFallbackSimpleBaseUrls;
+    final preferredMirrorId =
+        mirrorId.trim().isEmpty
+            ? PythonPackageMirrorConfig.directId
+            : mirrorId.trim();
+    final mirrorIds =
+        <String>[
+          preferredMirrorId,
+          ...PythonPackageMirrorConfig.automaticFallbackMirrorIds,
+        ].toSet().toList();
+    final pypiFallbackSources =
+        PythonPackageMirrorConfig.pypiFallbackSimpleBaseUrls;
     final lockPackages = <Map<String, dynamic>>[];
     final pendingQueue =
         normalizedRequirements
             .map(
-              (item) => _PendingRequirement(
-                requirement: item,
-                source: 'manifest',
-              ),
+              (item) =>
+                  _PendingRequirement(requirement: item, source: 'manifest'),
             )
             .toList();
     final queuedPackageNames = <String>{
@@ -312,10 +315,11 @@ class PythonPluginService {
       }
 
       installedByPackage[spec.packageName] = selectedCandidate;
-      final discoveredRequirements = await _extractTransitiveRequirementsFromWheel(
-        wheelFile: selectedWheelFile,
-        sourcePackage: selectedCandidate.packageName,
-      );
+      final discoveredRequirements =
+          await _extractTransitiveRequirementsFromWheel(
+            wheelFile: selectedWheelFile,
+            sourcePackage: selectedCandidate.packageName,
+          );
       final discoveredForLock = <String>[];
       for (final dependency in discoveredRequirements) {
         final dependencySpec = _RequirementSpec.parse(dependency.requirement);
@@ -666,10 +670,12 @@ class PythonPluginService {
     }
 
     // 第二阶段：Chaquopy 不可用时，回退到 PyPI simple（国内镜像优先）。
-    for (final simpleBaseUrl in PythonPackageMirrorConfig.pypiFallbackSimpleBaseUrls) {
-      final fallbackMirrorId = simpleBaseUrl.contains('tuna.tsinghua.edu.cn')
-          ? 'pypi_tsinghua'
-          : 'pypi_official';
+    for (final simpleBaseUrl
+        in PythonPackageMirrorConfig.pypiFallbackSimpleBaseUrls) {
+      final fallbackMirrorId =
+          simpleBaseUrl.contains('tuna.tsinghua.edu.cn')
+              ? 'pypi_tsinghua'
+              : 'pypi_official';
       for (final packageNameCandidate in packageNameCandidates) {
         final indexUrls = PythonPackageMirrorConfig.buildPypiSimpleIndexUrls(
           packageName: packageNameCandidate,
@@ -710,7 +716,8 @@ class PythonPluginService {
   }
 
   /// 从 simple index 页面提取 wheel 候选。
-  List<_ResolvedRequirementCandidate> _extractRequirementCandidatesFromSimpleIndex({
+  List<_ResolvedRequirementCandidate>
+  _extractRequirementCandidatesFromSimpleIndex({
     required _RequirementSpec spec,
     required String indexUrl,
     required String simpleHtml,
@@ -1085,15 +1092,13 @@ class PythonPluginService {
     final splitIndex = raw.indexOf(';');
     final requirementPart =
         splitIndex >= 0 ? raw.substring(0, splitIndex).trim() : raw;
-    final markerPart = splitIndex >= 0 ? raw.substring(splitIndex + 1).trim() : '';
+    final markerPart =
+        splitIndex >= 0 ? raw.substring(splitIndex + 1).trim() : '';
     if (markerPart.isNotEmpty && !_evaluateEnvironmentMarker(markerPart)) {
       return null;
     }
 
-    final withoutExtras = requirementPart.replaceAll(
-      RegExp(r'\[[^\]]+\]'),
-      '',
-    );
+    final withoutExtras = requirementPart.replaceAll(RegExp(r'\[[^\]]+\]'), '');
     final match = RegExp(
       r'^([A-Za-z0-9_.-]+)\s*(?:\(([^)]+)\)|([<>=!~].*))?$',
     ).firstMatch(withoutExtras.trim());
@@ -1247,8 +1252,14 @@ class PythonPluginService {
     final rightTokens = _tokenizeVersion(b);
     final maxLen = max(leftTokens.length, rightTokens.length);
     for (var i = 0; i < maxLen; i += 1) {
-      final left = i < leftTokens.length ? leftTokens[i] : const _VersionToken.numeric(0);
-      final right = i < rightTokens.length ? rightTokens[i] : const _VersionToken.numeric(0);
+      final left =
+          i < leftTokens.length
+              ? leftTokens[i]
+              : const _VersionToken.numeric(0);
+      final right =
+          i < rightTokens.length
+              ? rightTokens[i]
+              : const _VersionToken.numeric(0);
       if (left.isNumeric && right.isNumeric) {
         final cmp = left.numericValue.compareTo(right.numericValue);
         if (cmp != 0) return cmp;
@@ -1475,13 +1486,9 @@ class _VersionToken {
   final int? _number;
   final String? _text;
 
-  const _VersionToken.numeric(int value)
-    : _number = value,
-      _text = null;
+  const _VersionToken.numeric(int value) : _number = value, _text = null;
 
-  const _VersionToken.text(String value)
-    : _number = null,
-      _text = value;
+  const _VersionToken.text(String value) : _number = null, _text = value;
 
   bool get isNumeric => _number != null;
   int get numericValue => _number ?? 0;

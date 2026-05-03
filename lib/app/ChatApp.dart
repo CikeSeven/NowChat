@@ -1,4 +1,4 @@
-﻿// ignore_for_file: file_names
+// ignore_for_file: file_names
 
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -35,10 +35,7 @@ class ChatApp extends StatelessWidget {
             GlobalCupertinoLocalizations.delegate,
             GlobalWidgetsLocalizations.delegate,
           ],
-          supportedLocales: const [
-            Locale('zh', 'CN'),
-            Locale('en', 'US'),
-          ],
+          supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
           onGenerateRoute: AppRoutes.generateRoute,
           initialRoute: AppRoutes.startup,
           onGenerateInitialRoutes: _buildInitialRoutes,

@@ -16,10 +16,7 @@ class AgentPage extends StatelessWidget {
           IconButton(
             tooltip: '新建工具',
             onPressed: () {
-              Navigator.pushNamed(
-                context,
-                AppRoutes.agentForm,
-              );
+              Navigator.pushNamed(context, AppRoutes.agentForm);
             },
             icon: const Icon(Icons.add),
           ),
@@ -60,9 +57,10 @@ class AgentPageBody extends StatelessWidget {
       itemCount: agents.length,
       itemBuilder: (context, index) {
         final agent = agents[index];
-        final summary = agent.summary.trim().isEmpty
-            ? agent.prompt.trim()
-            : agent.summary.trim();
+        final summary =
+            agent.summary.trim().isEmpty
+                ? agent.prompt.trim()
+                : agent.summary.trim();
         return Card(
           margin: EdgeInsets.zero,
           color: color.surfaceContainerLow,

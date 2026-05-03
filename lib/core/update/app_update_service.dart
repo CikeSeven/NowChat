@@ -129,7 +129,9 @@ class AppUpdateService {
   AppReleaseAsset? pickPreferredApkAsset(List<AppReleaseAsset> assets) {
     if (assets.isEmpty) return null;
     final apkAssets =
-        assets.where((item) => item.name.toLowerCase().endsWith('.apk')).toList();
+        assets
+            .where((item) => item.name.toLowerCase().endsWith('.apk'))
+            .toList();
     if (apkAssets.isEmpty) return null;
     apkAssets.sort((a, b) {
       final pa = _apkPriority(a.name);
@@ -170,7 +172,8 @@ class AppUpdateService {
         if (item is! Map) continue;
         final map = Map<String, dynamic>.from(item);
         final name = (map['name'] ?? '').toString().trim();
-        final downloadUrl = (map['browser_download_url'] ?? '').toString().trim();
+        final downloadUrl =
+            (map['browser_download_url'] ?? '').toString().trim();
         if (name.isEmpty || downloadUrl.isEmpty) continue;
         final sizeRaw = map['size'];
         final size =
@@ -228,7 +231,12 @@ class AppUpdateService {
     final minor = semverParts.length > 1 ? _parseInt(semverParts[1]) : 0;
     final patch = semverParts.length > 2 ? _parseInt(semverParts[2]) : 0;
     if (major == null || minor == null || patch == null) return null;
-    return _ParsedVersion(major: major, minor: minor, patch: patch, build: build);
+    return _ParsedVersion(
+      major: major,
+      minor: minor,
+      patch: patch,
+      build: build,
+    );
   }
 
   /// 从字符串中提取首个整数。

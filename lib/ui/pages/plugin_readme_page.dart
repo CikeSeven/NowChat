@@ -10,10 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 class PluginReadmePage extends StatefulWidget {
   final String pluginId;
 
-  const PluginReadmePage({
-    super.key,
-    required this.pluginId,
-  });
+  const PluginReadmePage({super.key, required this.pluginId});
 
   @override
   State<PluginReadmePage> createState() => _PluginReadmePageState();
@@ -114,9 +111,7 @@ class _PluginReadmePageState extends State<PluginReadmePage> {
     final repoUrl = plugin?.repoUrl;
     final color = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(
-        title: Text('$pluginName README'),
-      ),
+      appBar: AppBar(title: Text('$pluginName README')),
       body:
           _isLoading
               ? const Center(child: CircularProgressIndicator())
@@ -129,10 +124,7 @@ class _PluginReadmePageState extends State<PluginReadmePage> {
                     children: [
                       Text(
                         _error!,
-                        style: TextStyle(
-                          color: color.error,
-                          fontSize: 13,
-                        ),
+                        style: TextStyle(color: color.error, fontSize: 13),
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 12),

@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../app/router.dart';
@@ -90,7 +90,9 @@ class SettingsPage extends StatelessWidget {
               return InkWell(
                 onTapDown: (details) => tapPosition = details.globalPosition,
                 onTap: () => _showThemeMenu(context, tapPosition),
-                splashColor: Theme.of(context).colorScheme.primary.withAlpha(25),
+                splashColor: Theme.of(
+                  context,
+                ).colorScheme.primary.withAlpha(25),
                 highlightColor: Colors.transparent,
                 child: ListTile(
                   leading: const Icon(Icons.color_lens_outlined),
@@ -113,9 +115,7 @@ class SettingsPage extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.tune_rounded),
             title: const Text('默认对话参数'),
-            subtitle: Text(
-              '设置默认会话参数信息',
-            ),
+            subtitle: Text('设置默认会话参数信息'),
             trailing: const Icon(Icons.chevron_right_rounded),
             onTap: () {
               Navigator.pushNamed(context, AppRoutes.defaultChatParams);

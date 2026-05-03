@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:now_chat/core/models/ai_provider_config.dart';
@@ -562,5 +562,4 @@ class _ProviderFormPageState extends State<ProviderFormPage> {
       ),
     );
   }
-
 }

@@ -8,8 +8,10 @@ import '../../core/models/message.dart';
 /// 聊天会话列表项组件（支持多选高亮显示）
 class ChatListItem extends StatelessWidget {
   final ChatSession chat;
+
   /// 是否被选中（多选模式）。
   final bool isSelected;
+
   /// 是否处于多选模式。
   final bool isSelecting;
   final VoidCallback? onTap;
@@ -47,9 +49,10 @@ class ChatListItem extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeOut,
-        color: isSelected
-            ? color.secondaryContainer.withAlpha(130)
-            : Colors.transparent,
+        color:
+            isSelected
+                ? color.secondaryContainer.withAlpha(130)
+                : Colors.transparent,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [
@@ -104,7 +107,7 @@ class ChatListItem extends StatelessWidget {
                     builder: (context, snapshot) {
                       final message = snapshot.data;
                       return Text(
-                         message?.content ?? "暂无消息",
+                        message?.content ?? "暂无消息",
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -113,8 +116,7 @@ class ChatListItem extends StatelessWidget {
                         ),
                       );
                     },
-                  )
-                  
+                  ),
                 ],
               ),
             ),
@@ -124,10 +126,7 @@ class ChatListItem extends StatelessWidget {
             // 时间
             Text(
               _formatTime(chat.lastUpdated),
-              style: TextStyle(
-                fontSize: 12,
-                color: color.outline,
-              ),
+              style: TextStyle(fontSize: 12, color: color.outline),
             ),
           ],
         ),

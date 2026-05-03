@@ -95,8 +95,9 @@ Future<void> _sendOpenAIChatStreaming({
     final allowVision = _supportsVisionForSessionModel(provider, session);
     final systemPrompt = _resolvedSystemPrompt(session);
     final shouldUseTools = _isToolCallingEnabledForSession(provider, session);
-    final requiresReasoningContent =
-        _requiresReasoningContentForOpenAI(provider);
+    final requiresReasoningContent = _requiresReasoningContentForOpenAI(
+      provider,
+    );
     var remainingToolCalls =
         session.maxToolCalls <= 0 ? 0 : session.maxToolCalls;
 
@@ -231,8 +232,7 @@ Future<void> _sendOpenAIChatStreaming({
       conversation.add(<String, dynamic>{
         'role': 'assistant',
         if (assistantContent.isNotEmpty) 'content': assistantContent,
-        if (requiresReasoningContent)
-          'reasoning_content': assistantReasoning,
+        if (requiresReasoningContent) 'reasoning_content': assistantReasoning,
         'tool_calls': toolCalls
             .map((call) => _toOpenAIToolCallPayload(call))
             .toList(growable: false),

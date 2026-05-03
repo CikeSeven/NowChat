@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:now_chat/ui/pages/workbench_page.dart';
 import 'package:now_chat/ui/pages/api_page.dart';
 import 'package:now_chat/ui/pages/chat_list_page.dart';
@@ -53,10 +53,7 @@ class _HomePageState extends State<HomePage> {
           // IndexedStack 会同时保活多个页面。
           // 这里仅允许当前页面参与 Hero，避免多个页面中的默认 FAB heroTag 冲突。
           children: List<Widget>.generate(_pages.length, (i) {
-            return HeroMode(
-              enabled: i == _index,
-              child: _pages[i],
-            );
+            return HeroMode(enabled: i == _index, child: _pages[i]);
           }),
         ),
         bottomNavigationBar: BottomNavigationBar(

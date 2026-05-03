@@ -32,7 +32,8 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
       'default_image_generation_provider_id';
   static const _defaultImageGenerationModelKey =
       'default_image_generation_model';
-  static const _defaultImageEditProviderIdKey = 'default_image_edit_provider_id';
+  static const _defaultImageEditProviderIdKey =
+      'default_image_edit_provider_id';
   static const _defaultImageEditModelKey = 'default_image_edit_model';
   static const _defaultImageGenerateSizeKey = 'default_image_generate_size';
   static const _defaultImageEditSizeKey = 'default_image_edit_size';
@@ -76,6 +77,7 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
   String? get defaultImageEditProviderId => _defaultImageEditProviderId;
   String? get defaultImageEditModel => _defaultImageEditModel;
   String get defaultImageGenerateSize => _defaultImageGenerateSize;
+
   /// 兼容旧调用：图片编辑尺寸与生图尺寸统一。
   String get defaultImageEditSize => _defaultImageEditSize;
   int get defaultImageGenerateCount => _defaultImageGenerateCount;
@@ -112,7 +114,8 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
     _defaultTemperature =
         prefs.getDouble(_defaultTemperatureKey) ?? defaultTemperatureValue;
     _defaultTopP = prefs.getDouble(_defaultTopPKey) ?? defaultTopPValue;
-    _defaultMaxTokens = prefs.getInt(_defaultMaxTokensKey) ?? defaultMaxTokensValue;
+    _defaultMaxTokens =
+        prefs.getInt(_defaultMaxTokensKey) ?? defaultMaxTokensValue;
     _defaultMaxConversationTurns =
         prefs.getInt(_defaultMaxConversationTurnsKey) ??
         defaultMaxConversationTurnsValue;
@@ -126,33 +129,30 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
     _exposeImageToolsToChat =
         prefs.getBool(_exposeImageToolsToChatKey) ??
         defaultExposeImageToolsToChatValue;
-    final imageGenProvider = prefs
-        .getString(_defaultImageGenerationProviderIdKey)
-        ?.trim();
-    final imageGenModel = prefs.getString(_defaultImageGenerationModelKey)?.trim();
+    final imageGenProvider =
+        prefs.getString(_defaultImageGenerationProviderIdKey)?.trim();
+    final imageGenModel =
+        prefs.getString(_defaultImageGenerationModelKey)?.trim();
     _defaultImageGenerationProviderId =
         (imageGenProvider == null || imageGenProvider.isEmpty)
             ? null
             : imageGenProvider;
     _defaultImageGenerationModel =
         (imageGenModel == null || imageGenModel.isEmpty) ? null : imageGenModel;
-    final imageEditProvider = prefs
-        .getString(_defaultImageEditProviderIdKey)
-        ?.trim();
+    final imageEditProvider =
+        prefs.getString(_defaultImageEditProviderIdKey)?.trim();
     final imageEditModel = prefs.getString(_defaultImageEditModelKey)?.trim();
     _defaultImageEditProviderId =
         (imageEditProvider == null || imageEditProvider.isEmpty)
             ? null
             : imageEditProvider;
     _defaultImageEditModel =
-        (imageEditModel == null || imageEditModel.isEmpty) ? null : imageEditModel;
+        (imageEditModel == null || imageEditModel.isEmpty)
+            ? null
+            : imageEditModel;
     _defaultImageGenerateSize =
-        _normalizeImageSize(
-          prefs.getString(_defaultImageGenerateSizeKey),
-        ) ??
-        _normalizeImageSize(
-          prefs.getString(_defaultImageEditSizeKey),
-        ) ??
+        _normalizeImageSize(prefs.getString(_defaultImageGenerateSizeKey)) ??
+        _normalizeImageSize(prefs.getString(_defaultImageEditSizeKey)) ??
         defaultImageGenerateSizeValue;
     // 尺寸配置统一：编辑尺寸与生图尺寸保持一致。
     _defaultImageEditSize = _defaultImageGenerateSize;
@@ -320,7 +320,8 @@ class SettingsProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   /// 设置默认生图尺寸（text-to-image）。
   Future<void> setDefaultImageGenerateSize(String value) async {
-    final normalized = _normalizeImageSize(value) ?? defaultImageGenerateSizeValue;
+    final normalized =
+        _normalizeImageSize(value) ?? defaultImageGenerateSizeValue;
     _defaultImageGenerateSize = normalized;
     _defaultImageEditSize = normalized;
     notifyListeners();

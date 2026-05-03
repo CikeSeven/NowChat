@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:now_chat/app/router.dart';
 import 'package:now_chat/providers/chat_provider.dart';
 import 'package:now_chat/ui/widgets/api_provider_card.dart';
@@ -15,6 +15,7 @@ class ApiPage extends StatefulWidget {
 /// _ApiPageState 视图状态。
 class _ApiPageState extends State<ApiPage> {
   final TextEditingController _searchController = TextEditingController();
+
   /// 当前展开的 provider 卡片 ID 集合。
   /// 用于保存列表滚动中的展开状态。
   final Set<String> _expandedProviderIds = <String>{};

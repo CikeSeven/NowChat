@@ -33,11 +33,15 @@ class ImageGenerationSettingsPage extends StatelessWidget {
     final genProvider =
         (settings.defaultImageGenerationProviderId ?? '').isEmpty
             ? null
-            : chatProvider.getProviderById(settings.defaultImageGenerationProviderId!);
+            : chatProvider.getProviderById(
+              settings.defaultImageGenerationProviderId!,
+            );
     final editProvider =
         (settings.defaultImageEditProviderId ?? '').isEmpty
             ? null
-            : chatProvider.getProviderById(settings.defaultImageEditProviderId!);
+            : chatProvider.getProviderById(
+              settings.defaultImageEditProviderId!,
+            );
     final genDisplay = _buildModelDisplay(
       provider: genProvider,
       model: settings.defaultImageGenerationModel,
@@ -66,7 +70,9 @@ class ImageGenerationSettingsPage extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.photo_size_select_large_outlined),
             title: const Text('默认尺寸'),
-            subtitle: Text(_formatSizeWithRatio(settings.defaultImageGenerateSize)),
+            subtitle: Text(
+              _formatSizeWithRatio(settings.defaultImageGenerateSize),
+            ),
             trailing: const Icon(Icons.chevron_right_rounded),
             onTap: () {
               _showSizeSelector(
@@ -74,7 +80,9 @@ class ImageGenerationSettingsPage extends StatelessWidget {
                 title: '选择默认尺寸',
                 currentValue: settings.defaultImageGenerateSize,
                 onSelected: (size) async {
-                  await context.read<SettingsProvider>().setDefaultImageGenerateSize(size);
+                  await context
+                      .read<SettingsProvider>()
+                      .setDefaultImageGenerateSize(size);
                 },
               );
             },
@@ -90,9 +98,9 @@ class ImageGenerationSettingsPage extends StatelessWidget {
                 context,
                 currentValue: settings.defaultImageGenerateCount,
                 onSelected: (value) async {
-                  await context.read<SettingsProvider>().setDefaultImageGenerateCount(
-                    value,
-                  );
+                  await context
+                      .read<SettingsProvider>()
+                      .setDefaultImageGenerateCount(value);
                 },
               );
             },
@@ -101,16 +109,16 @@ class ImageGenerationSettingsPage extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.queue_outlined),
             title: const Text('队列并发数'),
-            subtitle: Text(
-              '${settings.imageQueueConcurrency}（同时执行任务数）',
-            ),
+            subtitle: Text('${settings.imageQueueConcurrency}（同时执行任务数）'),
             trailing: const Icon(Icons.chevron_right_rounded),
             onTap: () {
               _showConcurrencySelector(
                 context,
                 currentValue: settings.imageQueueConcurrency,
                 onSelected: (value) async {
-                  await context.read<SettingsProvider>().setImageQueueConcurrency(value);
+                  await context
+                      .read<SettingsProvider>()
+                      .setImageQueueConcurrency(value);
                 },
               );
             },
@@ -146,10 +154,12 @@ class ImageGenerationSettingsPage extends StatelessWidget {
                 providerId: settings.defaultImageGenerationProviderId,
                 model: settings.defaultImageGenerationModel,
                 onSelected: (providerId, model) async {
-                  await context.read<SettingsProvider>().setDefaultImageGenerationModel(
-                    providerId: providerId,
-                    model: model,
-                  );
+                  await context
+                      .read<SettingsProvider>()
+                      .setDefaultImageGenerationModel(
+                        providerId: providerId,
+                        model: model,
+                      );
                 },
               );
             },
@@ -187,10 +197,12 @@ class ImageGenerationSettingsPage extends StatelessWidget {
                   IconButton(
                     tooltip: '清除',
                     onPressed: () async {
-                      await context.read<SettingsProvider>().setDefaultImageEditModel(
-                        providerId: null,
-                        model: null,
-                      );
+                      await context
+                          .read<SettingsProvider>()
+                          .setDefaultImageEditModel(
+                            providerId: null,
+                            model: null,
+                          );
                     },
                     icon: const Icon(Icons.clear_rounded),
                   ),
@@ -204,10 +216,12 @@ class ImageGenerationSettingsPage extends StatelessWidget {
                 providerId: settings.defaultImageEditProviderId,
                 model: settings.defaultImageEditModel,
                 onSelected: (providerId, model) async {
-                  await context.read<SettingsProvider>().setDefaultImageEditModel(
-                    providerId: providerId,
-                    model: model,
-                  );
+                  await context
+                      .read<SettingsProvider>()
+                      .setDefaultImageEditModel(
+                        providerId: providerId,
+                        model: model,
+                      );
                 },
               );
             },
@@ -293,11 +307,7 @@ class ImageGenerationSettingsPage extends StatelessWidget {
           child: ListView(
             shrinkWrap: true,
             children: [
-              ListTile(
-                title: Text(title),
-                dense: true,
-                enabled: false,
-              ),
+              ListTile(title: Text(title), dense: true, enabled: false),
               for (final size in _sizeOptions)
                 ListTile(
                   title: Text(_formatSizeWithRatio(size)),
@@ -463,7 +473,9 @@ class ImageGenerationSettingsPage extends StatelessWidget {
     final defaultPath = _defaultImagePathForModelType(modelType);
     final pathController = TextEditingController(
       text:
-          (isGeneration ? features.imageGeneratePath : features.imageEditPath) ??
+          (isGeneration
+              ? features.imageGeneratePath
+              : features.imageEditPath) ??
           defaultPath,
     );
     final baseController = TextEditingController(
@@ -607,7 +619,8 @@ class ImageGenerationSettingsPage extends StatelessWidget {
         modelType == ModelType.imageGeneration
             ? features.imageGeneratePath
             : features.imageEditPath;
-    final normalizedPath = _normalizePath(path) ?? _defaultImagePathForModelType(modelType);
+    final normalizedPath =
+        _normalizePath(path) ?? _defaultImagePathForModelType(modelType);
     final base = (features.imageBaseUrl ?? '').trim();
     final baseText = base.isEmpty ? 'Base: 继承 Provider' : 'Base: $base';
     return 'OpenAI · $baseText · Path: $normalizedPath';

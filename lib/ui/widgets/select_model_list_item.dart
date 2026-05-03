@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import '../../core/models/ai_provider_config.dart';
 
 /// SelectModelListItem 类型定义。
