@@ -46,7 +46,26 @@ const MessageSchema = CollectionSchema(
   deserialize: _messageDeserialize,
   deserializeProp: _messageDeserializeProp,
   idName: r'isarId',
-  indexes: {},
+  indexes: {
+    r'chatId_timestamp': IndexSchema(
+      id: 7561634958184098496,
+      name: r'chatId_timestamp',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'chatId',
+          type: IndexType.value,
+          caseSensitive: false,
+        ),
+        IndexPropertySchema(
+          name: r'timestamp',
+          type: IndexType.value,
+          caseSensitive: false,
+        ),
+      ],
+    ),
+  },
   links: {},
   embeddedSchemas: {},
   getId: _messageGetId,
@@ -162,6 +181,14 @@ extension MessageQueryWhereSort on QueryBuilder<Message, Message, QWhere> {
       return query.addWhereClause(const IdWhereClause.any());
     });
   }
+
+  QueryBuilder<Message, Message, QAfterWhere> anyChatIdTimestamp() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        const IndexWhereClause.any(indexName: r'chatId_timestamp'),
+      );
+    });
+  }
 }
 
 extension MessageQueryWhere on QueryBuilder<Message, Message, QWhereClause> {
@@ -231,6 +258,225 @@ extension MessageQueryWhere on QueryBuilder<Message, Message, QWhereClause> {
           lower: lowerIsarId,
           includeLower: includeLower,
           upper: upperIsarId,
+          includeUpper: includeUpper,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<Message, Message, QAfterWhereClause> chatIdEqualToAnyTimestamp(
+    int chatId,
+  ) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        IndexWhereClause.equalTo(
+          indexName: r'chatId_timestamp',
+          value: [chatId],
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<Message, Message, QAfterWhereClause>
+  chatIdNotEqualToAnyTimestamp(int chatId) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(
+              IndexWhereClause.between(
+                indexName: r'chatId_timestamp',
+                lower: [],
+                upper: [chatId],
+                includeUpper: false,
+              ),
+            )
+            .addWhereClause(
+              IndexWhereClause.between(
+                indexName: r'chatId_timestamp',
+                lower: [chatId],
+                includeLower: false,
+                upper: [],
+              ),
+            );
+      } else {
+        return query
+            .addWhereClause(
+              IndexWhereClause.between(
+                indexName: r'chatId_timestamp',
+                lower: [chatId],
+                includeLower: false,
+                upper: [],
+              ),
+            )
+            .addWhereClause(
+              IndexWhereClause.between(
+                indexName: r'chatId_timestamp',
+                lower: [],
+                upper: [chatId],
+                includeUpper: false,
+              ),
+            );
+      }
+    });
+  }
+
+  QueryBuilder<Message, Message, QAfterWhereClause>
+  chatIdGreaterThanAnyTimestamp(int chatId, {bool include = false}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        IndexWhereClause.between(
+          indexName: r'chatId_timestamp',
+          lower: [chatId],
+          includeLower: include,
+          upper: [],
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<Message, Message, QAfterWhereClause> chatIdLessThanAnyTimestamp(
+    int chatId, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        IndexWhereClause.between(
+          indexName: r'chatId_timestamp',
+          lower: [],
+          upper: [chatId],
+          includeUpper: include,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<Message, Message, QAfterWhereClause> chatIdBetweenAnyTimestamp(
+    int lowerChatId,
+    int upperChatId, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        IndexWhereClause.between(
+          indexName: r'chatId_timestamp',
+          lower: [lowerChatId],
+          includeLower: includeLower,
+          upper: [upperChatId],
+          includeUpper: includeUpper,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<Message, Message, QAfterWhereClause> chatIdTimestampEqualTo(
+    int chatId,
+    DateTime timestamp,
+  ) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        IndexWhereClause.equalTo(
+          indexName: r'chatId_timestamp',
+          value: [chatId, timestamp],
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<Message, Message, QAfterWhereClause>
+  chatIdEqualToTimestampNotEqualTo(int chatId, DateTime timestamp) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(
+              IndexWhereClause.between(
+                indexName: r'chatId_timestamp',
+                lower: [chatId],
+                upper: [chatId, timestamp],
+                includeUpper: false,
+              ),
+            )
+            .addWhereClause(
+              IndexWhereClause.between(
+                indexName: r'chatId_timestamp',
+                lower: [chatId, timestamp],
+                includeLower: false,
+                upper: [chatId],
+              ),
+            );
+      } else {
+        return query
+            .addWhereClause(
+              IndexWhereClause.between(
+                indexName: r'chatId_timestamp',
+                lower: [chatId, timestamp],
+                includeLower: false,
+                upper: [chatId],
+              ),
+            )
+            .addWhereClause(
+              IndexWhereClause.between(
+                indexName: r'chatId_timestamp',
+                lower: [chatId],
+                upper: [chatId, timestamp],
+                includeUpper: false,
+              ),
+            );
+      }
+    });
+  }
+
+  QueryBuilder<Message, Message, QAfterWhereClause>
+  chatIdEqualToTimestampGreaterThan(
+    int chatId,
+    DateTime timestamp, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        IndexWhereClause.between(
+          indexName: r'chatId_timestamp',
+          lower: [chatId, timestamp],
+          includeLower: include,
+          upper: [chatId],
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<Message, Message, QAfterWhereClause>
+  chatIdEqualToTimestampLessThan(
+    int chatId,
+    DateTime timestamp, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        IndexWhereClause.between(
+          indexName: r'chatId_timestamp',
+          lower: [chatId],
+          upper: [chatId, timestamp],
+          includeUpper: include,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<Message, Message, QAfterWhereClause>
+  chatIdEqualToTimestampBetween(
+    int chatId,
+    DateTime lowerTimestamp,
+    DateTime upperTimestamp, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        IndexWhereClause.between(
+          indexName: r'chatId_timestamp',
+          lower: [chatId, lowerTimestamp],
+          includeLower: includeLower,
+          upper: [chatId, upperTimestamp],
           includeUpper: includeUpper,
         ),
       );

@@ -31,7 +31,7 @@ window.ChatBridge = {
     const msg = state.messages.find((m) => m.id === id);
     if (!msg) return;
     msg.content = content;
-    updateMessageDOM(msg);
+    updateAssistantContentDOM(msg);
     if (isNearBottom()) scrollToBottom(false);
   },
 
@@ -41,7 +41,7 @@ window.ChatBridge = {
     if (!msg) return;
     msg.reasoning = content;
     if (timeMs !== undefined) msg.reasoningTimeMs = timeMs;
-    updateMessageDOM(msg);
+    updateReasoningDOM(msg);
     if (isNearBottom()) scrollToBottom(false);
   },
 
@@ -51,6 +51,7 @@ window.ChatBridge = {
     if (!msg) return;
     msg.isStreaming = false;
     msg.canContinue = !!canContinue;
+    delete state.streamingMarkdownSnapshots[id];
     updateMessageDOM(msg);
   },
 
@@ -59,6 +60,7 @@ window.ChatBridge = {
     const idx = state.messages.findIndex((m) => m.id === id);
     if (idx === -1) return;
     state.messages.splice(idx, 1);
+    delete state.streamingMarkdownSnapshots[id];
     const el = $list.querySelector(`.msg[data-id="${id}"]`);
     if (el) el.remove();
     // 更新 isLast 标记
@@ -72,6 +74,7 @@ window.ChatBridge = {
   /** 清空所有消息（切换会话） */
   clearMessages() {
     state.messages = [];
+    state.streamingMarkdownSnapshots = {};
     renderAllMessages();
   },
 
@@ -79,15 +82,12 @@ window.ChatBridge = {
   loadMessages(jsonStr, prepend) {
     const msgs = JSON.parse(jsonStr);
     if (prepend) {
-      // 历史消息：记录当前滚动位置
-      const oldHeight = $list.scrollHeight;
       state.messages = msgs.concat(state.messages);
-      renderAllMessages();
-      // 保持滚动位置
-      const newHeight = $list.scrollHeight;
-      $list.scrollTop = newHeight - oldHeight;
+      // 历史消息只前插新增片段，避免已加载 Markdown/图片全部重绘。
+      prependMessagesDOM(msgs);
     } else {
       state.messages = msgs;
+      state.streamingMarkdownSnapshots = {};
       renderAllMessages();
       scrollToBottom(false);
     }

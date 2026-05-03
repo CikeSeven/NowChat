@@ -299,6 +299,49 @@ const ASSISTANT_SHADOW_STYLE = `
 }
 `;
 
+const STREAMING_MARKDOWN_MIN_INTERVAL_MS = 420;
+const STREAMING_MARKDOWN_CHAR_THRESHOLD = 180;
+
+/** 判断流式正文是否需要刷新完整 Markdown 快照。 */
+function shouldRefreshStreamingMarkdownSnapshot(msg, previous) {
+  if (!msg.isStreaming) return true;
+  if (!previous) return true;
+  const content = msg.content || '';
+  if (content.length < previous.length) return true;
+  if (content.length - previous.length >= STREAMING_MARKDOWN_CHAR_THRESHOLD) {
+    return true;
+  }
+  const elapsed = Date.now() - previous.updatedAt;
+  if (elapsed >= STREAMING_MARKDOWN_MIN_INTERVAL_MS) return true;
+  const tail = content.substring(previous.length);
+  // 换行或代码围栏变化时刷新快照，避免流式 Markdown 结构长期不完整。
+  return tail.includes('\n') || tail.includes('```');
+}
+
+/** 生成流式阶段的 Markdown 快照与纯文本尾巴，降低高频完整解析成本。 */
+function renderAssistantContent(msg) {
+  const content = msg.content || '';
+  if (!msg.isStreaming) {
+    delete state.streamingMarkdownSnapshots[msg.id];
+    return renderMarkdown(content);
+  }
+
+  const previous = state.streamingMarkdownSnapshots[msg.id];
+  if (shouldRefreshStreamingMarkdownSnapshot(msg, previous)) {
+    state.streamingMarkdownSnapshots[msg.id] = {
+      length: content.length,
+      html: renderMarkdown(content),
+      updatedAt: Date.now(),
+    };
+    return state.streamingMarkdownSnapshots[msg.id].html;
+  }
+
+  const tail = content.substring(previous.length);
+  if (!tail) return previous.html;
+  // 流式尾巴只做 HTML 转义，等下一次快照或结束时再统一跑 Markdown/highlight/KaTeX。
+  return `${previous.html}<span class="streaming-tail">${escHtml(tail)}</span>`;
+}
+
 /** 返回指定消息的 assistant 正文 host 选择器。 */
 function shadowHostSelector(messageId) {
   return `.msg-content-host[data-shadow-msg-id="${messageId}"]`;
@@ -311,7 +354,7 @@ function mountAssistantShadowContent(messageId, root = document) {
   const host = root.querySelector ? root.querySelector(shadowHostSelector(messageId)) : null;
   if (!host) return;
 
-  const html = renderMarkdown(msg.content || '');
+  const html = renderAssistantContent(msg);
   if (!host.shadowRoot) {
     host.attachShadow({ mode: 'open' });
   }

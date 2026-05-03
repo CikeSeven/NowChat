@@ -1,30 +1,28 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
+import 'package:now_chat/core/models/message.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:now_chat/app/ChatApp.dart';
-
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const ChatApp());
+  test('Message JSON round trip preserves performance-relevant fields', () {
+    // 纯模型测试不依赖 Isar native core，保证 CI/离线环境也能稳定验证数据结构。
+    final timestamp = DateTime.utc(2026, 5, 3, 12, 30);
+    final message = Message(
+      chatId: 42,
+      role: 'assistant',
+      content: 'hello',
+      reasoning: 'thinking',
+      reasoningTimeMs: 1200,
+      imagePaths: const <String>['/storage/test.png'],
+      timestamp: timestamp,
+    );
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    final restored = Message.fromJson(message.toJson());
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(restored.chatId, 42);
+    expect(restored.role, 'assistant');
+    expect(restored.content, 'hello');
+    expect(restored.reasoning, 'thinking');
+    expect(restored.reasoningTimeMs, 1200);
+    expect(restored.imagePaths, const <String>['/storage/test.png']);
+    expect(restored.timestamp, timestamp);
   });
 }

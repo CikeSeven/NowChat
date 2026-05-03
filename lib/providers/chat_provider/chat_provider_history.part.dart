@@ -1,4 +1,4 @@
-﻿part of '../chat_provider.dart';
+part of '../chat_provider.dart';
 
 /// ChatProviderHistory 扩展方法集合。
 extension ChatProviderHistory on ChatProvider {
@@ -21,12 +21,12 @@ extension ChatProviderHistory on ChatProvider {
       _notifyStateChanged();
       return;
     }
-    final totalCount = await isar.messages.filter().chatIdEqualTo(chatId).count();
+    final totalCount =
+        await isar.messages.filter().chatIdEqualTo(chatId).count();
     final latestDesc =
         await isar.messages
-            .filter()
-            .chatIdEqualTo(chatId)
-            .sortByTimestampDesc()
+            .where(sort: Sort.desc)
+            .chatIdEqualToAnyTimestamp(chatId)
             .limit(limit)
             .findAll();
     // 数据库倒序取最新，再反转为时间正序给 UI 渲染。
@@ -51,13 +51,14 @@ extension ChatProviderHistory on ChatProvider {
     _isLoadingMoreHistory = true;
     _notifyStateChanged();
     try {
-      final totalCount = await isar.messages.filter().chatIdEqualTo(chatId).count();
       final olderDesc =
           await isar.messages
-              .filter()
-              .chatIdEqualTo(chatId)
-              .sortByTimestampDesc()
-              .offset(_loadedMessageCount)
+              .where(sort: Sort.desc)
+              // 使用当前最早消息作为 keyset 锚点，避免 offset 随历史增长越来越慢。
+              .chatIdEqualToTimestampLessThan(
+                chatId,
+                _currentMessages.first.timestamp,
+              )
               .limit(limit)
               .findAll();
       // 旧数据同样从倒序结果反转后拼接到头部。
@@ -66,7 +67,7 @@ extension ChatProviderHistory on ChatProvider {
         _currentMessages = <Message>[...olderMessages, ..._currentMessages];
         _loadedMessageCount = _currentMessages.length;
       }
-      _hasMoreHistory = _loadedMessageCount < totalCount;
+      _hasMoreHistory = olderMessages.length == limit;
     } finally {
       _isLoadingMoreHistory = false;
       _notifyStateChanged();
@@ -75,7 +76,11 @@ extension ChatProviderHistory on ChatProvider {
 
   /// 获取指定会话的完整消息列表。
   Future<List<Message>> getMessagesByChatId(int chatId) async {
-    return isar.messages.filter().chatIdEqualTo(chatId).sortByTimestamp().findAll();
+    return isar.messages
+        .filter()
+        .chatIdEqualTo(chatId)
+        .sortByTimestamp()
+        .findAll();
   }
 
   /// 获取会话最后一条消息。

@@ -20,6 +20,7 @@ const state = {
   isLoadingMore: false,
   _scrollLock: false, // 防止滚动事件重入
   imageProxyBase: '', // 本地图片代理服务器 base URL
+  streamingMarkdownSnapshots: {}, // messageId -> 流式阶段最近一次完整 Markdown 快照
 };
 
 // ===== DOM refs =====

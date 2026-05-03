@@ -37,6 +37,9 @@ class WorkbenchImagePage extends StatefulWidget {
 }
 
 class WorkbenchImagePageState extends State<WorkbenchImagePage> {
+  /// 记录卡片之间的固定间距，Sliver 懒加载时复用同一视觉间隔。
+  static const double _taskCardSpacing = 8;
+
   final TextEditingController _promptController = TextEditingController();
   final ImagePicker _imagePicker = ImagePicker();
   _ImageWorkbenchMode _mode = _ImageWorkbenchMode.generate;
@@ -76,49 +79,60 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
       child: Column(
         children: [
           Expanded(
-            child: ListView(
+            child: Padding(
               padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      '生成记录',
-                      style: TextStyle(
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.w700,
-                        color: color.onSurface,
-                      ),
+              child: CustomScrollView(
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              '生成记录',
+                              style: TextStyle(
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w700,
+                                color: color.onSurface,
+                              ),
+                            ),
+                            const Spacer(),
+                            _buildStatChip(
+                              context,
+                              label: '生成中 ${queueProvider.runningCount}',
+                            ),
+                            const SizedBox(width: 6),
+                            _buildStatChip(
+                              context,
+                              label: '排队 ${queueProvider.queuedCount}',
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                      ],
                     ),
-                    const Spacer(),
-                    _buildStatChip(
-                      context,
-                      label: '生成中 ${queueProvider.runningCount}',
-                    ),
-                    const SizedBox(width: 6),
-                    _buildStatChip(
-                      context,
-                      label: '排队 ${queueProvider.queuedCount}',
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                if (tasks.isEmpty)
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(14),
-                      child: Text(
-                        '暂无任务，点击下方“加入生图队列”开始创建',
-                        style: TextStyle(color: color.onSurfaceVariant),
-                      ),
-                    ),
-                  )
-                else
-                  _buildTaskList(
-                    context: context,
-                    tasks: tasks,
-                    queueProvider: queueProvider,
                   ),
-              ],
+                  if (tasks.isEmpty)
+                    SliverToBoxAdapter(
+                      child: Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: Text(
+                            '暂无任务，点击下方“加入生图队列”开始创建',
+                            style: TextStyle(color: color.onSurfaceVariant),
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    _buildTaskList(
+                      context: context,
+                      tasks: tasks,
+                      queueProvider: queueProvider,
+                    ),
+                ],
+              ),
             ),
           ),
           _buildComposer(
@@ -199,10 +213,7 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
               Expanded(
                 child: Text(
                   '输入区已收起',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: color.onSurfaceVariant,
-                  ),
+                  style: TextStyle(fontSize: 12, color: color.onSurfaceVariant),
                 ),
               ),
               TextButton.icon(
@@ -288,6 +299,10 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
                       height: 72,
                       width: double.infinity,
                       fit: BoxFit.cover,
+                      // 编辑原图预览只需缩略图质量，限制解码尺寸可减少切图时卡顿。
+                      cacheHeight: (72 * MediaQuery.devicePixelRatioOf(context))
+                          .round()
+                          .clamp(1, 4096),
                     ),
                   ),
                 ),
@@ -304,7 +319,8 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
                   horizontal: 12,
                   vertical: 10,
                 ),
-                labelText: _mode == _ImageWorkbenchMode.generate ? '生图提示词' : '编辑提示词',
+                labelText:
+                    _mode == _ImageWorkbenchMode.generate ? '生图提示词' : '编辑提示词',
                 hintText:
                     _mode == _ImageWorkbenchMode.generate
                         ? '例如：科幻城市夜景，霓虹灯，电影感'
@@ -316,7 +332,10 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
               children: [
                 OutlinedButton.icon(
                   onPressed: () {
-                    Navigator.pushNamed(context, AppRoutes.imageGenerationSettings);
+                    Navigator.pushNamed(
+                      context,
+                      AppRoutes.imageGenerationSettings,
+                    );
                   },
                   icon: const Icon(Icons.tune_rounded),
                   label: const Text('配置'),
@@ -334,7 +353,8 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
                     Offset tapPosition = Offset.zero;
                     return InkWell(
                       borderRadius: BorderRadius.circular(10),
-                      onTapDown: (details) => tapPosition = details.globalPosition,
+                      onTapDown:
+                          (details) => tapPosition = details.globalPosition,
                       onTap: () => _showModeMenu(modeContext, tapPosition),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
@@ -370,17 +390,16 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
                 ),
                 const Spacer(),
                 FilledButton.icon(
-                  onPressed: () => _enqueueTask(
-                    context: context,
-                    settings: settings,
-                    chatProvider: chatProvider,
-                    queueProvider: queueProvider,
-                  ),
+                  onPressed:
+                      () => _enqueueTask(
+                        context: context,
+                        settings: settings,
+                        chatProvider: chatProvider,
+                        queueProvider: queueProvider,
+                      ),
                   icon: const Icon(Icons.playlist_add_rounded),
                   label: Text(
-                    _mode == _ImageWorkbenchMode.generate
-                        ? '加入生图队列'
-                        : '加入编辑队列',
+                    _mode == _ImageWorkbenchMode.generate ? '加入生图队列' : '加入编辑队列',
                   ),
                   style: FilledButton.styleFrom(
                     visualDensity: VisualDensity.compact,
@@ -540,9 +559,8 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
     );
     final isSelected = _selectedTaskIds.contains(task.id);
     final deletable = _isTaskDeletable(task);
-    final firstUri = task.resultImageUris.isEmpty
-        ? null
-        : task.resultImageUris.first;
+    final firstUri =
+        task.resultImageUris.isEmpty ? null : task.resultImageUris.first;
     final prompt = task.prompt.trim();
     final isLongPrompt = prompt.length > 120;
     final isPromptExpanded = _expandedPromptTaskIds.contains(task.id);
@@ -632,10 +650,7 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
                 // 折叠态只展示两行，且禁用文本内部滚动，避免抢占外层列表手势。
                 maxLines: isLongPrompt && !isPromptExpanded ? 2 : null,
                 scrollPhysics: const NeverScrollableScrollPhysics(),
-                style: TextStyle(
-                  color: color.onSurface,
-                  fontSize: 13.5,
-                ),
+                style: TextStyle(color: color.onSurface, fontSize: 13.5),
               ),
               if (isLongPrompt)
                 Padding(
@@ -678,10 +693,7 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
                   padding: const EdgeInsets.only(top: 6),
                   child: Text(
                     task.errorMessage!.trim(),
-                    style: TextStyle(
-                      color: color.error,
-                      fontSize: 12.5,
-                    ),
+                    style: TextStyle(color: color.error, fontSize: 12.5),
                   ),
                 ),
               if (task.resultImageUris.isNotEmpty) ...[
@@ -705,53 +717,52 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
   }) {
     final columns = widget.listColumns == 2 ? 2 : 1;
     if (columns == 1) {
-      return Column(
-        children:
-            tasks
-                .map(
-                  (task) => _buildTaskCard(
-                    context: context,
-                    task: task,
-                    queueProvider: queueProvider,
-                  ),
-                )
-                .toList(),
+      return SliverList.separated(
+        itemCount: tasks.length,
+        separatorBuilder: (_, __) => const SizedBox(height: _taskCardSpacing),
+        itemBuilder: (context, index) {
+          return _buildTaskCard(
+            context: context,
+            task: tasks[index],
+            queueProvider: queueProvider,
+            margin: EdgeInsets.zero,
+          );
+        },
       );
     }
-    return LayoutBuilder(
-      builder: (layoutContext, constraints) {
-        const spacing = 8.0;
-        final itemWidth = (constraints.maxWidth - spacing) / 2;
-        return Wrap(
-          spacing: spacing,
-          runSpacing: spacing,
-          children:
-              tasks
-                  .map(
-                    (task) => SizedBox(
-                      width: itemWidth,
-                      child: _buildTaskCard(
-                        context: context,
-                        task: task,
-                        queueProvider: queueProvider,
-                        margin: EdgeInsets.zero,
-                      ),
-                    ),
-                  )
-                  .toList(),
+    return SliverGrid.builder(
+      itemCount: tasks.length,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: _taskCardSpacing,
+        mainAxisSpacing: _taskCardSpacing,
+        childAspectRatio: 0.68,
+      ),
+      itemBuilder: (context, index) {
+        return _buildTaskCard(
+          context: context,
+          task: tasks[index],
+          queueProvider: queueProvider,
+          margin: EdgeInsets.zero,
         );
       },
     );
   }
 
-  Widget _buildStatusChip(BuildContext context, ImageGenerationTaskStatus status) {
+  Widget _buildStatusChip(
+    BuildContext context,
+    ImageGenerationTaskStatus status,
+  ) {
     final color = Theme.of(context).colorScheme;
     final (text, background) = switch (status) {
       ImageGenerationTaskStatus.running => ('生成中', color.primaryContainer),
       ImageGenerationTaskStatus.queued => ('排队中', color.secondaryContainer),
       ImageGenerationTaskStatus.succeeded => ('已完成', color.tertiaryContainer),
       ImageGenerationTaskStatus.failed => ('失败', color.errorContainer),
-      ImageGenerationTaskStatus.canceled => ('已取消', color.surfaceContainerHighest),
+      ImageGenerationTaskStatus.canceled => (
+        '已取消',
+        color.surfaceContainerHighest,
+      ),
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -785,9 +796,7 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
     final previewUri = Uri.parse(_normalizeDisplayImageUri(firstUri));
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => ImagePreviewPage(imageUri: previewUri),
-      ),
+      MaterialPageRoute(builder: (_) => ImagePreviewPage(imageUri: previewUri)),
     );
   }
 
@@ -834,10 +843,7 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
           ),
         );
       },
-      child: _buildImageByUriWithHeight(
-        rawUri: rawUri,
-        forcedHeight: height,
-      ),
+      child: _buildImageByUriWithHeight(rawUri: rawUri, forcedHeight: height),
     );
   }
 
@@ -978,11 +984,6 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
     return result ?? false;
   }
 
-  /// 根据 URI 类型构建缩略图。
-  Widget _buildImageByUri(String rawUri) {
-    return _buildImageByUriWithHeight(rawUri: rawUri, forcedHeight: 108);
-  }
-
   /// 根据 URI 类型构建缩略图（可指定高度，供单图/宫格共用）。
   Widget _buildImageByUriWithHeight({
     required String rawUri,
@@ -990,7 +991,8 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
   }) {
     final normalizedRawUri = _normalizeDisplayImageUri(rawUri);
     final uri = Uri.tryParse(normalizedRawUri);
-    final isHttp = uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
+    final isHttp =
+        uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
     final isFile = uri != null && uri.scheme == 'file';
     if (isHttp) {
       return CachedNetworkImage(
@@ -1019,18 +1021,21 @@ class WorkbenchImagePageState extends State<WorkbenchImagePage> {
       );
     }
     if (isFile) {
-      return Image.file(
-        File(uri.toFilePath()),
-        height: forcedHeight,
-        width: double.infinity,
-        fit: BoxFit.cover,
-      );
+      return _buildLocalThumbnail(uri.toFilePath(), forcedHeight);
     }
+    return _buildLocalThumbnail(normalizedRawUri, forcedHeight);
+  }
+
+  /// 按缩略图展示尺寸解码本地图片，避免小卡片直接解码原始大图造成掉帧。
+  Widget _buildLocalThumbnail(String path, double forcedHeight) {
+    final pixelRatio = MediaQuery.devicePixelRatioOf(context);
+    final cacheHeight = (forcedHeight * pixelRatio).round().clamp(1, 4096);
     return Image.file(
-      File(normalizedRawUri),
+      File(path),
       height: forcedHeight,
       width: double.infinity,
       fit: BoxFit.cover,
+      cacheHeight: cacheHeight,
     );
   }
 

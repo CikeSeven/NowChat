@@ -200,6 +200,7 @@ class _ChatWebViewPanelState extends State<ChatWebViewPanel> {
   final Map<int, int> _syncedContentLengths = {};
   final Map<int, int> _syncedReasoningLengths = {};
   final Map<int, int> _syncedToolLogCounts = {};
+  final Map<int, bool> _syncedStreamingStates = {};
 
   @override
   void initState() {
@@ -418,17 +419,21 @@ class _ChatWebViewPanelState extends State<ChatWebViewPanel> {
     _syncedContentLengths.clear();
     _syncedReasoningLengths.clear();
     _syncedToolLogCounts.clear();
+    _syncedStreamingStates.clear();
     for (final m in widget.messages) {
       _syncedContentLengths[m.isarId] = m.content.length;
       _syncedReasoningLengths[m.isarId] = (m.reasoning ?? '').length;
       _syncedToolLogCounts[m.isarId] =
           widget.toolLogsForMessage(m.isarId).length;
+      _syncedStreamingStates[m.isarId] = widget.isMessageStreaming(m.isarId);
     }
   }
 
   /// 增量同步消息变化。
   void _syncMessages() {
     final currentIds = widget.messages.map((m) => m.isarId).toList();
+    final currentIdSet = currentIds.toSet();
+    final syncedIdSet = _syncedMessageIds.toSet();
 
     // 检测是否是历史消息前插（prepend）
     if (currentIds.length > _syncedMessageIds.length &&
@@ -458,23 +463,25 @@ class _ChatWebViewPanelState extends State<ChatWebViewPanel> {
 
     // 检测新增消息（append）
     for (final m in widget.messages) {
-      if (!_syncedMessageIds.contains(m.isarId)) {
+      if (!syncedIdSet.contains(m.isarId)) {
         final json = jsonEncode(_messageToJson(m));
         _evalJs("ChatBridge.addMessage('${_escJs(json)}')");
         _syncedContentLengths[m.isarId] = m.content.length;
         _syncedReasoningLengths[m.isarId] = (m.reasoning ?? '').length;
         _syncedToolLogCounts[m.isarId] =
             widget.toolLogsForMessage(m.isarId).length;
+        _syncedStreamingStates[m.isarId] = widget.isMessageStreaming(m.isarId);
       }
     }
 
     // 检测删除的消息
     for (final oldId in _syncedMessageIds) {
-      if (!currentIds.contains(oldId)) {
+      if (!currentIdSet.contains(oldId)) {
         _evalJs('ChatBridge.deleteMessage($oldId)');
         _syncedContentLengths.remove(oldId);
         _syncedReasoningLengths.remove(oldId);
         _syncedToolLogCounts.remove(oldId);
+        _syncedStreamingStates.remove(oldId);
       }
     }
 
@@ -514,8 +521,14 @@ class _ChatWebViewPanelState extends State<ChatWebViewPanel> {
         _syncedToolLogCounts[m.isarId] = newToolCount;
       }
 
-      // 更精确：如果之前在流式中，现在不在了
-      if (!widget.isMessageStreaming(m.isarId) && m.role == 'assistant') {
+      final isStreamingNow = widget.isMessageStreaming(m.isarId);
+      final wasStreaming = _syncedStreamingStates[m.isarId] ?? false;
+      if (wasStreaming != isStreamingNow) {
+        _syncedStreamingStates[m.isarId] = isStreamingNow;
+      }
+
+      // 只在“流式中 -> 已结束”的边沿同步结束状态，避免旧消息被每帧重绘。
+      if (wasStreaming && !isStreamingNow && m.role == 'assistant') {
         final canContinue = widget.canContinueAssistantMessage(m.isarId);
         _evalJs('ChatBridge.endStreaming(${m.isarId}, $canContinue)');
       }

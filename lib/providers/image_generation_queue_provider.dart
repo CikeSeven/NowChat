@@ -32,16 +32,22 @@ class ImageGenerationQueueProvider extends ChangeNotifier {
   int _activeWorkers = 0;
   final List<ImageGenerationTask> _tasks = <ImageGenerationTask>[];
 
-  List<ImageGenerationTask> get tasks => List<ImageGenerationTask>.unmodifiable(_tasks);
+  List<ImageGenerationTask> get tasks =>
+      List<ImageGenerationTask>.unmodifiable(_tasks);
 
   int get runningCount =>
-      _tasks.where((item) => item.status == ImageGenerationTaskStatus.running).length;
+      _tasks
+          .where((item) => item.status == ImageGenerationTaskStatus.running)
+          .length;
 
   int get queuedCount =>
-      _tasks.where((item) => item.status == ImageGenerationTaskStatus.queued).length;
+      _tasks
+          .where((item) => item.status == ImageGenerationTaskStatus.queued)
+          .length;
 
   int get concurrency {
-    final next = _settings?.imageQueueConcurrency ??
+    final next =
+        _settings?.imageQueueConcurrency ??
         SettingsProvider.defaultImageQueueConcurrencyValue;
     if (next < 1) return 1;
     if (next > 4) return 4;
@@ -73,8 +79,8 @@ class ImageGenerationQueueProvider extends ChangeNotifier {
     _initializing = true;
     try {
       final loaded = await Storage.loadImageGenerationQueueTasks();
-      final normalized =
-          loaded.map((task) {
+      final normalized = loaded
+          .map((task) {
             // 进程重启后，运行中的任务回退为排队，避免卡死在 running。
             if (task.status == ImageGenerationTaskStatus.running) {
               return task.copyWith(
@@ -84,7 +90,8 @@ class ImageGenerationQueueProvider extends ChangeNotifier {
               );
             }
             return task;
-          }).toList(growable: true);
+          })
+          .toList(growable: true);
       await _mergeLegacyHistory(normalized);
       _tasks
         ..clear()
@@ -116,8 +123,8 @@ class ImageGenerationQueueProvider extends ChangeNotifier {
   /// 主要用于“应用数据导入”后立即刷新工作台展示与队列状态。
   Future<void> reloadFromStorage() async {
     final loaded = await Storage.loadImageGenerationQueueTasks();
-    final normalized =
-        loaded.map((task) {
+    final normalized = loaded
+        .map((task) {
           // 重载时将 running 回退为 queued，避免历史运行态卡死。
           if (task.status == ImageGenerationTaskStatus.running) {
             return task.copyWith(
@@ -127,7 +134,8 @@ class ImageGenerationQueueProvider extends ChangeNotifier {
             );
           }
           return task;
-        }).toList(growable: true);
+        })
+        .toList(growable: true);
     await _mergeLegacyHistory(normalized);
     _tasks
       ..clear()
@@ -186,6 +194,7 @@ class ImageGenerationQueueProvider extends ChangeNotifier {
     _scheduling = true;
     Future<void>(() async {
       try {
+        var startedAnyTask = false;
         while (_activeWorkers < concurrency) {
           final queued = _findNextQueuedTask();
           if (queued == null) break;
@@ -197,9 +206,13 @@ class ImageGenerationQueueProvider extends ChangeNotifier {
           );
           _replaceTask(running);
           _activeWorkers += 1;
+          startedAnyTask = true;
+          unawaited(_runTask(running.id));
+        }
+        if (startedAnyTask) {
+          // 一轮调度可能同时启动多个 worker；批量落盘和通知可避免 UI 连续重建。
           await _persistTasks();
           notifyListeners();
-          unawaited(_runTask(running.id));
         }
       } finally {
         _scheduling = false;
@@ -320,10 +333,9 @@ class ImageGenerationQueueProvider extends ChangeNotifier {
   }
 
   ImageGenerationTask? _findNextQueuedTask() {
-    final queued =
-        _tasks
-            .where((item) => item.status == ImageGenerationTaskStatus.queued)
-            .toList(growable: false);
+    final queued = _tasks
+        .where((item) => item.status == ImageGenerationTaskStatus.queued)
+        .toList(growable: false);
     if (queued.isEmpty) return null;
     queued.sort((a, b) => a.createdAt.compareTo(b.createdAt));
     return queued.first;
@@ -385,8 +397,9 @@ class ImageGenerationQueueProvider extends ChangeNotifier {
     if (taskIds.isEmpty) return;
     final history = await Storage.loadImageGenerationHistory();
     if (history.isEmpty) return;
-    final next =
-        history.where((item) => !taskIds.contains(item.id)).toList(growable: false);
+    final next = history
+        .where((item) => !taskIds.contains(item.id))
+        .toList(growable: false);
     if (next.length == history.length) return;
     await Storage.saveImageGenerationHistory(next);
   }

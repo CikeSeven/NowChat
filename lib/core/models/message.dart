@@ -14,6 +14,9 @@ class Message {
   Id isarId = Isar.autoIncrement;
 
   /// 关联会话 ID。
+  ///
+  /// 与 [timestamp] 组成复合索引，支撑长会话按时间分页加载，避免全表扫描。
+  @Index(composite: [CompositeIndex('timestamp')])
   late int chatId;
 
   /// 角色标识：通常为 `user`/`assistant`/`system`。

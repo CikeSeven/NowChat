@@ -1,9 +1,10 @@
-﻿/**
+/**
  * chat.js - 运行时 bundle 入口
  *
  * 该文件由 assets/chat_webview/js/*.js 按顺序拼接生成，
  * 供 Flutter WebView 稳定内联加载。
  */
+
 /**
  * state.js
  *
@@ -26,6 +27,7 @@ const state = {
   isLoadingMore: false,
   _scrollLock: false, // 防止滚动事件重入
   imageProxyBase: '', // 本地图片代理服务器 base URL
+  streamingMarkdownSnapshots: {}, // messageId -> 流式阶段最近一次完整 Markdown 快照
 };
 
 // ===== DOM refs =====
@@ -37,7 +39,6 @@ let $scrollFab;
 let $streamCheck;
 let $modelName;
 let $modelCaps;
-
 
 /**
  * utils.js
@@ -122,7 +123,6 @@ function icon(name, extraClass = '') {
   const cls = extraClass ? `ms-icon ${extraClass}` : 'ms-icon';
   return `<span class="${cls}" aria-hidden="true">${name}</span>`;
 }
-
 
 /**
  * markdown_renderer.js
@@ -380,10 +380,7 @@ const ASSISTANT_SHADOW_STYLE = `
   font-size: 20px;
 }
 
-.code-block-header .preview-btn:active {
-  background: var(--outline-variant);
-}
-
+.code-block-header .preview-btn:active,
 .code-block-header .copy-btn:active {
   background: var(--outline-variant);
 }
@@ -428,6 +425,49 @@ const ASSISTANT_SHADOW_STYLE = `
 }
 `;
 
+const STREAMING_MARKDOWN_MIN_INTERVAL_MS = 420;
+const STREAMING_MARKDOWN_CHAR_THRESHOLD = 180;
+
+/** 判断流式正文是否需要刷新完整 Markdown 快照。 */
+function shouldRefreshStreamingMarkdownSnapshot(msg, previous) {
+  if (!msg.isStreaming) return true;
+  if (!previous) return true;
+  const content = msg.content || '';
+  if (content.length < previous.length) return true;
+  if (content.length - previous.length >= STREAMING_MARKDOWN_CHAR_THRESHOLD) {
+    return true;
+  }
+  const elapsed = Date.now() - previous.updatedAt;
+  if (elapsed >= STREAMING_MARKDOWN_MIN_INTERVAL_MS) return true;
+  const tail = content.substring(previous.length);
+  // 换行或代码围栏变化时刷新快照，避免流式 Markdown 结构长期不完整。
+  return tail.includes('\n') || tail.includes('```');
+}
+
+/** 生成流式阶段的 Markdown 快照与纯文本尾巴，降低高频完整解析成本。 */
+function renderAssistantContent(msg) {
+  const content = msg.content || '';
+  if (!msg.isStreaming) {
+    delete state.streamingMarkdownSnapshots[msg.id];
+    return renderMarkdown(content);
+  }
+
+  const previous = state.streamingMarkdownSnapshots[msg.id];
+  if (shouldRefreshStreamingMarkdownSnapshot(msg, previous)) {
+    state.streamingMarkdownSnapshots[msg.id] = {
+      length: content.length,
+      html: renderMarkdown(content),
+      updatedAt: Date.now(),
+    };
+    return state.streamingMarkdownSnapshots[msg.id].html;
+  }
+
+  const tail = content.substring(previous.length);
+  if (!tail) return previous.html;
+  // 流式尾巴只做 HTML 转义，等下一次快照或结束时再统一跑 Markdown/highlight/KaTeX。
+  return `${previous.html}<span class="streaming-tail">${escHtml(tail)}</span>`;
+}
+
 /** 返回指定消息的 assistant 正文 host 选择器。 */
 function shadowHostSelector(messageId) {
   return `.msg-content-host[data-shadow-msg-id="${messageId}"]`;
@@ -440,7 +480,7 @@ function mountAssistantShadowContent(messageId, root = document) {
   const host = root.querySelector ? root.querySelector(shadowHostSelector(messageId)) : null;
   if (!host) return;
 
-  const html = renderMarkdown(msg.content || '');
+  const html = renderAssistantContent(msg);
   if (!host.shadowRoot) {
     host.attachShadow({ mode: 'open' });
   }
@@ -458,7 +498,6 @@ function mountAllAssistantShadowContents(root = document) {
     mountAssistantShadowContent(id, root);
   }
 }
-
 
 /**
  * message_renderer.js
@@ -607,6 +646,35 @@ function renderAssistantMessage(msg) {
   return html;
 }
 
+/** 仅刷新助手正文 Shadow DOM，避免流式阶段替换整条消息节点。 */
+function updateAssistantContentDOM(msg) {
+  const host = $list.querySelector(shadowHostSelector(msg.id));
+  if (!host) {
+    updateMessageDOM(msg);
+    return;
+  }
+  mountAssistantShadowContent(msg.id, $list);
+}
+
+/** 仅刷新 reasoning 区块；结构从无到有时退回整条消息更新。 */
+function updateReasoningDOM(msg) {
+  const el = $list.querySelector(`.msg[data-id="${msg.id}"]`);
+  if (!el) return;
+  const existing = el.querySelector('.reasoning-block');
+  const hasReasoning = (msg.reasoning || '').trim().length > 0;
+  if (!existing || !hasReasoning) {
+    updateMessageDOM(msg);
+    return;
+  }
+  const timeLabel = existing.querySelector('.reasoning-toggle span:last-child');
+  if (timeLabel) {
+    const timeStr = msg.reasoningTimeMs ? (msg.reasoningTimeMs / 1000).toFixed(1) : '...';
+    timeLabel.textContent = `已思考 ${timeStr} 秒`;
+  }
+  const content = existing.querySelector('.reasoning-content');
+  if (content) content.textContent = msg.reasoning || '';
+}
+
 /** 增量更新单条消息 DOM（流式场景优化，避免全量重绘） */
 function updateMessageDOM(msg) {
   const el = $list.querySelector(`.msg[data-id="${msg.id}"]`);
@@ -635,6 +703,27 @@ function updateMessageDOM(msg) {
   }
 }
 
+/** 前插历史消息片段，不触碰已存在节点，避免长会话加载更多时整表重绘。 */
+function prependMessagesDOM(msgs) {
+  if (!msgs || msgs.length === 0) return;
+  const oldHeight = $list.scrollHeight;
+  let html = '';
+  for (const msg of msgs) {
+    html += renderMessage(msg);
+  }
+
+  const systemPromptCard = $list.querySelector('.system-prompt-card');
+  if (systemPromptCard) {
+    systemPromptCard.insertAdjacentHTML('afterend', html);
+  } else {
+    $list.insertAdjacentHTML('afterbegin', html);
+  }
+  for (const msg of msgs) {
+    mountAssistantShadowContent(msg.id, $list);
+  }
+  const newHeight = $list.scrollHeight;
+  $list.scrollTop += newHeight - oldHeight;
+}
 
 /**
  * interactions.js
@@ -1081,7 +1170,6 @@ function renderModelCapabilityBadges(supportsVision, supportsTools, hasModel) {
   return caps.join('');
 }
 
-
 /**
  * bridge_api.js
  *
@@ -1115,7 +1203,7 @@ window.ChatBridge = {
     const msg = state.messages.find((m) => m.id === id);
     if (!msg) return;
     msg.content = content;
-    updateMessageDOM(msg);
+    updateAssistantContentDOM(msg);
     if (isNearBottom()) scrollToBottom(false);
   },
 
@@ -1125,7 +1213,7 @@ window.ChatBridge = {
     if (!msg) return;
     msg.reasoning = content;
     if (timeMs !== undefined) msg.reasoningTimeMs = timeMs;
-    updateMessageDOM(msg);
+    updateReasoningDOM(msg);
     if (isNearBottom()) scrollToBottom(false);
   },
 
@@ -1135,6 +1223,7 @@ window.ChatBridge = {
     if (!msg) return;
     msg.isStreaming = false;
     msg.canContinue = !!canContinue;
+    delete state.streamingMarkdownSnapshots[id];
     updateMessageDOM(msg);
   },
 
@@ -1143,6 +1232,7 @@ window.ChatBridge = {
     const idx = state.messages.findIndex((m) => m.id === id);
     if (idx === -1) return;
     state.messages.splice(idx, 1);
+    delete state.streamingMarkdownSnapshots[id];
     const el = $list.querySelector(`.msg[data-id="${id}"]`);
     if (el) el.remove();
     // 更新 isLast 标记
@@ -1156,6 +1246,7 @@ window.ChatBridge = {
   /** 清空所有消息（切换会话） */
   clearMessages() {
     state.messages = [];
+    state.streamingMarkdownSnapshots = {};
     renderAllMessages();
   },
 
@@ -1163,15 +1254,12 @@ window.ChatBridge = {
   loadMessages(jsonStr, prepend) {
     const msgs = JSON.parse(jsonStr);
     if (prepend) {
-      // 历史消息：记录当前滚动位置
-      const oldHeight = $list.scrollHeight;
       state.messages = msgs.concat(state.messages);
-      renderAllMessages();
-      // 保持滚动位置
-      const newHeight = $list.scrollHeight;
-      $list.scrollTop = newHeight - oldHeight;
+      // 历史消息只前插新增片段，避免已加载 Markdown/图片全部重绘。
+      prependMessagesDOM(msgs);
     } else {
       state.messages = msgs;
+      state.streamingMarkdownSnapshots = {};
       renderAllMessages();
       scrollToBottom(false);
     }
@@ -1270,4 +1358,3 @@ window.ChatBridge = {
     scrollToBottom(animated);
   },
 };
-

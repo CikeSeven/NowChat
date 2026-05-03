@@ -1,4 +1,3 @@
-﻿import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
@@ -166,8 +165,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             if (candidateProviderId == null || candidateProviderId.isEmpty) {
               candidateProviderId = settings.defaultProviderId?.trim();
             }
-            if (candidateProviderId != null &&
-                candidateProviderId.isEmpty) {
+            if (candidateProviderId != null && candidateProviderId.isEmpty) {
               candidateProviderId = null;
             }
 
@@ -315,7 +313,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     final effectiveChat =
         chat ??
         _chat ??
-        (widget.chatId == null ? null : chatProvider.getChatById(widget.chatId!));
+        (widget.chatId == null
+            ? null
+            : chatProvider.getChatById(widget.chatId!));
     final normalizedAction = action.trim();
 
     switch (normalizedAction) {
@@ -339,29 +339,30 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         chatProvider.deleteMessage(messageId);
         break;
       case 'edit':
-        final msg = chatProvider.currentMessages
-            .where((m) => m.isarId == messageId)
-            .firstOrNull;
+        final msg =
+            chatProvider.currentMessages
+                .where((m) => m.isarId == messageId)
+                .firstOrNull;
         if (msg != null) {
-          Navigator.pushNamed(
-            context,
-            AppRoutes.editMessage,
-            arguments: msg,
-          );
+          Navigator.pushNamed(context, AppRoutes.editMessage, arguments: msg);
         }
         break;
       case 'editSystemPrompt':
         _showSystemPromptEditor(chat: chat);
         break;
       case 'copy':
-        final msg = chatProvider.currentMessages
-            .where((m) => m.isarId == messageId)
-            .firstOrNull;
+        final msg =
+            chatProvider.currentMessages
+                .where((m) => m.isarId == messageId)
+                .firstOrNull;
         if (msg != null) {
           Clipboard.setData(ClipboardData(text: msg.content));
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('已复制'), duration: Duration(seconds: 1)),
+              const SnackBar(
+                content: Text('已复制'),
+                duration: Duration(seconds: 1),
+              ),
             );
           }
         }
@@ -441,20 +442,21 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   Future<bool> _confirmAction(String title, String content) async {
     final result = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: Text(content),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
+      builder:
+          (ctx) => AlertDialog(
+            title: Text(title),
+            content: Text(content),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('确认'),
+              ),
+            ],
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('确认'),
-          ),
-        ],
-      ),
     );
     return result == true;
   }
@@ -577,9 +579,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   /// 用户消息长按菜单。
   void _showUserMessageMenu(ChatProvider chatProvider, int messageId) {
     final color = Theme.of(context).colorScheme;
-    final msg = chatProvider.currentMessages
-        .where((m) => m.isarId == messageId)
-        .firstOrNull;
+    final msg =
+        chatProvider.currentMessages
+            .where((m) => m.isarId == messageId)
+            .firstOrNull;
     if (msg == null) return;
     showModalBottomSheetMenu(
       context: context,
@@ -598,12 +601,15 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           onTap: () {
             Clipboard.setData(ClipboardData(text: msg.content));
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('已复制'), duration: Duration(seconds: 1)),
+              const SnackBar(
+                content: Text('已复制'),
+                duration: Duration(seconds: 1),
+              ),
             );
           },
         ),
         SheetMenuItem(
-          icon: Icon(Icons.delete_outline, color: color.error,),
+          icon: Icon(Icons.delete_outline, color: color.error),
           label: '删除',
           onTap: () async {
             final confirmed = await _confirmAction('删除确认', '确定要删除这条消息吗？');
@@ -611,10 +617,13 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           },
         ),
         SheetMenuItem(
-          icon: Icon(Icons.delete_forever, color: color.error,),
+          icon: Icon(Icons.delete_forever, color: color.error),
           label: '删除这条及之后的消息',
           onTap: () async {
-            final confirmed = await _confirmAction('删除确认', '将删除此消息及之后的所有消息，是否继续？');
+            final confirmed = await _confirmAction(
+              '删除确认',
+              '将删除此消息及之后的所有消息，是否继续？',
+            );
             if (confirmed) chatProvider.deleteMessageAndAfter(messageId);
           },
         ),
@@ -629,9 +638,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     int messageId,
   ) {
     final color = Theme.of(context).colorScheme;
-    final msg = chatProvider.currentMessages
-        .where((m) => m.isarId == messageId)
-        .firstOrNull;
+    final msg =
+        chatProvider.currentMessages
+            .where((m) => m.isarId == messageId)
+            .firstOrNull;
     if (msg == null) return;
     showModalBottomSheetMenu(
       context: context,
@@ -650,7 +660,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           onTap: () {
             Clipboard.setData(ClipboardData(text: msg.content));
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('已复制'), duration: Duration(seconds: 1)),
+              const SnackBar(
+                content: Text('已复制'),
+                duration: Duration(seconds: 1),
+              ),
             );
           },
         ),
@@ -663,10 +676,13 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           },
         ),
         SheetMenuItem(
-          icon: Icon(Icons.delete_forever, color: color.error,),
+          icon: Icon(Icons.delete_forever, color: color.error),
           label: '删除这条及之后的消息',
           onTap: () async {
-            final confirmed = await _confirmAction('删除确认', '将删除此消息及之后的所有消息，是否继续？');
+            final confirmed = await _confirmAction(
+              '删除确认',
+              '将删除此消息及之后的所有消息，是否继续？',
+            );
             if (confirmed) chatProvider.deleteMessageAndAfter(messageId);
           },
         ),
